@@ -13,7 +13,9 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@viem/anvil": "^0.0.10",
     "alkahest-ts": "file:../alkahest-ts",
+    "testExecution": "file:../test-execution-app",
     "viem": "^2.33.3"
   }
 }
