@@ -19,6 +19,7 @@ export async function setupTest() {
     commitObligation: makeCommitObligationClient(client.viemClient, commitObligationAddresses),
   }));
 
+
   return {
     testContext,
     commitObligationAddress,

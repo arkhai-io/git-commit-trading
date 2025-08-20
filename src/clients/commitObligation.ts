@@ -3,10 +3,10 @@ import {
     encodeAbiParameters,
     parseAbiParameters,
 } from "viem";
-import { getAttestation, getAttestedEventFromTxHash } from "alkahest-ts/src";
+import { getAttestation, getAttestedEventFromTxHash } from "alkahest-ts/src/utils";
 
 import { abi as commitObligationAbi } from "../contracts/CommitObligation";
-import type { ViemClient } from "alkahest-ts/src";
+import type { ViemClient } from "alkahest-ts/src/utils";
 import type { ChainAddresses } from "alkahest-ts";
 
 // Enum for CommitAlgo from the contract

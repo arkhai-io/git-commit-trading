@@ -10,20 +10,22 @@ describe("Oracle CommitObligation Tests", () => {
     let testContext: TestContext;
     let alice: `0x${string}`;
     let bob: `0x${string}`;
+    let oracle: `0x${string}`;
     let aliceClient: any;
     let bobClient: any;
-    let testClient: TestContext["testClient"];
+    let arbiterClient: any;
     let commitObligationAddress: `0x${string}`;
     beforeAll(async () => {
         const setup = await setupTest();
         testContext = setup.testContext;
         aliceClient = setup.aliceClient;
         bobClient = setup.bobClient;
+        arbiterClient = testContext.charlieClient;
 
         // Extract the values we need for tests
         alice = testContext.alice;
         bob = testContext.bob;
-        testClient = testContext.testClient;
+        oracle = testContext.charlie;
         commitObligationAddress = setup.commitObligationAddress;
     });
 
@@ -67,7 +69,7 @@ describe("Oracle CommitObligation Tests", () => {
             });
 
             const demand = aliceClient.arbiters.encodeTrustedOracleDemand({
-                oracle: testContext.bob,
+                oracle,
                 data: commitTestsData,
             });
 
@@ -95,7 +97,7 @@ describe("Oracle CommitObligation Tests", () => {
             await Bun.sleep(150);
 
             // 2 .a Bob listens for the escrow and fulfills it by writing a commit that makes the test suite pass
-            const { unwatch } = await bobClient.oracle.listenAndArbitrateForEscrow({
+            const { unwatch } = await arbiterClient.oracle.listenAndArbitrateForEscrow({
                 escrow: {
                     attester: testContext.addresses.erc20EscrowObligation,
                     demandAbi: parseAbiParameters("(string testsCommitHash, string testsCommand, uint8 testsCommitAlgo, string[] hosts)"),
