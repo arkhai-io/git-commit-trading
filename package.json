@@ -3,11 +3,21 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "bin": {
+    "git-escrows": "./src/cli/git-escrows.ts"
+  },
   "scripts": {
     "test": "bun test",
-    "build": "tsc",
+    "build": "tsup src/index.ts --dts --format esm,cjs",
     "start": "bun run index.ts",
-    "dev": "bun run --watch index.ts"
+    "dev": "bun run --watch index.ts",
+    "cli": "bun run src/cli/git-escrows.ts",
+    "escrows": "bun run src/cli/git-escrows.ts",
+    "escrows list": "bun run src/cli/git-escrows.ts list",
+    "escrows submit": "bun run src/cli/git-escrows.ts submit",
+    "escrows fulfill": "bun run src/cli/git-escrows.ts fulfill",
+    "escrows server": "bun run src/cli/git-escrows.ts server",
+    "escrows collect": "bun run src/cli/git-escrows.ts collect"
   },
   "devDependencies": {
     "@types/bun": "latest",
