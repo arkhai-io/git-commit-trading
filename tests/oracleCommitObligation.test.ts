@@ -115,15 +115,15 @@ describe("Oracle CommitObligation Tests", () => {
                 pollingInterval: 50,
             });
 
-            // // 3. Bob collects the escrow
-            // const collectionHash = await bobClient.erc20.collectEscrow(
-            //     escrow.uid,
-            //     fulfillment.uid,
-            // );
+            // 3. Bob collects the escrow
+            const collectionHash = await bobClient.erc20.collectEscrow(
+                escrow.uid,
+                fulfillment.uid,
+            );
 
-            // expect(collectionHash).toBeTruthy();
+            expect(collectionHash).toBeTruthy();
 
-            // unwatch();
+            unwatch();
         });
     });
 
