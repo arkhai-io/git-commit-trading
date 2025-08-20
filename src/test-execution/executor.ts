@@ -272,7 +272,9 @@ export class TestExecutor {
   }
 
   private async cleanup(): Promise<void> {
-    await removeDirectory(this.workingDir);
+    // Remove the entire temp directory instead of just the working subdirectory
+    const tempDirectory = path.resolve(this.config.execution.tempDirectory);
+    await removeDirectory(tempDirectory);
   }
 
   getWorkingDirectory(): string {

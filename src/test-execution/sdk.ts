@@ -1,5 +1,5 @@
 import { TestExecutor } from './executor.js';
-import { Config, ExecutionResult, TestResult } from './types.js';
+import type { Config, ExecutionResult, TestResult } from './types.js';
 import { loadConfig, validateCommitHash } from './utils.js';
 
 /**
@@ -118,5 +118,5 @@ export class GitTestExecution {
 }
 
 // Export types for external use
-export type { Config, ExecutionResult, TestResult } from './src/types.js';
+export type { Config, ExecutionResult, TestResult } from './types.js';
 export { TestExecutor } from './executor.js';

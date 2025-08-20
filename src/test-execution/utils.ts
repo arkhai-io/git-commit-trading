@@ -1,8 +1,8 @@
-import { spawn, SpawnOptions } from 'child_process';
+import { spawn, type SpawnOptions } from 'child_process';
 import { promises as fs } from 'fs';
 import path from 'path';
 import chalk from 'chalk';
-import { Config } from './types.js';
+import type { Config } from './types.js';
 
 export async function loadConfig(configPath: string): Promise<Config> {
   try {
@@ -146,6 +146,11 @@ export function getPackageManagerCommands(packageManager: string) {
  */
 export function parseCommand(fullCommand: string): { command: string; args: string[] } {
   const parts = fullCommand.trim().split(/\s+/);
+  
+  if (!parts[0]) {
+    throw new Error('Invalid command: empty command string');
+  }
+  
   return {
     command: parts[0],
     args: parts.slice(1)

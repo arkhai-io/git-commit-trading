@@ -110,7 +110,34 @@ describe("Oracle CommitObligation Tests", () => {
                     console.log("Arbitrating obligation:", obligation, "against demand:", demand);
                     //After Bob writes a commit that makes the test suite pass,
                     //Clone the repository, run the tests, and check if they pass
-                    return true;
+                    try {
+                        const config = GitTestExecution.initConfig();
+                        // rewrite config with data from obligation and demand
+                        config.repositories.testcase.url = demand[0].hosts[0];
+                        config.repositories.testcase.commitHash = demand[0].testsCommitHash;
+                        config.repositories.testcase.buildCommand = "npm run build";
+                        config.repositories.testcase.testCommand = demand[0].testsCommand;
+
+                        config.repositories.source.url = obligation[0].hosts[0];
+                        config.repositories.source.commitHash = obligation[0].commitHash;
+                        config.repositories.source.testCommand = obligation[0].testsCommand;
+                        config.repositories.source.installCommand = "npm install"
+
+                        // console.log("Starting test execution with config:", config);
+                        
+                        // Set a shorter timeout for the execution to prevent hanging
+                        config.execution.timeout = 45000; // 45 seconds
+                        config.execution.cleanupAfterExecution = true;
+                        
+                        const res = await GitTestExecution.executeTests(config, {
+                            onProgress: (step) => console.log(`  → ${step}`)
+                        });
+                        console.log("Execution result: ", res.testResult.success);
+                        return res.testResult.success;
+                    } catch (error) {
+                        console.error("Error during test execution:", error);
+                        return false; // Return false instead of throwing to allow test to continue
+                    }
                 },
                 onAfterArbitrate: async (decision: any) => {
 
@@ -127,7 +154,7 @@ describe("Oracle CommitObligation Tests", () => {
             expect(collectionHash).toBeTruthy();
 
             unwatch();
-        });
+        }, 20000);
     });
 
 });
