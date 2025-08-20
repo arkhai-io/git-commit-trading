@@ -3,6 +3,7 @@ import { decodeAbiParameters, encodeAbiParameters, parseAbiParameters } from "vi
 import { setupTest } from "./utils/setup";
 import { teardownTestEnvironment, type TestContext } from "alkahest-ts/tests/utils/setup";
 import { CommitAlgo, type CommitObligationData } from "../src/clients/commitObligation";
+import { GitTestExecution } from "../src/test-execution/";
 
 describe("Oracle CommitObligation Tests", () => {
     // Test context and variables
