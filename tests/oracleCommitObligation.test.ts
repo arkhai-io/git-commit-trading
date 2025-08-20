@@ -60,10 +60,10 @@ describe("Oracle CommitObligation Tests", () => {
             //  Alice make an escrow deposit, released to anyone who writes a commit that makes the test suite pass
 
             const commitTestsData = encodeCommitTestsDemand({
-                testsCommitHash: "test-sui-commit-hash",
+                testsCommitHash: "ab940eceae6702e05b9c03765b7407a054ea84c9",
                 testsCommand: "npm test",
-                testsCommitAlgo: 1, // CommitTestsCommitAlgo.Sha256
-                hosts: ["required.host.com"]
+                testsCommitAlgo: CommitAlgo.SHA256,
+                hosts: ["https://github.com/thinhnx-var/testcase-repo-alice.git"]
             });
 
             const demand = aliceClient.arbiters.encodeTrustedOracleDemand({
@@ -85,9 +85,9 @@ describe("Oracle CommitObligation Tests", () => {
             const { attested: fulfillment } =
                 await bobClient.commitObligation.doObligation(
                     {
-                        commitHash: "commit hash that makes the test suite pass",
+                        commitHash: "14acbbd4b4795dc5a8178540e32e1aa9661867ea", // success. to be fail use: 11e0ecb39cc93f999cd5b5afb8a93d90ecb0add5
                         commitAlgo: CommitAlgo.SHA256,
-                        hosts: ["required.host.com", "additional.host.com"],
+                        hosts: ["https://github.com/thinhnx-var/solution-repo-bob.git", "additional.host.com"],
                     },
                     escrow.uid,
                 );
