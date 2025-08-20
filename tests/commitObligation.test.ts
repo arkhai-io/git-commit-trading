@@ -10,8 +10,8 @@ import {
     encodeAbiParameters,
     parseAbiParameters,
 } from "viem";
-import { setupTestEnvironment, teardownTestEnvironment } from "./utils/setup";
-import type { TestContext } from "./utils/setup";
+import { setupTest } from "./utils/setup";
+import { teardownTestEnvironment, type TestContext } from "alkahest-ts/tests/utils/setup";
 import { CommitAlgo, type CommitObligationData } from "../src/clients/commitObligation";
 
 describe("CommitObligation Tests", () => {
@@ -19,19 +19,19 @@ describe("CommitObligation Tests", () => {
     let testContext: TestContext;
     let alice: `0x${string}`;
     let bob: `0x${string}`;
-    let aliceClient: TestContext["aliceClient"];
-    let bobClient: TestContext["bobClient"];
+    let aliceClient: any;
+    let bobClient: any;
     let testClient: TestContext["testClient"];
 
     beforeAll(async () => {
-        // Setup test environment
-        testContext = await setupTestEnvironment();
+        const setup = await setupTest();
+        testContext = setup.testContext;
+        aliceClient = setup.aliceClient;
+        bobClient = setup.bobClient;
 
         // Extract the values we need for tests
         alice = testContext.alice;
         bob = testContext.bob;
-        aliceClient = testContext.aliceClient;
-        bobClient = testContext.bobClient;
         testClient = testContext.testClient;
     });
 
