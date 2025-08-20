@@ -6,7 +6,7 @@ import {
     type TestContext,
 } from "./utils/setup";
 import { CommitAlgo, type CommitObligationData } from "../src/clients/commitObligation";
-import { GitTestExecution } from "testExecution";
+import { GitTestExecution } from "../src/test-execution/";
 
 let testContext: TestContext;
 
