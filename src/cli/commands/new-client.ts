@@ -40,7 +40,7 @@ export async function newClientCommand(options: NewClientOptions) {
 
     // Check if client_info.json already exists
     if (existsSync(outputFile)) {
-      console.log(chalk.yellow(`⚠️  ${outputFile} already exists. Overwriting...`));
+      console.log(chalk.yellow(`${outputFile} already exists. Overwriting...`));
     }
 
     let commitObligationAddress: string | undefined;
@@ -60,7 +60,7 @@ export async function newClientCommand(options: NewClientOptions) {
       commitObligationAddress = setup.commitObligationAddress;
       
       // For anvil, we'll just store the configuration and let the loader handle client creation
-      console.log(chalk.green('✅ Anvil setup complete'));
+      console.log(chalk.green('Anvil setup complete'));
 
     } else {
       // For other networks, we'll just store the basic configuration
@@ -84,7 +84,7 @@ export async function newClientCommand(options: NewClientOptions) {
           throw new Error(`Unsupported network: ${options.network}`);
       }
       
-      console.log(chalk.yellow('⚠️  CommitObligation contract not deployed for this network. You may need to deploy it manually.'));
+      console.log(chalk.yellow('CommitObligation contract not deployed for this network. You may need to deploy it manually.'));
     }
 
     // Create client info object
@@ -99,21 +99,21 @@ export async function newClientCommand(options: NewClientOptions) {
     // Save to file
     writeFileSync(outputFile, JSON.stringify(clientInfo, null, 2));
 
-    console.log(chalk.green('✅ Client initialized successfully!'));
-    console.log(chalk.gray(`📁 Client configuration saved to: ${outputFile}`));
-    console.log(chalk.gray(`👤 Address: ${account.address}`));
-    console.log(chalk.gray(`🌐 Network: ${options.network}`));
+    console.log(chalk.green('Client initialized successfully!'));
+    console.log(chalk.gray(`Client configuration saved to: ${outputFile}`));
+    console.log(chalk.gray(`Address: ${account.address}`));
+    console.log(chalk.gray(`Network: ${options.network}`));
     if (commitObligationAddress) {
-      console.log(chalk.gray(`📝 CommitObligation Contract: ${commitObligationAddress}`));
+      console.log(chalk.gray(`CommitObligation Contract: ${commitObligationAddress}`));
     }
     
-    console.log(chalk.gray('✨ Use this configuration with other commands by having client_info.json in your working directory.'));
+    console.log(chalk.gray('Use this configuration with other commands by having client_info.json in your working directory.'));
 
     // Exit successfully
     process.exit(0);
 
   } catch (error) {
-    console.error(chalk.red('❌ Failed to initialize client:'));
+    console.error(chalk.red('Failed to initialize client:'));
     console.error(chalk.red(error instanceof Error ? error.message : String(error)));
     process.exit(1);
   }

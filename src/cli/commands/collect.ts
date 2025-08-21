@@ -9,7 +9,7 @@ interface CollectOptions {
 
 export async function collectCommand(options: CollectOptions) {
   try {
-    console.log(chalk.blue('💰 Collecting escrow reward...'));
+    console.log(chalk.blue('Collecting escrow reward...'));
     
     // Validate inputs
     if (!options.escrowUid || !options.fulfillmentUid) {
@@ -22,11 +22,11 @@ export async function collectCommand(options: CollectOptions) {
     const bobClient = setup.bobClient;
 
     if (setup.isFromConfig) {
-      console.log(chalk.green('✅ Using client configuration from client_info.json'));
-      console.log(chalk.gray(`👤 Address: ${setup.clientInfo?.address}`));
-      console.log(chalk.gray(`🌐 Network: ${setup.clientInfo?.network}`));
+      console.log(chalk.green('Using client configuration from client_info.json'));
+      console.log(chalk.gray(`Address: ${setup.clientInfo?.address}`));
+      console.log(chalk.gray(`Network: ${setup.clientInfo?.network}`));
     } else {
-      console.log(chalk.yellow('⚠️  No client_info.json found, using test environment'));
+      console.log(chalk.yellow('No client_info.json found, using test environment'));
     }
 
     console.log(chalk.gray('Collection details:'));
@@ -41,20 +41,20 @@ export async function collectCommand(options: CollectOptions) {
       options.fulfillmentUid as `0x${string}`,
     );
 
-    console.log(chalk.green('✅ Reward collected successfully!'));
-    console.log(chalk.white('📄 Collection Details:'));
+    console.log(chalk.green('Reward collected successfully!'));
+    console.log(chalk.white('Collection Details:'));
     console.log(chalk.gray(`  Transaction Hash: ${collectionHash}`));
     console.log(chalk.gray(`  Escrow UID: ${options.escrowUid}`));
     console.log(chalk.gray(`  Fulfillment UID: ${options.fulfillmentUid}`));
     
-    console.log(chalk.yellow('\n🎉 Congratulations!'));
+    console.log(chalk.yellow('\nCongratulations!'));
     console.log(chalk.yellow('Your solution passed the tests and you have been rewarded!'));
 
     // Exit successfully
     process.exit(0);
 
   } catch (error) {
-    console.error(chalk.red('❌ Failed to collect reward:'));
+    console.error(chalk.red('Failed to collect reward:'));
     console.error(chalk.red(error instanceof Error ? error.message : String(error)));
     process.exit(1);
   }

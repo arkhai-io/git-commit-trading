@@ -25,12 +25,12 @@ All these are equivalent:
 - `bun run escrows`
 
 ### Workflow
-1. **Everyone**: `bun run escrows list` → See available escrows
-2. **Alice**: `bun run escrows submit ...` → Gets `Escrow UID`
-3. **Charlie**: `bun run escrows server` → Starts listening
-4. **Bob**: `bun run escrows list --status open` → Find escrows to fulfill
-5. **Bob**: `bun run escrows fulfill ...` → Auto-tested by Charlie
-6. **Bob**: `bun run escrows collect ...` → If tests passed
+1. **Everyone**: `bun run escrows list` - See available escrows
+2. **Alice**: `bun run escrows submit ...` - Gets `Escrow UID`
+3. **Charlie**: `bun run escrows server` - Starts listening
+4. **Bob**: `bun run escrows list --status open` - Find escrows to fulfill
+5. **Bob**: `bun run escrows fulfill ...` - Auto-tested by Charlie
+6. **Bob**: `bun run escrows collect ...` - If tests passed
 
 ## Commands
 
@@ -135,11 +135,11 @@ bun run escrows collect --help   # Collect command help
 ## Error Handling
 
 The CLI provides detailed error messages and colored output for better user experience:
-- 🚀 Blue: Starting operations
-- ✅ Green: Success messages  
-- ❌ Red: Error messages
-- ⚠️ Yellow: Warnings and next steps
-- 🔍 Gray: Debug/info messages
+- Blue: Starting operations
+- Green: Success messages  
+- Red: Error messages
+- Yellow: Warnings and next steps
+- Gray: Debug/info messages
 
 ## Development
 

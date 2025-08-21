@@ -88,7 +88,7 @@ export async function getClientOrSetupTest(configFile: string = 'client_info.jso
       
       // For anvil network, we need to use the test setup to ensure contracts are deployed
       if (clientInfo.network.toLowerCase() === 'anvil') {
-        console.log(chalk.yellow('⚠️  Anvil network detected in config, using test environment for proper setup'));
+        console.log(chalk.yellow('Anvil network detected in config, using test environment for proper setup'));
         const setup = await setupTest();
         return {
           ...setup,
@@ -109,8 +109,8 @@ export async function getClientOrSetupTest(configFile: string = 'client_info.jso
         };
       }
     } catch (error) {
-      console.log(chalk.yellow(`⚠️  Failed to load from ${configFile}: ${error instanceof Error ? error.message : String(error)}`));
-      console.log(chalk.yellow('⚠️  Falling back to test environment'));
+      console.log(chalk.yellow(`Failed to load from ${configFile}: ${error instanceof Error ? error.message : String(error)}`));
+      console.log(chalk.yellow('Falling back to test environment'));
     }
   }
 

@@ -17,7 +17,7 @@ interface SubmitOptions {
 
 export async function submitCommand(options: SubmitOptions) {
   try {
-    console.log(chalk.blue('🚀 Creating new escrow demand...'));
+    console.log(chalk.blue('Creating new escrow demand...'));
     
     // Validate inputs
     if (!options.testsRepo || !options.testsCommit || !options.reward) {
@@ -43,11 +43,11 @@ export async function submitCommand(options: SubmitOptions) {
     const testContext = setup.testContext;
 
     if (setup.isFromConfig) {
-      console.log(chalk.green('✅ Using client configuration from client_info.json'));
-      console.log(chalk.gray(`👤 Address: ${setup.clientInfo?.address}`));
-      console.log(chalk.gray(`🌐 Network: ${setup.clientInfo?.network}`));
+      console.log(chalk.green('Using client configuration from client_info.json'));
+      console.log(chalk.gray(`Address: ${setup.clientInfo?.address}`));
+      console.log(chalk.gray(`Network: ${setup.clientInfo?.network}`));
     } else {
-      console.log(chalk.yellow('⚠️  No client_info.json found, using test environment'));
+      console.log(chalk.yellow('No client_info.json found, using test environment'));
     }
 
     // Use provided addresses or defaults from test setup (if available)
@@ -114,8 +114,8 @@ export async function submitCommand(options: SubmitOptions) {
       0n,
     );
 
-    console.log(chalk.green('✅ Escrow created successfully!'));
-    console.log(chalk.white('📄 Escrow Details:'));
+    console.log(chalk.green('Escrow created successfully!'));
+    console.log(chalk.white('Escrow Details:'));
     console.log(chalk.gray(`  Escrow UID: ${escrow.uid}`));
     console.log(chalk.gray(`  Attester: ${escrow.attester}`));
     console.log(chalk.gray(`  Recipient: ${escrow.recipient}`));
@@ -125,7 +125,7 @@ export async function submitCommand(options: SubmitOptions) {
     console.log(chalk.gray(`  Oracle: ${oracleAddress}`));
     console.log(chalk.gray(`  Arbiter: ${arbiterAddress}`));
     
-    console.log(chalk.yellow('\n💡 Next steps:'));
+    console.log(chalk.yellow('\nNext steps:'));
     console.log(chalk.yellow('  1. Share the Escrow UID with developers'));
     console.log(chalk.yellow('  2. Developers can fulfill using: git-escrows fulfill --escrow-uid ' + escrow.uid));
     console.log(chalk.yellow('  3. Run the arbiter server: git-escrows server'));
@@ -134,7 +134,7 @@ export async function submitCommand(options: SubmitOptions) {
     process.exit(0);
 
   } catch (error) {
-    console.error(chalk.red('❌ Failed to create escrow:'));
+    console.error(chalk.red('Failed to create escrow:'));
     console.error(chalk.red(error instanceof Error ? error.message : String(error)));
     process.exit(1);
   }

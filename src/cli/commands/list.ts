@@ -11,7 +11,7 @@ interface ListOptions {
 
 export async function listCommand(options: ListOptions) {
   try {
-    console.log(chalk.blue('📋 Fetching available escrows...'));
+    console.log(chalk.blue('Fetching available escrows...'));
     
     const limit = parseInt(options.limit || '20');
     const status = options.status?.toLowerCase();
@@ -38,12 +38,12 @@ export async function listCommand(options: ListOptions) {
     });
 
     if (logs.length === 0) {
-      console.log(chalk.yellow('📭 No escrows found.'));
+      console.log(chalk.yellow('No escrows found.'));
       console.log(chalk.gray('Create your first escrow with: git-escrows submit'));
-      return;
+      process.exit(0);
     }
 
-    console.log(chalk.green(`✅ Found ${logs.length} escrow events`));
+    console.log(chalk.green(`Found ${logs.length} escrow events`));
 
     // Process and filter escrows
     const escrows = [];
@@ -83,7 +83,7 @@ export async function listCommand(options: ListOptions) {
     }
 
     if (escrows.length === 0) {
-      console.log(chalk.yellow('📭 No valid escrows found.'));
+      console.log(chalk.yellow('No valid escrows found.'));
       return;
     }
 
@@ -97,7 +97,7 @@ export async function listCommand(options: ListOptions) {
     }
 
     // Display results
-    console.log(chalk.white(`\n📋 Escrows (${filteredEscrows.length} found):`));
+    console.log(chalk.white(`\nEscrows (${filteredEscrows.length} found):`));
     
     if (format === 'json') {
       console.log(JSON.stringify(filteredEscrows, null, 2));
@@ -154,14 +154,14 @@ export async function listCommand(options: ListOptions) {
     }
 
     // Show summary and helpful commands
-    console.log(chalk.yellow('\n💡 Useful commands:'));
+    console.log(chalk.yellow('\nUseful commands:'));
     console.log(chalk.gray('  • Fulfill an escrow: git-escrows fulfill --escrow-uid <UID>'));
     console.log(chalk.gray('  • Filter by status: git-escrows list --status open'));
     console.log(chalk.gray('  • Verbose output: git-escrows list --verbose'));
     console.log(chalk.gray('  • JSON format: git-escrows list --format json'));
     
     if (filteredEscrows.length > 0) {
-      console.log(chalk.yellow('\n🎯 Quick fulfill command for latest escrow:'));
+      console.log(chalk.yellow('\nQuick fulfill command for latest escrow:'));
       const latestEscrow = filteredEscrows[0];
       if (latestEscrow) {
         console.log(chalk.cyan(`git-escrows fulfill --escrow-uid "${latestEscrow.uid}" --solution-repo "YOUR_REPO" --solution-commit "YOUR_COMMIT"`));
@@ -172,11 +172,11 @@ export async function listCommand(options: ListOptions) {
     process.exit(0);
 
   } catch (error) {
-    console.error(chalk.red('❌ Failed to list escrows:'));
+    console.error(chalk.red('Failed to list escrows:'));
     console.error(chalk.red(error instanceof Error ? error.message : String(error)));
     
     if (error instanceof Error && error.message.includes('network')) {
-      console.log(chalk.yellow('\n💡 Tip: Make sure your blockchain environment is running'));
+      console.log(chalk.yellow('\nTip: Make sure your blockchain environment is running'));
       console.log(chalk.gray('Try running the arbiter server first: git-escrows server'));
     }
     

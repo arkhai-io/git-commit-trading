@@ -1,0 +1,24 @@
+{
+  "repositories": {
+    "source": {
+      "url": "https://github.com/VAR-META-Tech/solution-repo-bob.git",
+      "branch": "main",
+      "buildCommand": "bun install",
+      "testCommand": "bun test",
+      "installCommand": "bun install"
+    },
+    "testcase": {
+      "url": "https://github.com/VAR-META-Tech/testcase-repo-alice.git", 
+      "branch": "main",
+      "buildCommand": "bun install",
+      "testCommand": "bun test",
+      "installCommand": "bun install"
+    }
+  },
+  "execution": {
+    "timeout": 300000,
+    "cleanupAfterExecution": true,
+    "isolatedEnvironment": true,
+    "tempDirectory": "./temp"
+  }
+}

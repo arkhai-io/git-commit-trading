@@ -13,7 +13,7 @@ interface FulfillOptions {
 
 export async function fulfillCommand(options: FulfillOptions) {
   try {
-    console.log(chalk.blue('🔧 Submitting solution to fulfill escrow...'));
+    console.log(chalk.blue('Submitting solution to fulfill escrow...'));
     
     // Validate inputs
     if (!options.escrowUid || !options.solutionRepo || !options.solutionCommit) {
@@ -38,11 +38,11 @@ export async function fulfillCommand(options: FulfillOptions) {
     const bobClient = setup.bobClient;
 
     if (setup.isFromConfig) {
-      console.log(chalk.green('✅ Using client configuration from client_info.json'));
-      console.log(chalk.gray(`👤 Address: ${setup.clientInfo?.address}`));
-      console.log(chalk.gray(`🌐 Network: ${setup.clientInfo?.network}`));
+      console.log(chalk.green('Using client configuration from client_info.json'));
+      console.log(chalk.gray(`Address: ${setup.clientInfo?.address}`));
+      console.log(chalk.gray(`Network: ${setup.clientInfo?.network}`));
     } else {
-      console.log(chalk.yellow('⚠️  No client_info.json found, using test environment'));
+      console.log(chalk.yellow('No client_info.json found, using test environment'));
     }
 
     // Parse additional hosts
@@ -74,15 +74,15 @@ export async function fulfillCommand(options: FulfillOptions) {
       options.escrowUid as `0x${string}`,
     );
 
-    console.log(chalk.green('✅ Fulfillment submitted successfully!'));
-    console.log(chalk.white('📄 Fulfillment Details:'));
+    console.log(chalk.green('Fulfillment submitted successfully!'));
+    console.log(chalk.white('Fulfillment Details:'));
     console.log(chalk.gray(`  Fulfillment UID: ${fulfillment.uid}`));
     console.log(chalk.gray(`  Attester: ${fulfillment.attester}`));
     console.log(chalk.gray(`  Recipient: ${fulfillment.recipient}`));
     console.log(chalk.gray(`  Schema UID: ${fulfillment.schema}`));
     console.log(chalk.gray(`  Reference UID: ${options.escrowUid}`));
     
-    console.log(chalk.yellow('\n💡 Next steps:'));
+    console.log(chalk.yellow('\nNext steps:'));
     console.log(chalk.yellow('  1. The arbiter server will automatically test your solution'));
     console.log(chalk.yellow('  2. If tests pass, you can collect the reward with:'));
     console.log(chalk.yellow(`     git-escrows collect --escrow-uid ${options.escrowUid} --fulfillment-uid ${fulfillment.uid}`));
@@ -92,7 +92,7 @@ export async function fulfillCommand(options: FulfillOptions) {
     process.exit(0);
 
   } catch (error) {
-    console.error(chalk.red('❌ Failed to submit fulfillment:'));
+    console.error(chalk.red('Failed to submit fulfillment:'));
     console.error(chalk.red(error instanceof Error ? error.message : String(error)));
     process.exit(1);
   }
