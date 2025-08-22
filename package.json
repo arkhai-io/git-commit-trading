@@ -22,7 +22,8 @@
     "escrows submit": "bun run src/cli/git-escrows.ts submit",
     "escrows fulfill": "bun run src/cli/git-escrows.ts fulfill",
     "escrows server": "bun run src/cli/git-escrows.ts server",
-    "escrows collect": "bun run src/cli/git-escrows.ts collect"
+    "escrows collect": "bun run src/cli/git-escrows.ts collect",
+    "update:json-to-ts": "bun run script/jsonToTsConverter.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",
