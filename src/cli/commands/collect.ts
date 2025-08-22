@@ -1,6 +1,5 @@
 import chalk from 'chalk';
-import { setupTest } from '../../../tests/utils/setup.js';
-import { getClientOrSetupTest } from '../utils/clientLoader.js';
+import { createClientFromEnv, requireEnvFile } from '../utils/envLoader.js';
 
 interface CollectOptions {
   escrowUid: string;
@@ -16,18 +15,11 @@ export async function collectCommand(options: CollectOptions) {
       throw new Error('Missing required options: --escrow-uid, --fulfillment-uid');
     }
 
-    // Setup client environment (try client_info.json first, then fallback to test setup)
-    console.log(chalk.gray('Setting up blockchain environment...'));
-    const setup = await getClientOrSetupTest();
-    const bobClient = setup.bobClient;
-
-    if (setup.isFromConfig) {
-      console.log(chalk.green('Using client configuration from client_info.json'));
-      console.log(chalk.gray(`Address: ${setup.clientInfo?.address}`));
-      console.log(chalk.gray(`Network: ${setup.clientInfo?.network}`));
-    } else {
-      console.log(chalk.yellow('No client_info.json found, using test environment'));
-    }
+    // Check for .env file and load client
+    requireEnvFile();
+    
+    console.log(chalk.gray('Setting up blockchain client...'));
+    const { client, config } = await createClientFromEnv();
 
     console.log(chalk.gray('Collection details:'));
     console.log(chalk.gray(`  Escrow UID: ${options.escrowUid}`));
@@ -36,7 +28,7 @@ export async function collectCommand(options: CollectOptions) {
     console.log(chalk.gray('Submitting collection transaction...'));
 
     // Collect the escrow reward
-    const collectionHash = await bobClient.erc20.collectEscrow(
+    const collectionHash = await client.erc20.collectEscrow(
       options.escrowUid as `0x${string}`,
       options.fulfillmentUid as `0x${string}`,
     );

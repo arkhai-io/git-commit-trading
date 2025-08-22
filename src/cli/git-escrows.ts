@@ -16,13 +16,12 @@ program
   .description('Git-based escrow system for code challenges and bounties')
   .version('1.0.0');
 
-// New Client command - Initialize a client with obligation extension
+// New Client command - Initialize a client with .env configuration
 program
   .command('new-client')
-  .description('Initialize a new client with private key and network configuration')
+  .description('Create a .env file with private key and network configuration')
   .requiredOption('--privateKey <key>', 'Private key for the client (0x...)')
   .requiredOption('--network <network>', 'Network to connect to (anvil, localhost, sepolia, mainnet)')
-  .option('--output <file>', 'Output file for client configuration', 'client_info.json')
   .action(newClientCommand);
 
 // List command - Show all available escrows

@@ -1,12 +1,7 @@
 import chalk from 'chalk';
 import { writeFileSync, existsSync } from 'fs';
 import { privateKeyToAccount } from 'viem/accounts';
-import { createWalletClient, http, nonceManager } from 'viem';
-import { foundry } from 'viem/chains';
-import { makeClient } from 'alkahest-ts';
-import { makeCommitObligationClient, type CommitObligationAddresses } from '../../clients/commitObligation.js';
-import { setupTest } from '../../../tests/utils/setup.js';
-import CommitObligation from '@contracts/CommitObligation.json';
+import { nonceManager } from 'viem';
 
 interface NewClientOptions {
   privateKey: string;
@@ -14,17 +9,9 @@ interface NewClientOptions {
   output?: string;
 }
 
-export interface ClientInfo {
-  privateKey: string;
-  network: string;
-  address: string;
-  commitObligationAddress?: string;
-  timestamp: string;
-}
-
 export async function newClientCommand(options: NewClientOptions) {
   try {
-    console.log(chalk.blue('🔑 Initializing new client...'));
+    console.log(chalk.blue('🔑 Creating .env file for client configuration...'));
     
     // Validate inputs
     if (!options.privateKey || !options.network) {
@@ -36,84 +23,67 @@ export async function newClientCommand(options: NewClientOptions) {
       throw new Error('Invalid private key format. Must be 64 hex characters starting with 0x');
     }
 
-    const outputFile = options.output || 'client_info.json';
+    const envFile = '.env';
 
-    // Check if client_info.json already exists
-    if (existsSync(outputFile)) {
-      console.log(chalk.yellow(`${outputFile} already exists. Overwriting...`));
+    // Check if .env already exists
+    if (existsSync(envFile)) {
+      console.log(chalk.yellow(`.env already exists. Overwriting...`));
     }
 
-    let commitObligationAddress: string | undefined;
-    let account: any;
-
-    // Create account from private key
-    account = privateKeyToAccount(options.privateKey as `0x${string}`, {
+    // Create account from private key to get the address
+    const account = privateKeyToAccount(options.privateKey as `0x${string}`, {
       nonceManager,
     });
 
-    console.log(chalk.gray(`Setting up client for address: ${account.address}`));
+    console.log(chalk.green('✓ Account created successfully'));
+    console.log(chalk.gray(`  Address: ${account.address}`));
+    console.log(chalk.gray(`  Network: ${options.network}`));
 
-    if (options.network.toLowerCase() === 'anvil') {
-      // For anvil network, use the test setup to get the deployed contract
-      console.log(chalk.gray('Using Anvil network with test environment...'));
-      const setup = await setupTest();
-      commitObligationAddress = setup.commitObligationAddress;
-      
-      // For anvil, we'll just store the configuration and let the loader handle client creation
-      console.log(chalk.green('Anvil setup complete'));
+    // Create .env content
+    let envContent = `# Git Escrows Client Configuration
+# Generated on ${new Date().toISOString()}
 
+PRIVATE_KEY=${options.privateKey}
+ADDRESS=${account.address}
+NETWORK=${options.network}
+`;
+
+    // Add RPC URL if not anvil/localhost
+    if (options.network.toLowerCase() !== 'anvil' && options.network.toLowerCase() !== 'localhost') {
+      envContent += `RPC_URL=# Add your RPC URL here
+`;
     } else {
-      // For other networks, we'll just store the basic configuration
-      console.log(chalk.gray(`Setting up client for network: ${options.network}`));
-      
-      // For now, we'll just create the basic client structure
-      // In a real implementation, you'd need to handle different networks
-      // and potentially deploy the CommitObligation contract
-      
-      switch (options.network.toLowerCase()) {
-        case 'localhost':
-          console.log(chalk.gray('Using localhost network'));
-          break;
-        case 'sepolia':
-          // You would configure sepolia here
-          throw new Error('Sepolia network configuration not implemented yet');
-        case 'mainnet':
-          // You would configure mainnet here
-          throw new Error('Mainnet network configuration not implemented yet');
-        default:
-          throw new Error(`Unsupported network: ${options.network}`);
-      }
-      
-      console.log(chalk.yellow('CommitObligation contract not deployed for this network. You may need to deploy it manually.'));
+      envContent += `RPC_URL=http://127.0.0.1:8545
+`;
     }
 
-    // Create client info object
-    const clientInfo: ClientInfo = {
-      privateKey: options.privateKey,
-      network: options.network,
-      address: account.address,
-      commitObligationAddress,
-      timestamp: new Date().toISOString(),
-    };
+    // Add placeholder for commit obligation address
+    envContent += `COMMIT_OBLIGATION_ADDRESS=# Add the deployed CommitObligation contract address here
 
-    // Save to file
-    writeFileSync(outputFile, JSON.stringify(clientInfo, null, 2));
+# Optional additional contract addresses:
+# ERC20_ESCROW_OBLIGATION_ADDRESS=
+# ARBITER_ADDRESS=
+# ORACLE_ADDRESS=
+# TOKEN_ADDRESS=
+`;
 
-    console.log(chalk.green('Client initialized successfully!'));
-    console.log(chalk.gray(`Client configuration saved to: ${outputFile}`));
-    console.log(chalk.gray(`Address: ${account.address}`));
-    console.log(chalk.gray(`Network: ${options.network}`));
-    if (commitObligationAddress) {
-      console.log(chalk.gray(`CommitObligation Contract: ${commitObligationAddress}`));
-    }
+    // Write .env file
+    writeFileSync(envFile, envContent);
+
+    console.log(chalk.green(`✅ .env file created successfully!`));
+    console.log(chalk.yellow('\nNext steps:'));
+    console.log(chalk.gray('1. Add the COMMIT_OBLIGATION_ADDRESS to your .env file'));
+    console.log(chalk.gray('2. If using a network other than anvil, add the RPC_URL'));
+    console.log(chalk.gray('3. Test your configuration with: git-escrows list'));
     
-    console.log(chalk.gray('Use this configuration with other commands by having client_info.json in your working directory.'));
+    console.log(chalk.cyan('\nExample usage:'));
+    console.log(chalk.gray('git-escrows submit --tests-repo "repo-url" --tests-commit "hash" --reward "1000" --arbiter "0x..." --oracle "0x..." --token "0x..."'));
 
     // Exit successfully
     process.exit(0);
 
   } catch (error) {
-    console.error(chalk.red('Failed to initialize client:'));
+    console.error(chalk.red('Failed to create client configuration:'));
     console.error(chalk.red(error instanceof Error ? error.message : String(error)));
     process.exit(1);
   }
