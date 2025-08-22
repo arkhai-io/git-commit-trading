@@ -8,6 +8,7 @@
   },
   "scripts": {
     "test": "bun test ./tests --exclude alkahest-ts/**",
+    "build:contracts": "forge build --root ./contract",
     "build": "tsup src/index.ts --dts --format esm,cjs",
     "build:binary": "bun build --compile --outfile bin/git-escrows src/cli/git-escrows.ts",
     "build:binary:linux": "bun build --compile --target bun-linux-x64 --outfile bin/git-escrows src/cli/git-escrows.ts",
