@@ -1,8 +1,7 @@
 import chalk from 'chalk';
 import { encodeAbiParameters, parseAbiParameters } from 'viem';
-import { setupTest } from '../../../tests/utils/setup.js';
 import { CommitAlgo } from '../../clients/commitObligation.js';
-import { getClientOrSetupTest } from '../utils/clientLoader.js';
+import { createClientFromEnv, requireEnvFile } from '../utils/envLoader.js';
 
 interface SubmitOptions {
   testsRepo: string;
@@ -36,38 +35,24 @@ export async function submitCommand(options: SubmitOptions) {
       throw new Error(`Invalid commit algorithm: ${options.testsAlgo}. Use: sha1, sha256, or md5`);
     }
 
-    // Setup client environment (try client_info.json first, then fallback to test setup)
-    console.log(chalk.gray('Setting up blockchain environment...'));
-    const setup = await getClientOrSetupTest();
-    const aliceClient = setup.aliceClient;
-    const testContext = setup.testContext;
-
-    if (setup.isFromConfig) {
-      console.log(chalk.green('Using client configuration from client_info.json'));
-      console.log(chalk.gray(`Address: ${setup.clientInfo?.address}`));
-      console.log(chalk.gray(`Network: ${setup.clientInfo?.network}`));
-    } else {
-      console.log(chalk.yellow('No client_info.json found, using test environment'));
-    }
-
-    // Use provided addresses or defaults from test setup (if available)
-    let arbiterAddress, oracleAddress, tokenAddress;
+    // Check for .env file and load client
+    requireEnvFile();
     
-    if (setup.isFromConfig) {
-      // When using client_info.json, require explicit addresses or use common defaults
-      arbiterAddress = options.arbiter;
-      oracleAddress = options.oracle;
-      tokenAddress = options.token;
-      
-      if (!arbiterAddress || !oracleAddress || !tokenAddress) {
-        throw new Error('When using client configuration, you must provide --arbiter, --oracle, and --token addresses');
-      }
-    } else {
-      // When using test environment, use test defaults
-      arbiterAddress = options.arbiter || testContext!.addresses.trustedOracleArbiter;
-      oracleAddress = options.oracle || testContext!.charlie;
-      tokenAddress = options.token || testContext!.mockAddresses.erc20A;
+    console.log(chalk.gray('Setting up blockchain client...'));
+    const { client, config, hasCommitObligation } = await createClientFromEnv();
+    
+    if (!hasCommitObligation) {
+      throw new Error('COMMIT_OBLIGATION_ADDRESS is required in .env file for this command');
     }
+
+    // Require explicit addresses when using environment configuration
+    if (!options.arbiter || !options.oracle || !options.token) {
+      throw new Error('You must provide --arbiter, --oracle, and --token addresses when using environment configuration');
+    }
+    
+    const arbiterAddress = options.arbiter;
+    const oracleAddress = options.oracle; 
+    const tokenAddress = options.token;
 
     // Encode the demand data
     const encodeCommitTestsDemand = (demand: {
@@ -96,7 +81,7 @@ export async function submitCommand(options: SubmitOptions) {
     console.log(chalk.gray(`  Commit Algorithm: ${options.testsAlgo || 'sha1'}`));
 
     // Create the trusted oracle demand
-    const demand = aliceClient.arbiters.encodeTrustedOracleDemand({
+    const demand = client.arbiters.encodeTrustedOracleDemand({
       oracle: oracleAddress,
       data: commitTestsData,
     });
@@ -105,7 +90,7 @@ export async function submitCommand(options: SubmitOptions) {
 
     // Create the escrow by depositing tokens
     const rewardAmount = BigInt(options.reward);
-    const { attested: escrow } = await aliceClient.erc20.permitAndBuyWithErc20(
+    const { attested: escrow } = await client.erc20.permitAndBuyWithErc20(
       {
         address: tokenAddress,
         value: rewardAmount,

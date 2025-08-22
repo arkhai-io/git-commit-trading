@@ -1,7 +1,6 @@
 import chalk from 'chalk';
-import { setupTest } from '../../../tests/utils/setup.js';
 import { CommitAlgo, type CommitObligationData } from '../../clients/commitObligation.js';
-import { getClientOrSetupTest } from '../utils/clientLoader.js';
+import { createClientFromEnv, requireEnvFile } from '../utils/envLoader.js';
 
 interface FulfillOptions {
   escrowUid: string;
@@ -32,17 +31,14 @@ export async function fulfillCommand(options: FulfillOptions) {
       throw new Error(`Invalid commit algorithm: ${options.solutionAlgo}. Use: sha1, sha256, or md5`);
     }
 
-    // Setup client environment (try client_info.json first, then fallback to test setup)
-    console.log(chalk.gray('Setting up blockchain environment...'));
-    const setup = await getClientOrSetupTest();
-    const bobClient = setup.bobClient;
-
-    if (setup.isFromConfig) {
-      console.log(chalk.green('Using client configuration from client_info.json'));
-      console.log(chalk.gray(`Address: ${setup.clientInfo?.address}`));
-      console.log(chalk.gray(`Network: ${setup.clientInfo?.network}`));
-    } else {
-      console.log(chalk.yellow('No client_info.json found, using test environment'));
+    // Check for .env file and load client
+    requireEnvFile();
+    
+    console.log(chalk.gray('Setting up blockchain client...'));
+    const { client, config, hasCommitObligation } = await createClientFromEnv();
+    
+    if (!hasCommitObligation) {
+      throw new Error('COMMIT_OBLIGATION_ADDRESS is required in .env file for this command');
     }
 
     // Parse additional hosts
@@ -69,7 +65,7 @@ export async function fulfillCommand(options: FulfillOptions) {
     console.log(chalk.gray('Submitting fulfillment transaction...'));
 
     // Submit the fulfillment
-    const { attested: fulfillment } = await bobClient.commitObligation.doObligation(
+    const { attested: fulfillment } = await client.commitObligation.doObligation(
       obligationData,
       options.escrowUid as `0x${string}`,
     );
