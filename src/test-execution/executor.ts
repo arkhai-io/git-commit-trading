@@ -1,9 +1,8 @@
-import simpleGit, { type SimpleGit } from 'simple-git';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import chalk from 'chalk';
 import type { Config, ExecutionResult, TestResult, RepositoryConfig } from './types.js';
-import { Logger, executeCommand, ensureDirectory, removeDirectory, copyDirectory, parseCommand, validateCommitHash, normalizeCommitHash } from './utils.js';
+import { Logger, executeCommand, ensureDirectory, removeDirectory, copyDirectory, parseCommand, validateCommitHash, normalizeCommitHash, downloadAndExtractArchive } from './utils.js';
 
 export class TestExecutor {
   private config: Config;
@@ -100,44 +99,56 @@ export class TestExecutor {
   }
 
   private async cloneRepository(repo: RepositoryConfig, targetDir: string): Promise<void> {
-    const git: SimpleGit = simpleGit();
-    
-    if (repo.commitHash && repo.commitHash.trim() !== '') {
-      // Validate commit hash format if algorithm is specified
-      if (repo.commitAlgo) {
-        const normalizedHash = normalizeCommitHash(repo.commitHash);
-        if (!validateCommitHash(normalizedHash, repo.commitAlgo)) {
-          throw new Error(`Invalid ${repo.commitAlgo.toUpperCase()} commit hash format: ${repo.commitHash}`);
+    let downloadUrl: string;
+    const host = repo.url;
+
+    // Case 1: If host contains .git suffix, remove it and create GitHub archive link
+    if (host.endsWith('.git')) {
+      if (host.includes('github.com')) {
+        // Extract owner/repo from git URL
+        const gitUrlMatch = host.match(/github\.com[\/:]([^\/]+)\/([^\/]+)\.git$/);
+        if (gitUrlMatch && repo.commitHash) {
+          const [, owner, repoName] = gitUrlMatch;
+          downloadUrl = `https://github.com/${owner}/${repoName}/archive/${repo.commitHash}.tar.gz`;
+          Logger.step(`Converted git URL to archive URL: ${downloadUrl}`);
+        } else {
+          throw new Error(`Cannot construct archive URL from ${host}. Please provide commitHash.`);
         }
-        Logger.step(`Validated ${repo.commitAlgo.toUpperCase()} commit hash: ${normalizedHash}`);
-      }
-      
-      // Clone the full repository if we need a specific commit
-      Logger.step(`Cloning repository ${repo.url}...`);
-      await git.clone(repo.url, targetDir);
-      
-      // Navigate to the cloned directory and checkout the specific commit
-      const repoGit: SimpleGit = simpleGit(targetDir);
-      const commitToCheckout = normalizeCommitHash(repo.commitHash);
-      Logger.step(`Checking out commit ${commitToCheckout}${repo.commitAlgo ? ` (${repo.commitAlgo.toUpperCase()})` : ''}...`);
-      
-      try {
-        await repoGit.checkout(commitToCheckout);
-        Logger.success(`Successfully checked out commit ${commitToCheckout}`);
-      } catch (error) {
-        throw new Error(`Failed to checkout commit ${commitToCheckout}: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    } else {
-      // Clone with branch optimization if no specific commit is needed
-      const branch = repo.branch || 'main'; // Default to main if no branch specified
-      Logger.step(`Cloning repository ${repo.url} (branch: ${branch})...`);
-      try {
-        await git.clone(repo.url, targetDir, ['--branch', branch, '--single-branch']);
-        Logger.success(`Successfully cloned branch ${branch}`);
-      } catch (error) {
-        throw new Error(`Failed to clone branch ${branch}: ${error instanceof Error ? error.message : String(error)}`);
+      } else {
+        throw new Error(`Git URLs are only supported for GitHub repositories. Use direct download links for other hosts.`);
       }
     }
+    // Case 2: If host doesn't contain .git suffix but is GitHub (and not already an archive), create download link
+    else if (host.includes('github.com') && !host.includes('/archive/') && !host.endsWith('.tar.gz')) {
+      const githubMatch = host.match(/github\.com[\/:]([^\/]+)\/([^\/]+)\/?$/);
+      if (githubMatch && repo.commitHash) {
+        const [, owner, repoName] = githubMatch;
+        downloadUrl = `https://github.com/${owner}/${repoName}/archive/${repo.commitHash}.tar.gz`;
+        Logger.step(`Constructed GitHub archive URL: ${downloadUrl}`);
+      } else {
+        throw new Error(`Cannot construct archive URL from ${host}. Please provide commitHash.`);
+      }
+    }
+    // Case 3: If host contains other link (not GitHub) OR is already a direct archive URL, download directly
+    else {
+      downloadUrl = host;
+      Logger.step(`Using direct download URL: ${downloadUrl}`);
+    }
+
+    // Validate commit hash format if algorithm is specified
+    if (repo.commitHash && repo.commitAlgo) {
+      const normalizedHash = normalizeCommitHash(repo.commitHash);
+      if (!validateCommitHash(normalizedHash, repo.commitAlgo)) {
+        throw new Error(`Invalid ${repo.commitAlgo.toUpperCase()} commit hash format: ${repo.commitHash}`);
+      }
+      Logger.step(`Validated ${repo.commitAlgo.toUpperCase()} commit hash: ${normalizedHash}`);
+    }
+
+    // Download and extract the archive
+    Logger.step(`Downloading and extracting archive from ${downloadUrl}...`);
+    await ensureDirectory(targetDir);
+    await downloadAndExtractArchive(downloadUrl, targetDir);
+    Logger.success('Archive downloaded and extracted successfully');
   }
 
   private async mergeTestcases(): Promise<void> {

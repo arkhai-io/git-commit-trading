@@ -3,6 +3,8 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import chalk from 'chalk';
 import type { Config } from './types.js';
+import { exec } from 'child_process';
+
 
 export async function loadConfig(configPath: string): Promise<Config> {
   try {
@@ -195,4 +197,25 @@ export function getCommitHashLength(algorithm: 'sha256' | 'md5' | 'sha1'): numbe
 
 export function normalizeCommitHash(commitHash: string): string {
   return commitHash.trim().toLowerCase();
+}
+
+
+/**
+ * Download a tar.gz archive from a URL and extract it to a target directory using curl and tar.
+ * @param url The direct download URL (e.g. https://.../archive/{commit-sha}.tar.gz)
+ * @param targetDir The directory to extract the archive into
+ */
+export async function downloadAndExtractArchive(url: string, targetDir: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    // -L follows redirects, --fail for proper error code, -s for silent
+    // --strip-components=1 removes the top-level folder from the archive
+    const cmd = `curl -L --fail -s "${url}" | tar -xz --strip-components=1 -C "${targetDir}"`;
+    exec(cmd, (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error(`Failed to download or extract archive: ${stderr || error.message}`));
+      } else {
+        resolve();
+      }
+    });
+  });
 }

@@ -95,13 +95,13 @@ export class GitTestExecution {
     return {
       repositories: {
         source: {
-          url: 'https://github.com/your-org/source-repo.git',
-          branch: 'main',
+          url: 'https://github.com/your-org/source-repo/archive/{commit-sha}.tar.gz',
+          commitHash: 'abc123def456', // Required: specific commit hash
           installCommand: 'npm install'
         },
         testcase: {
-          url: 'https://github.com/your-org/testcase-repo.git',
-          branch: 'main',
+          url: 'https://github.com/your-org/testcase-repo/archive/{commit-sha}.tar.gz',
+          commitHash: 'def456ghi789', // Required: specific commit hash  
           testCommand: 'npm run test',
           buildCommand: 'npm run build',
           installCommand: 'npm install'

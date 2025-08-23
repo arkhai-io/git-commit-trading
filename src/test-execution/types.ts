@@ -1,7 +1,7 @@
 export interface RepositoryConfig {
   url: string;
-  branch?: string; // Made optional since commitHash can be used instead
-  commitHash?: string; // Optional commit hash to checkout specific commit
+  branch?: string; // Optional, only used for fallback scenarios
+  commitHash: string; // Required for archive downloads
   commitAlgo?: 'sha256' | 'md5' | 'sha1'; // Algorithm used for commit hash format validation
   buildCommand?: string; // Full command like "npm run build" or "bun run build"
   testCommand?: string; // Full command like "npm run test" or "bun test"

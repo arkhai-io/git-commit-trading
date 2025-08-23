@@ -47,12 +47,11 @@ describe("Oracle CommitObligation Tests", () => {
         test("Oracle CommitObligation Integration", async () => {
             const encodeCommitTestsDemand = (demand: {
                 testsCommitHash: string;
-                testsCommand: string;
                 testsCommitAlgo: number; // 0 = Sha1, 1 = Sha256
                 hosts: string[];
             }) => {
                 return encodeAbiParameters(
-                    parseAbiParameters("(string testsCommitHash, string testsCommand, uint8 testsCommitAlgo, string[] hosts)"),
+                    parseAbiParameters("(string testsCommitHash, uint8 testsCommitAlgo, string[] hosts)"),
                     [demand],
                 );
             };
@@ -63,7 +62,6 @@ describe("Oracle CommitObligation Tests", () => {
 
             const commitTestsData = encodeCommitTestsDemand({
                 testsCommitHash: "ab940eceae6702e05b9c03765b7407a054ea84c9",
-                testsCommand: "npm test",
                 testsCommitAlgo: CommitAlgo.SHA256,
                 hosts: ["https://github.com/thinhnx-var/testcase-repo-alice.git"]
             });
@@ -100,28 +98,30 @@ describe("Oracle CommitObligation Tests", () => {
             const { unwatch } = await arbiterClient.oracle.listenAndArbitrateForEscrow({
                 escrow: {
                     attester: testContext.addresses.erc20EscrowObligation,
-                    demandAbi: parseAbiParameters("(string testsCommitHash, string testsCommand, uint8 testsCommitAlgo, string[] hosts)"),
+                    demandAbi: parseAbiParameters("(string testsCommitHash, uint8 testsCommitAlgo, string[] hosts)"),
                 },
                 fulfillment: {
                     attester: commitObligationAddress,
-                    obligationAbi: parseAbiParameters("(string commitHash,uint8 commitAlgo,string[] hosts)"),
+                    obligationAbi: parseAbiParameters("(string commitHash, uint8 commitAlgo, string[] hosts)"),
                 },
                 arbitrate: async (obligation: any, demand: any) => {
                     console.log("Arbitrating obligation:", obligation, "against demand:", demand);
                     //After Bob writes a commit that makes the test suite pass,
                     //Clone the repository, run the tests, and check if they pass
                     try {
+                        // TODO: Change the hardcoded of buildCommand & testCommand to follow the package.json ( if the project is node base)
                         const config = GitTestExecution.initConfig();
                         // rewrite config with data from obligation and demand
                         config.repositories.testcase.url = demand[0].hosts[0];
                         config.repositories.testcase.commitHash = demand[0].testsCommitHash;
                         config.repositories.testcase.buildCommand = "npm run build";
-                        config.repositories.testcase.testCommand = demand[0].testsCommand;
+                        // config.repositories.testcase.testCommand = demand[0].testsCommand;
+                        config.repositories.testcase.testCommand = "bun test";
 
                         config.repositories.source.url = obligation[0].hosts[0];
                         config.repositories.source.commitHash = obligation[0].commitHash;
-                        config.repositories.source.testCommand = obligation[0].testsCommand;
-                        config.repositories.source.installCommand = "npm install"
+                        config.repositories.source.testCommand = "bun test";
+                        config.repositories.source.installCommand = "npm install";
 
                         // console.log("Starting test execution with config:", config);
                         
