@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import chalk from 'chalk';
 import type { Config, ExecutionResult, TestResult, RepositoryConfig } from './types.js';
 import { Logger, executeCommand, ensureDirectory, removeDirectory, copyDirectory, parseCommand, validateCommitHash, normalizeCommitHash, downloadAndExtractArchive } from './utils.js';
+import { detectProjectCommands } from './projectDetection.js';
 
 export class TestExecutor {
   private config: Config;
@@ -193,10 +194,22 @@ export class TestExecutor {
   }
 
   private async installDependencies(): Promise<void> {
-    // Install dependencies for the merged project (Alice's install command)
-    const installCommand = this.config.repositories.testcase.installCommand || 'npm install';
+    let installCommand: string;
     
-    Logger.step(`Installing dependencies using: ${installCommand}`);
+    // First try to get install command from config (Alice's testcase repo)
+    if (this.config.repositories.testcase.installCommand) {
+      installCommand = this.config.repositories.testcase.installCommand;
+      Logger.step(`Using configured install command: ${installCommand}`);
+    } else {
+      // Fallback to auto-detection
+      Logger.step('Auto-detecting install command from merged project...');
+      const detectedCommands = await detectProjectCommands(this.mergedDir);
+      if (!detectedCommands.isTypeScriptProject || !detectedCommands.commands) {
+        throw new Error(`Failed to detect TypeScript project commands: ${detectedCommands.error || 'Not a valid TypeScript project'}`);
+      }
+      installCommand = detectedCommands.commands.installCommand;
+      Logger.step(`Auto-detected install command: ${installCommand}`);
+    }
     
     const { command, args } = parseCommand(installCommand);
     
@@ -217,14 +230,29 @@ export class TestExecutor {
   }
 
   private async buildSource(): Promise<void> {
+    let buildCommand: string | undefined;
+    
     // Try Alice's build command first, then Bob's
-    const buildCommand = this.config.repositories.testcase.buildCommand || this.config.repositories.source.buildCommand;
+    buildCommand = this.config.repositories.testcase.buildCommand || this.config.repositories.source.buildCommand;
+    
     if (!buildCommand) {
-      return;
+      // Fallback to auto-detection
+      Logger.step('Auto-detecting build command from merged project...');
+      const detectedCommands = await detectProjectCommands(this.mergedDir);
+      if (!detectedCommands.isTypeScriptProject || !detectedCommands.commands) {
+        Logger.warning('No build command detected, skipping build step');
+        return;
+      }
+      buildCommand = detectedCommands.commands.buildCommand;
+      if (!buildCommand || buildCommand === 'echo "No build command"') {
+        Logger.warning('No build command available, skipping build step');
+        return;
+      }
+      Logger.step(`Auto-detected build command: ${buildCommand}`);
+    } else {
+      Logger.step(`Using configured build command: ${buildCommand}`);
     }
 
-    Logger.step(`Building project using: ${buildCommand}`);
-    
     const { command, args } = parseCommand(buildCommand);
     
     const result = await executeCommand(
@@ -239,16 +267,31 @@ export class TestExecutor {
     if (result.exitCode !== 0) {
       throw new Error(`Build failed: ${result.stderr}`);
     }
+    
+    Logger.success('Build completed successfully');
   }
 
   private async runTests(): Promise<TestResult> {
     const startTime = Date.now();
     
     try {
-      // Use Alice's test command or fall back to default
-      const testCommand = this.config.repositories.testcase.testCommand || this.config.repositories.source.testCommand || 'npm test';
+      let testCommand: string | undefined;
       
-      Logger.step(`Running tests with command: ${testCommand}`);
+      // Use Alice's test command first, then Bob's
+      testCommand = this.config.repositories.testcase.testCommand || this.config.repositories.source.testCommand;
+      
+      if (!testCommand) {
+        // Fallback to auto-detection
+        Logger.step('Auto-detecting test command from merged project...');
+        const detectedCommands = await detectProjectCommands(this.mergedDir);
+        if (!detectedCommands.isTypeScriptProject || !detectedCommands.commands) {
+          throw new Error(`Failed to detect TypeScript project commands: ${detectedCommands.error || 'Not a valid TypeScript project'}`);
+        }
+        testCommand = detectedCommands.commands.testCommand;
+        Logger.step(`Auto-detected test command: ${testCommand}`);
+      } else {
+        Logger.step(`Using configured test command: ${testCommand}`);
+      }
 
       const { command, args } = parseCommand(testCommand);
 

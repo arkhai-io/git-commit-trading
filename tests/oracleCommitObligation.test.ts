@@ -114,14 +114,14 @@ describe("Oracle CommitObligation Tests", () => {
                         // rewrite config with data from obligation and demand
                         config.repositories.testcase.url = demand[0].hosts[0];
                         config.repositories.testcase.commitHash = demand[0].testsCommitHash;
-                        config.repositories.testcase.buildCommand = "npm run build";
+                        // config.repositories.testcase.buildCommand = "npm run build";
                         // config.repositories.testcase.testCommand = demand[0].testsCommand;
-                        config.repositories.testcase.testCommand = "bun test";
+                        // config.repositories.testcase.testCommand = "bun test";
 
                         config.repositories.source.url = obligation[0].hosts[0];
                         config.repositories.source.commitHash = obligation[0].commitHash;
-                        config.repositories.source.testCommand = "bun test";
-                        config.repositories.source.installCommand = "npm install";
+                        // config.repositories.source.testCommand = "bun test";
+                        // config.repositories.source.installCommand = "npm install";
 
                         // console.log("Starting test execution with config:", config);
                         

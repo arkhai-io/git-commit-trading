@@ -8,19 +8,29 @@ interface ServerOptions {
   pollingInterval?: string;
   timeout?: string;
   cleanup?: boolean;
+  past?: boolean;
+  listen?: boolean;
 }
 
 export async function serverCommand(options: ServerOptions) {
   try {
     console.log(chalk.blue('Starting Git Escrows Arbiter Server...'));
     
-    const port = parseInt(options.port || '3000');
+    // Validate mode options
+    if (options.past && options.listen) {
+      throw new Error('Cannot use both --past and --listen options at the same time');
+    }
+    
+    if (!options.past && !options.listen) {
+      throw new Error('Must specify either --past or --listen mode');
+    }
+    
     const pollingInterval = parseInt(options.pollingInterval || '1000');
     const timeout = parseInt(options.timeout || '300000');
     const cleanup = options.cleanup !== false;
 
     console.log(chalk.gray('Server configuration:'));
-    console.log(chalk.gray(`  Port: ${port}`));
+    console.log(chalk.gray(`  Mode: ${options.past ? 'Arbitrate Past' : 'Listen and Arbitrate'}`));
     console.log(chalk.gray(`  Polling Interval: ${pollingInterval}ms`));
     console.log(chalk.gray(`  Test Timeout: ${timeout}ms`));
     console.log(chalk.gray(`  Cleanup: ${cleanup}`));
@@ -39,45 +49,85 @@ export async function serverCommand(options: ServerOptions) {
     console.log(chalk.gray(`  Oracle Address: ${config.address}`));
     console.log(chalk.gray(`  CommitObligation Contract: ${config.commitObligationAddress}`));
 
-    // Note: The server functionality requires additional implementation for:
-    // 1. Event listening for new escrows
-    // 2. Test execution coordination
-    // 3. Arbitration logic
-    
-    console.log(chalk.yellow('⚠️  Server functionality is partially implemented'));
-    console.log(chalk.gray('The server would need additional contract event listeners'));
-    console.log(chalk.gray('and arbitration logic to be fully functional.'));
-    
-    console.log(chalk.yellow('Starting basic server loop...'));
-    console.log(chalk.gray('Press Ctrl+C to stop the server'));
+    // Define the arbitration logic
+    const arbitrate = async (obligation: any, demand: any) => {
+      console.log("Arbitrating obligation:", obligation, "against demand:", demand);
+      
+      try {
+        const testConfig = GitTestExecution.initConfig();
+        
+        // Configure repositories from obligation and demand
+        testConfig.repositories.testcase.url = demand[0].hosts[0];
+        testConfig.repositories.testcase.commitHash = demand[0].testsCommitHash;
+        testConfig.repositories.testcase.testCommand = demand[0].testsCommand;
 
-    // Basic server loop - in a full implementation, this would:
-    // 1. Listen for new escrow events on the blockchain
-    // 2. When a fulfillment is submitted, execute the arbitration logic
-    // 3. Compare test results and submit arbitration decisions
-    
-    let isRunning = true;
-    
-    // Handle graceful shutdown
-    process.on('SIGINT', () => {
-      console.log(chalk.yellow('\n🛑 Shutting down server...'));
-      isRunning = false;
+        testConfig.repositories.source.url = obligation[0].hosts[0];
+        testConfig.repositories.source.commitHash = obligation[0].commitHash;
+        
+        // Note: install, build, and test commands will be auto-detected from package.json
+        // unless explicitly configured above
+        
+        // Set execution parameters
+        testConfig.execution.timeout = timeout;
+        testConfig.execution.cleanupAfterExecution = cleanup;
+        
+        const result = await GitTestExecution.executeTests(testConfig, {
+          onProgress: (step) => console.log(`  → ${step}`)
+        });
+        
+        console.log("Execution result:", result.testResult.success);
+        return result.testResult.success;
+      } catch (error) {
+        console.error("Error during test execution:", error);
+        return false;
+      }
+    };
+
+    // Set up arbitration parameters
+    const arbitrationParams = {
+      escrow: {
+        attester: client.contractAddresses.erc20EscrowObligation,
+        demandAbi: parseAbiParameters("(string testsCommitHash, string testsCommand, uint8 testsCommitAlgo, string[] hosts)"),
+      },
+      fulfillment: {
+        attester: config.commitObligationAddress as `0x${string}`,
+        obligationAbi: parseAbiParameters("(string commitHash,uint8 commitAlgo,string[] hosts)"),
+      },
+      arbitrate,
+      onAfterArbitrate: async (decision: any) => {
+        console.log(chalk.green(`✓ Arbitration completed: ${decision.decision ? 'PASSED' : 'FAILED'}`));
+        console.log(chalk.gray(`  Transaction Hash: ${decision.hash}`));
+        console.log(chalk.gray(`  Escrow UID: ${decision.escrowAttestation?.uid}`));
+        console.log(chalk.gray(`  Fulfillment UID: ${decision.attestation.uid}`));
+      },
+      pollingInterval,
+    };
+
+    if (options.past) {
+      console.log(chalk.yellow('� Arbitrating past obligations...'));
+      
+      const decisions = await client.oracle.arbitratePastForEscrow(arbitrationParams);
+      
+      console.log(chalk.green(`✓ Arbitration completed for ${decisions.decisions.length} past obligations`));
+      console.log(chalk.gray(`  Escrows processed: ${decisions.escrows.length}`));
+      console.log(chalk.gray(`  Decisions made: ${decisions.decisions.length}`));
+      
       process.exit(0);
-    });
+    } else {
+      console.log(chalk.yellow('Listening for new obligations and arbitrating...'));
+      console.log(chalk.gray('Press Ctrl+C to stop the server'));
 
-    // Placeholder server loop
-    let iteration = 0;
-    while (isRunning) {
-      iteration++;
-      console.log(chalk.gray(`[${new Date().toLocaleTimeString()}] Server heartbeat ${iteration} - listening for escrows...`));
+      const { unwatch } = await client.oracle.listenAndArbitrateForEscrow(arbitrationParams);
       
-      // In a real implementation, you would:
-      // - Query the blockchain for new events
-      // - Process any pending arbitrations
-      // - Execute tests for fulfillments
-      
-      // Wait for the polling interval
-      await new Promise(resolve => setTimeout(resolve, pollingInterval));
+      // Handle graceful shutdown
+      process.on('SIGINT', () => {
+        console.log(chalk.yellow('\nShutting down server...'));
+        unwatch();
+        process.exit(0);
+      });
+
+      // Keep the process alive
+      await new Promise(() => {}); // This will run indefinitely until SIGINT
     }
     
   } catch (error) {

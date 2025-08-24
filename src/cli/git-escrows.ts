@@ -71,7 +71,9 @@ program
 program
   .command('server')
   .description('Run the arbiter server to listen and arbitrate escrows')
-  .option('--port <port>', 'Server port', '3000')
+  .option('--past', 'Arbitrate past obligations and exit')
+  .option('--listen', 'Listen for new obligations and arbitrate continuously')
+  .option('--port <port>', 'Server port (deprecated)', '3000')
   .option('--polling-interval <ms>', 'Polling interval for new escrows (ms)', '1000')
   .option('--timeout <ms>', 'Test execution timeout (ms)', '300000')
   .option('--cleanup', 'Cleanup temporary directories after execution', true)
