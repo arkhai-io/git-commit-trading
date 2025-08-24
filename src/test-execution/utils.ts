@@ -143,11 +143,39 @@ export function getPackageManagerCommands(packageManager: string) {
 
 /**
  * Parse a full command string into command and arguments
- * @param fullCommand - Full command like "npm run test" or "bun install"
+ * @param fullCommand - Full command like "npm run test" or "bun install" or compound commands with &&, ||, ;
  * @returns {command: string, args: string[]}
  */
 export function parseCommand(fullCommand: string): { command: string; args: string[] } {
-  const parts = fullCommand.trim().split(/\s+/);
+  const trimmedCommand = fullCommand.trim();
+  
+  if (!trimmedCommand) {
+    throw new Error('Invalid command: empty command string');
+  }
+  
+  // Check if this is a compound command (contains &&, ||, ;, or |)
+  const hasShellOperators = /[;&|]/.test(trimmedCommand);
+  
+  if (hasShellOperators) {
+    // For compound commands, we need to run them in a shell
+    // Use 'sh' on Unix-like systems, 'cmd' on Windows
+    const isWindows = process.platform === 'win32';
+    
+    if (isWindows) {
+      return {
+        command: 'cmd',
+        args: ['/c', trimmedCommand]
+      };
+    } else {
+      return {
+        command: 'sh',
+        args: ['-c', trimmedCommand]
+      };
+    }
+  }
+  
+  // For simple commands, split by whitespace
+  const parts = trimmedCommand.split(/\s+/);
   
   if (!parts[0]) {
     throw new Error('Invalid command: empty command string');
