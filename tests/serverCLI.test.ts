@@ -120,8 +120,8 @@ async function runCommand(args: string[], timeoutMs: number = 10000): Promise<{
     stderr: string;
 }> {
     return new Promise((resolve) => {
-        const child = spawn('bun', ['run', 'src/cli/git-escrows.ts', ...args], {
-            cwd: '/Users/thinhnx/Work/varmeta/coophive/git-deal/git-app',
+        const child = spawn('./bin/git-escrows', args, {
+            cwd: process.cwd(),
             stdio: 'pipe'
         });
 
@@ -160,48 +160,51 @@ async function runCommandWithEnv(args: string[], envFile: string, timeoutMs: num
     stderr: string;
 }> {
     return new Promise((resolve) => {
-        // Copy env file to .env for the test
-        const child = spawn('cp', [envFile, '.env'], {
-            cwd: '/Users/thinhnx/Work/varmeta/coophive/git-deal/git-app',
+        // Copy env file to .env for the test using fs instead of spawn
+        const fs = require('fs');
+        try {
+            fs.copyFileSync(envFile, '.env');
+        } catch (error) {
+            console.error('Failed to copy env file:', error);
+        }
+
+        const testChild = spawn('./bin/git-escrows', args, {
+            cwd: process.cwd(),
+            stdio: 'pipe'
         });
 
-        child.on('close', () => {
-            const testChild = spawn('bun', ['run', 'src/cli/git-escrows.ts', ...args], {
-                cwd: '/Users/thinhnx/Work/varmeta/coophive/git-deal/git-app',
-                stdio: 'pipe'
+        let stdout = '';
+        let stderr = '';
+
+        testChild.stdout?.on('data', (data) => {
+            stdout += data.toString();
+        });
+
+        testChild.stderr?.on('data', (data) => {
+            stderr += data.toString();
+        });
+
+        testChild.on('close', (code) => {
+            // Clean up .env file
+            try {
+                fs.unlinkSync('.env');
+            } catch (error) {
+                // Ignore if file doesn't exist
+            }
+
+            resolve({
+                exitCode: code || 0,
+                stdout,
+                stderr
             });
+        });
 
-            let stdout = '';
-            let stderr = '';
-
-            testChild.stdout?.on('data', (data) => {
-                stdout += data.toString();
-            });
-
-            testChild.stderr?.on('data', (data) => {
-                stderr += data.toString();
-            });
-
-            testChild.on('close', (code) => {
-                // Clean up .env file
-                spawn('rm', ['.env'], {
-                    cwd: '/Users/thinhnx/Work/varmeta/coophive/git-deal/git-app',
-                });
-
-                resolve({
-                    exitCode: code || 0,
-                    stdout,
-                    stderr
-                });
-            });
-
-            // Kill after timeout
+        // Kill after timeout
+        setTimeout(() => {
+            testChild.kill('SIGTERM');
             setTimeout(() => {
-                testChild.kill('SIGTERM');
-                setTimeout(() => {
-                    testChild.kill('SIGKILL');
-                }, 1000);
-            }, timeoutMs);
-        });
+                testChild.kill('SIGKILL');
+            }, 1000);
+        }, timeoutMs);
     });
 }
