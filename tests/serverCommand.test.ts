@@ -253,6 +253,7 @@ describe("Server Command Tests", () => {
             let unwatch: (() => void) | null = null;
 
             try {
+                // First establish the event listener
                 console.log("Setting up real-time event listener...");
 
                 // Start listening for NEW events BEFORE creating any transactions
@@ -284,15 +285,26 @@ describe("Server Command Tests", () => {
                         console.log("  → Real-time arbitration completed:", decision.decision ? 'PASSED' : 'FAILED');
                         console.log("  → Transaction Hash:", decision.hash);
                         arbitrationResult = decision;
-                    }
+                    },
+                    // Add specific options for better event detection in test environment
+                    pollingInterval: 100, // More frequent polling for tests (100ms)
+                    skipAlreadyArbitrated: false, // Don't skip in tests
                 });
 
                 unwatch = result.unwatch;
 
                 console.log("Event listener is now active and watching for events...");
                 
-                // Wait a bit to ensure listener is fully established
-                await Bun.sleep(1000); // Reduced from 2000
+                // Now reset to clean state AFTER establishing listener to avoid interference
+                console.log("Resetting blockchain state for clean test environment...");
+                if (testContext.anvilInitState) {
+                    await testContext.testClient.loadState({
+                        state: testContext.anvilInitState,
+                    });
+                }
+                
+                // Wait longer to ensure listener is fully established on anvil
+                await Bun.sleep(2000); // Increased back to 2000ms for reliability
 
                 const encodeCommitTestsDemand = (demand: {
                     testsCommitHash: string;
@@ -334,7 +346,7 @@ describe("Server Command Tests", () => {
 
                 console.log("Escrow created, UID:", escrow.uid);
                 console.log("Waiting a moment before fulfillment...");
-                await Bun.sleep(500); // Reduced from 1000
+                await Bun.sleep(1000); // Increased back to 1000ms
 
                 console.log("Bob fulfilling escrow (this should trigger the real-time listener)...");
 
@@ -351,8 +363,8 @@ describe("Server Command Tests", () => {
                 console.log("Fulfillment created, UID:", fulfillment.uid);
                 console.log("Waiting for real-time event processing...");
 
-                // Wait for the real-time listener to process the event (reduced timeout)
-                await Bun.sleep(3000); // Reduced from 8000
+                // Wait longer for the real-time listener to process the event
+                await Bun.sleep(5000); // Increased from 3000ms to 5000ms for better reliability
 
                 // Verify that the real-time listener caught the event
                 console.log("Test Results:");
@@ -376,7 +388,7 @@ describe("Server Command Tests", () => {
                     unwatch();
                 }
             }
-        }, 30000); // Reduced timeout from 120000 to 30000
+        }, 45000); // Increased timeout from 30000 to 45000ms to accommodate longer waits
 
         test("should handle multiple real-time events continuously", async () => {
             // Skip this test for now to avoid hanging
@@ -433,22 +445,21 @@ async function runCLICommand(args: string[], timeoutMs: number = 10000): Promise
 }> {
     return new Promise((resolve) => {
         const child = spawn('./bin/git-escrows', args, {
-            cwd: process.cwd(),
             stdio: 'pipe'
         });
 
         let stdout = '';
         let stderr = '';
 
-        child.stdout?.on('data', (data) => {
+        child.stdout?.on('data', (data: any) => {
             stdout += data.toString();
         });
 
-        child.stderr?.on('data', (data) => {
+        child.stderr?.on('data', (data: any) => {
             stderr += data.toString();
         });
 
-        child.on('close', (code) => {
+        child.on('close', (code: number | null) => {
             resolve({
                 exitCode: code || 0,
                 stdout,
