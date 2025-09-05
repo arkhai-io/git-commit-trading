@@ -61,9 +61,9 @@ describe("Oracle CommitObligation Tests", () => {
             //  Alice make an escrow deposit, released to anyone who writes a commit that makes the test suite pass
 
             const commitTestsData = encodeCommitTestsDemand({
-                testsCommitHash: "ab940eceae6702e05b9c03765b7407a054ea84c9",
+                testsCommitHash: "71b4477668d8d6efe6cbc219ec4fd30bc2883f3c",
                 testsCommitAlgo: CommitAlgo.SHA256,
-                hosts: ["https://github.com/thinhnx-var/testcase-repo-alice.git"]
+                hosts: ["https://github.com/thanhngoc541/test-repo.git"]
             });
 
             const demand = aliceClient.arbiters.encodeTrustedOracleDemand({
@@ -85,9 +85,9 @@ describe("Oracle CommitObligation Tests", () => {
             const { attested: fulfillment } =
                 await bobClient.commitObligation.doObligation(
                     {
-                        commitHash: "14acbbd4b4795dc5a8178540e32e1aa9661867ea", // success. to be fail use: 11e0ecb39cc93f999cd5b5afb8a93d90ecb0add5
+                        commitHash: "fcec3615fbb4feb3204b111db620f5b9023095b9", // success. to be fail use: 11e0ecb39cc93f999cd5b5afb8a93d90ecb0add5
                         commitAlgo: CommitAlgo.SHA256,
-                        hosts: ["https://github.com/thinhnx-var/solution-repo-bob.git", "additional.host.com"],
+                        hosts: ["https://github.com/thanhngoc541/test-repo.git", "additional.host.com"],
                     },
                     escrow.uid,
                 );
@@ -124,11 +124,11 @@ describe("Oracle CommitObligation Tests", () => {
                         // config.repositories.source.installCommand = "npm install";
 
                         // console.log("Starting test execution with config:", config);
-                        
+
                         // Set a shorter timeout for the execution to prevent hanging
                         config.execution.timeout = 45000; // 45 seconds
                         config.execution.cleanupAfterExecution = true;
-                        
+
                         const res = await GitTestExecution.executeTests(config, {
                             onProgress: (step) => console.log(`  → ${step}`)
                         });

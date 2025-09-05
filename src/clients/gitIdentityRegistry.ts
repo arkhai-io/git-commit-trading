@@ -23,7 +23,7 @@ export type GitIdentityRegistryAddresses = {
 
 export const makeGitIdentityRegistryClient = (
     viemClient: ViemClient,
-    addresses: GitIdentityRegistryAddresses,
+    addresses: GitIdentityRegistryAddresses
 ) => {
     const claimKey = async (claim: GitKeyClaim) => {
         const { request } = await viemClient.simulateContract({
@@ -71,8 +71,14 @@ export function createGitKeyClaim(
 ): GitKeyClaim {
     return {
         keyType,
-        fingerprint: fingerprint.startsWith("0x") ? fingerprint as `0x${string}` : `0x${fingerprint}`,
-        nonceHash: nonceHash.startsWith("0x") ? nonceHash as `0x${string}` : `0x${nonceHash}`,
-        sig: signature.startsWith("0x") ? signature as `0x${string}` : `0x${signature}`,
+        fingerprint: fingerprint.startsWith("0x")
+            ? (fingerprint as `0x${string}`)
+            : `0x${fingerprint}`,
+        nonceHash: nonceHash.startsWith("0x")
+            ? (nonceHash as `0x${string}`)
+            : `0x${nonceHash}`,
+        sig: signature.startsWith("0x")
+            ? (signature as `0x${string}`)
+            : `0x${signature}`,
     };
 }
