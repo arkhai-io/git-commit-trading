@@ -52,13 +52,13 @@ describe("GitIdentityRegistry Client", () => {
 
   it("should create a git key claim correctly", () => {
     const claim = createGitKeyClaim(
-      KeyType.SSH_ED25519,
+      KeyType.SSHEd25519,
       "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
       "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
       "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
     );
 
-    expect(claim.keyType).toBe(KeyType.SSH_ED25519);
+    expect(claim.keyType).toBe(KeyType.SSHEd25519);
     expect(claim.fingerprint).toBe(
       "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
     );
@@ -86,7 +86,7 @@ describe("GitIdentityRegistry Client", () => {
 
   it("should handle hex strings with 0x prefix", () => {
     const claim = createGitKeyClaim(
-      KeyType.GPG,
+      KeyType.PGPv4,
       "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
       "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
       "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
@@ -107,7 +107,7 @@ describe("GitIdentityRegistry Client", () => {
     it("should claim a Git key successfully", async () => {
       try {
         const claimData = createGitKeyClaim(
-          KeyType.SSH_ED25519,
+          KeyType.SSHEd25519,
           "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
           "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
           "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
@@ -143,7 +143,7 @@ describe("GitIdentityRegistry Client", () => {
 
         // First claim the key
         const claimData = createGitKeyClaim(
-          KeyType.SSH_RSA,
+          KeyType.SSHSecp256k1,
           fingerprint.slice(2), // Remove 0x prefix for createGitKeyClaim
           "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
           "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
@@ -175,7 +175,7 @@ describe("GitIdentityRegistry Client", () => {
           "0x9876543210fedcba9876543210fedcba9876543210fedcba9876543210fedcba" as `0x${string}`;
 
         const claimData = createGitKeyClaim(
-          KeyType.GPG,
+          KeyType.PGPv4,
           fingerprint.slice(2),
           "fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321",
           "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe"
@@ -211,7 +211,7 @@ describe("GitIdentityRegistry Client", () => {
           "0x5555555555555555555555555555555555555555555555555555555555555555" as `0x${string}`;
 
         const claimData = createGitKeyClaim(
-          KeyType.SSH_ECDSA,
+          KeyType.SSHSecp256k1,
           fingerprint.slice(2),
           "1111111111111111111111111111111111111111111111111111111111111111",
           "2222222222222222222222222222222222222222222222222222222222222222"

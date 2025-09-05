@@ -3,10 +3,10 @@ import type { ViemClient } from "alkahest-ts/src/utils";
 
 // Enum for KeyType from the contract
 export enum KeyType {
-    SSH_RSA = 0,
-    SSH_ECDSA = 1,
-    SSH_ED25519 = 2,
-    GPG = 3,
+    PGPv4 = 0,
+    SSHEd25519 = 1,
+    SSHSecp256k1 = 2,
+    X509 = 3,
 }
 
 // Type for the GitKeyClaim data structure
