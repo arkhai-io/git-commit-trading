@@ -1,12 +1,15 @@
+export type ProjectLanguage = 'typescript' | 'rust' | 'python';
+
 export interface RepositoryConfig {
   url: string;
   branch?: string; // Optional, only used for fallback scenarios
   commitHash: string; // Required for archive downloads
   commitAlgo?: 'sha256' | 'md5' | 'sha1'; // Algorithm used for commit hash format validation
-  buildCommand?: string; // Full command like "npm run build" or "bun run build"
-  testCommand?: string; // Full command like "npm run test" or "bun test"
+  language?: ProjectLanguage; // Explicit language specification, if not provided, will be auto-detected
+  buildCommand?: string; // Full command like "npm run build", "cargo build", "python -m build"
+  testCommand?: string; // Full command like "npm run test", "cargo test", "pytest"
   testDirectory?: string;
-  installCommand?: string; // Full command like "npm install" or "bun install"
+  installCommand?: string; // Full command like "npm install", "cargo build", "pip install -r requirements.txt"
 }
 
 export interface ExecutionConfig {

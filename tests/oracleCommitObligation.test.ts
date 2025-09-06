@@ -44,7 +44,223 @@ describe("Oracle CommitObligation Tests", () => {
     });
 
     describe("Git App Flow", () => {
-        test("Oracle CommitObligation Integration", async () => {
+        test("Oracle CommitObligation Integration - Python", async () => {
+            const encodeCommitTestsDemand = (demand: {
+                testsCommitHash: string;
+                testsCommitAlgo: number; // 0 = Sha1, 1 = Sha256
+                hosts: string[];
+            }) => {
+                return encodeAbiParameters(
+                    parseAbiParameters("(string testsCommitHash, uint8 testsCommitAlgo, string[] hosts)"),
+                    [demand],
+                );
+            };
+
+            const arbiter = testContext.addresses.trustedOracleArbiter;
+            // 1. Alice creates Python test suite and commits to the git repository
+            //  Alice makes an escrow deposit, released to anyone who writes a commit that makes the test suite pass
+
+            const commitTestsData = encodeCommitTestsDemand({
+                testsCommitHash: "6491cdb5f5f9101c026db079283dd59c246d895a", // Alice's updated Python tests commit (duplicate removed)
+                testsCommitAlgo: CommitAlgo.SHA256, // Using SHA256 for SHA1 hashes as per existing pattern
+                hosts: ["https://github.com/thinhnx-var/testcase-py-alice.git"]
+            });
+
+            const demand = aliceClient.arbiters.encodeTrustedOracleDemand({
+                oracle,
+                data: commitTestsData,
+            });
+
+            const { attested: escrow } =
+                await aliceClient.erc20.permitAndBuyWithErc20(
+                    {
+                        address: testContext.mockAddresses.erc20A,
+                        value: 10n,
+                    },
+                    { arbiter, demand },
+                    0n,
+                );
+
+            // 2. Bob fulfills the escrow by writing Python solution that makes the test suite pass
+            const { attested: fulfillment } =
+                await bobClient.commitObligation.doObligation(
+                    {
+                        commitHash: "a3b61a4234b335bd2efab78518828d28f97f1ca9", // Bob's Python solution commit
+                        commitAlgo: CommitAlgo.SHA256, // Using SHA256 for SHA1 hashes as per existing pattern
+                        hosts: ["https://github.com/thinhnx-var/solution-py-bob.git"],
+                    },
+                    escrow.uid,
+                );
+
+            await Bun.sleep(150);
+
+            // 2.a Oracle arbitrates the Python test execution
+            const { unwatch } = await arbiterClient.oracle.listenAndArbitrateForEscrow({
+                escrow: {
+                    attester: testContext.addresses.erc20EscrowObligation,
+                    demandAbi: parseAbiParameters("(string testsCommitHash, uint8 testsCommitAlgo, string[] hosts)"),
+                },
+                fulfillment: {
+                    attester: commitObligationAddress,
+                    obligationAbi: parseAbiParameters("(string commitHash, uint8 commitAlgo, string[] hosts)"),
+                },
+                arbitrate: async (obligation: any, demand: any) => {
+                    console.log("Arbitrating Python obligation:", obligation, "against demand:", demand);
+                    try {
+                        const config = GitTestExecution.initConfig();
+                        
+                        // Configure Python test repository (Alice's tests)
+                        config.repositories.testcase.url = demand[0].hosts[0];
+                        config.repositories.testcase.commitHash = demand[0].testsCommitHash;
+
+                        // Configure Python solution repository (Bob's solution)
+                        config.repositories.source.url = obligation[0].hosts[0];
+                        config.repositories.source.commitHash = obligation[0].commitHash;
+                        
+                        config.execution.timeout = 60000; // 60 seconds for Python setup
+                        config.execution.cleanupAfterExecution = true;
+                        
+                        console.log("Starting Python test execution...");
+                        const res = await GitTestExecution.executeTests(config, {
+                            onProgress: (step) => console.log(`  → ${step}`)
+                        });
+                        
+                        console.log(`Python execution result: ${res.testResult.success ? 'PASSED' : 'FAILED'}`);
+                        if (!res.testResult.success && res.testResult.error) {
+                            console.log("Error details:", res.testResult.error);
+                        }
+                        return res.testResult.success;
+                    } catch (error) {
+                        console.error("Error during Python test execution:", error);
+                        return false;
+                    }
+                },
+                onAfterArbitrate: async (decision: any) => {
+                    console.log("Python arbitration decision:", decision);
+                },
+                pollingInterval: 50,
+            });
+
+            // 3. Bob collects the escrow
+            const collectionHash = await bobClient.erc20.collectEscrow(
+                escrow.uid,
+                fulfillment.uid,
+            );
+
+            expect(collectionHash).toBeTruthy();
+            unwatch();
+        }, 30000);
+
+        test("Oracle CommitObligation Integration - Rust", async () => {
+            const encodeCommitTestsDemand = (demand: {
+                testsCommitHash: string;
+                testsCommitAlgo: number; // 0 = Sha1, 1 = Sha256
+                hosts: string[];
+            }) => {
+                return encodeAbiParameters(
+                    parseAbiParameters("(string testsCommitHash, uint8 testsCommitAlgo, string[] hosts)"),
+                    [demand],
+                );
+            };
+
+            const arbiter = testContext.addresses.trustedOracleArbiter;
+            // 1. Alice creates Rust test suite and commits to the git repository
+            //  Alice makes an escrow deposit, released to anyone who writes a commit that makes the test suite pass
+
+            const commitTestsData = encodeCommitTestsDemand({
+                testsCommitHash: "f92331a1f4ac99aaacac5018ff631e4fb59595e0", // Alice's Rust tests commit
+                testsCommitAlgo: CommitAlgo.SHA256, // Using SHA256 for SHA1 hashes as per existing pattern
+                hosts: ["https://github.com/thinhnx-var/testcase-rust-alice.git"]
+            });
+
+            const demand = aliceClient.arbiters.encodeTrustedOracleDemand({
+                oracle,
+                data: commitTestsData,
+            });
+
+            const { attested: escrow } =
+                await aliceClient.erc20.permitAndBuyWithErc20(
+                    {
+                        address: testContext.mockAddresses.erc20A,
+                        value: 10n,
+                    },
+                    { arbiter, demand },
+                    0n,
+                );
+
+            // 2. Bob fulfills the escrow by writing Rust solution that makes the test suite pass
+            const { attested: fulfillment } =
+                await bobClient.commitObligation.doObligation(
+                    {
+                        commitHash: "687f49b5bbebc70c7bc1944ff17a96063cfdbb45", // Bob's Rust solution commit
+                        commitAlgo: CommitAlgo.SHA256, // Using SHA256 for SHA1 hashes as per existing pattern
+                        hosts: ["https://github.com/thinhnx-var/solution-rust-bob.git"],
+                    },
+                    escrow.uid,
+                );
+
+            await Bun.sleep(150);
+
+            // 2.a Oracle arbitrates the Rust test execution
+            const { unwatch } = await arbiterClient.oracle.listenAndArbitrateForEscrow({
+                escrow: {
+                    attester: testContext.addresses.erc20EscrowObligation,
+                    demandAbi: parseAbiParameters("(string testsCommitHash, uint8 testsCommitAlgo, string[] hosts)"),
+                },
+                fulfillment: {
+                    attester: commitObligationAddress,
+                    obligationAbi: parseAbiParameters("(string commitHash, uint8 commitAlgo, string[] hosts)"),
+                },
+                arbitrate: async (obligation: any, demand: any) => {
+                    console.log("Arbitrating Rust obligation:", obligation, "against demand:", demand);
+                    try {
+                        const config = GitTestExecution.initConfig();
+                        
+                        // Configure Rust test repository (Alice's tests)
+                        config.repositories.testcase.url = demand[0].hosts[0];
+                        config.repositories.testcase.commitHash = demand[0].testsCommitHash;
+                        // config.repositories.testcase.language = "rust";
+
+                        // Configure Rust solution repository (Bob's solution)
+                        config.repositories.source.url = obligation[0].hosts[0];
+                        config.repositories.source.commitHash = obligation[0].commitHash;
+                        // config.repositories.source.language = "rust";
+                        
+                        config.execution.timeout = 45000; // 45 seconds for Rust compilation
+                        config.execution.cleanupAfterExecution = true;
+                        
+                        console.log("Starting Rust test execution...");
+                        const res = await GitTestExecution.executeTests(config, {
+                            onProgress: (step) => console.log(`  → ${step}`)
+                        });
+                        
+                        console.log(`Rust execution result: ${res.testResult.success ? 'PASSED' : 'FAILED'}`);
+                        if (!res.testResult.success && res.testResult.error) {
+                            console.log("Error details:", res.testResult.error);
+                        }
+                        return res.testResult.success;
+                    } catch (error) {
+                        console.error("Error during Rust test execution:", error);
+                        return false;
+                    }
+                },
+                onAfterArbitrate: async (decision: any) => {
+                    console.log("Rust arbitration decision:", decision);
+                },
+                pollingInterval: 50,
+            });
+
+            // 3. Bob collects the escrow
+            const collectionHash = await bobClient.erc20.collectEscrow(
+                escrow.uid,
+                fulfillment.uid,
+            );
+
+            expect(collectionHash).toBeTruthy();
+            unwatch();
+        }, 30000);
+
+        test("Oracle CommitObligation Integration - Typescript", async () => {
             const encodeCommitTestsDemand = (demand: {
                 testsCommitHash: string;
                 testsCommitAlgo: number; // 0 = Sha1, 1 = Sha256
