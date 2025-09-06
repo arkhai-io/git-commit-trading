@@ -2,14 +2,15 @@ import chalk from 'chalk';
 import { parseAbiParameters } from 'viem';
 import { createClientFromEnv, requireEnvFile } from '../utils/envLoader.js';
 import { GitTestExecution } from '../../test-execution/index.js';
+import { SdkFactory } from '../../test-execution/sdks/index.js';
 
-interface ServerOptions {
-  port?: string;
+export interface ServerOptions {
   pollingInterval?: string;
   timeout?: string;
   cleanup?: boolean;
   past?: boolean;
   listen?: boolean;
+  sdkType?: 'typescript' | 'rust' | 'python'; // Add SDK type option
 }
 
 export async function serverCommand(options: ServerOptions) {
@@ -28,12 +29,25 @@ export async function serverCommand(options: ServerOptions) {
     const pollingInterval = parseInt(options.pollingInterval || '1000');
     const timeout = parseInt(options.timeout || '300000');
     const cleanup = options.cleanup !== false;
+    const sdkType = options.sdkType || 'typescript';
 
     console.log(chalk.gray('Server configuration:'));
     console.log(chalk.gray(`  Mode: ${options.past ? 'Arbitrate Past' : 'Listen and Arbitrate'}`));
+    console.log(chalk.gray(`  SDK Type: ${sdkType}`));
     console.log(chalk.gray(`  Polling Interval: ${pollingInterval}ms`));
     console.log(chalk.gray(`  Test Timeout: ${timeout}ms`));
     console.log(chalk.gray(`  Cleanup: ${cleanup}`));
+
+    // Validate SDK availability
+    console.log(chalk.gray('Validating SDK...'));
+    const sdk = SdkFactory.createSdk(sdkType);
+    const isValidSdk = await sdk.validateSdk();
+    
+    if (!isValidSdk) {
+      throw new Error(`${sdkType} SDK is not available or not properly configured`);
+    }
+    
+    console.log(chalk.green(`✓ ${sdkType} SDK is available`));
 
     // Check for .env file and load client
     requireEnvFile();
@@ -49,36 +63,15 @@ export async function serverCommand(options: ServerOptions) {
     console.log(chalk.gray(`  Oracle Address: ${config.address}`));
     console.log(chalk.gray(`  CommitObligation Contract: ${config.commitObligationAddress}`));
 
-    // Define the arbitration logic
+    // Define the arbitration logic using the selected SDK
     const arbitrate = async (obligation: any, demand: any) => {
       console.log("Arbitrating obligation:", obligation, "against demand:", demand);
       
       try {
-        const testConfig = GitTestExecution.initConfig();
-        
-        // Configure repositories from obligation and demand
-        testConfig.repositories.testcase.url = demand[0].hosts[0];
-        testConfig.repositories.testcase.commitHash = demand[0].testsCommitHash;
-        testConfig.repositories.testcase.testCommand = demand[0].testsCommand;
-
-        testConfig.repositories.source.url = obligation[0].hosts[0];
-        testConfig.repositories.source.commitHash = obligation[0].commitHash;
-        
-        // Note: install, build, and test commands will be auto-detected from package.json
-        // unless explicitly configured above
-        
-        // Set execution parameters
-        testConfig.execution.timeout = timeout;
-        testConfig.execution.cleanupAfterExecution = cleanup;
-        
-        const result = await GitTestExecution.executeTests(testConfig, {
-          onProgress: (step) => console.log(`  → ${step}`)
-        });
-        
-        console.log("Execution result:", result.testResult.success);
-        return result.testResult.success;
+        // Use the SDK factory to execute arbitration
+        return await sdk.executeArbitration(obligation, demand);
       } catch (error) {
-        console.error("Error during test execution:", error);
+        console.error("Error during SDK arbitration:", error);
         return false;
       }
     };

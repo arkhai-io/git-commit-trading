@@ -73,6 +73,7 @@ program
   .description('Run the arbiter server to listen and arbitrate escrows')
   .option('--past', 'Arbitrate past obligations and exit')
   .option('--listen', 'Listen for new obligations and arbitrate continuously')
+  .option('--sdk-type <type>', 'SDK type to use (typescript|rust|python)', 'typescript')
   .option('--port <port>', 'Server port (deprecated)', '3000')
   .option('--polling-interval <ms>', 'Polling interval for new escrows (ms)', '1000')
   .option('--timeout <ms>', 'Test execution timeout (ms)', '300000')

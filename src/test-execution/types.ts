@@ -1,3 +1,5 @@
+export type SdkType = 'typescript' | 'rust' | 'python';
+
 export interface RepositoryConfig {
   url: string;
   branch?: string; // Optional, only used for fallback scenarios
@@ -17,6 +19,7 @@ export interface ExecutionConfig {
 }
 
 export interface Config {
+  sdkType?: SdkType; // Add SDK type selection
   repositories: {
     source: RepositoryConfig;      // Bob's solution repository
     testcase: RepositoryConfig;    // Alice's test repository

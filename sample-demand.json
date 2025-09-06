@@ -1,0 +1,6 @@
+[{
+  "hosts": ["https://github.com/user/testcase-repo-alice.git"],
+  "testsCommitHash": "main",
+  "testsCommitAlgo": 1,
+  "testsCommand": "npm test"
+}]

@@ -1,0 +1,5 @@
+[{
+  "hosts": ["https://github.com/user/solution-repo-bob.git"],
+  "commitHash": "main",
+  "commitAlgo": 1
+}]
