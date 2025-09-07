@@ -1,4 +1,5 @@
 import sshpk from 'sshpk';
+import fs from 'fs';
 
 // Import the GitKeyClaim type and KeyType enum
 import type { GitKeyClaim, KeyType } from '../clients/gitIdentityRegistry';
@@ -199,6 +200,213 @@ function verifyX509Signature(gitMetadata: any, gitKeyClaim: GitKeyClaim): boolea
     // TODO: Implement proper X509 certificate verification
     console.log("  ⚠️ X509 verification not fully implemented - trusting GitHub");
     return gitMetadata.verified;
+}
+
+/**
+ * Generate an SSH signature for the GitKeyClaim
+ * @param privateKey - SSH private key in PEM format
+ * @param message - Message to sign
+ * @returns Signature as hex string
+ */
+export function generateSSHSignature(privateKeyDataOrPath: string, message: string): string {
+    try {
+        let privateKeyData: string;
+
+        // Check if input is a file path or private key content
+        if (privateKeyDataOrPath.includes('-----BEGIN')) {
+            // It's already private key content
+            privateKeyData = privateKeyDataOrPath;
+        } else {
+            // It's a file path
+            privateKeyData = fs.readFileSync(privateKeyDataOrPath, 'utf8');
+        }
+
+        // Parse private key
+        const privateKey = sshpk.parsePrivateKey(privateKeyData, 'openssh');
+
+        // Extract public key from private key and log it
+        const derivedPublicKey = privateKey.toPublic();
+        const sshPublicKeyString = derivedPublicKey.toString('ssh');
+
+        // Determine hash algorithm based on key type
+        const hashAlgo = privateKey.type === 'ed25519' ? 'sha512' : 'sha256';
+
+        // Create signer with appropriate hash
+        const signer = privateKey.createSign(hashAlgo);
+        signer.update(message);
+        const signature = signer.sign();
+
+        // Convert signature to hex
+        const signatureHex = signature.toBuffer().toString('hex');
+
+        return signatureHex;
+    } catch (error) {
+        console.error("❌ Error generating SSH signature:", error);
+        throw new Error(`Failed to generate SSH signature: ${error}`);
+    }
+}
+
+/**
+ * Verify an SSH signature
+ * @param publicKey - SSH public key (base64 format)
+ * @param message - Original message that was signed
+ * @param signature - Signature to verify (hex format)
+ * @param keyType - Type of SSH key (ed25519, rsa, etc.)
+ * @returns True if signature is valid
+ */
+export function verifySSHSignature(
+    publicKey: string,
+    message: string,
+    signature: string,
+    keyType: string = 'ed25519'
+): boolean {
+    try {
+        // Create a completely unique trace ID for this verification attempt
+        const traceId = `verify_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+        console.log(`🔍 [${traceId}] Verifying signature:
+  Public Key: ${publicKey}
+  Message: ${message}
+  Signature: ${signature}
+  Key Type: ${keyType}`);
+
+        // Add hex dump of the message to see exact bytes
+        const messageBuffer = Buffer.from(message, 'utf8');
+        console.log(`  [${traceId}] Message hex dump: ${messageBuffer.toString('hex')}`);
+        console.log(`  [${traceId}] Message byte analysis: ${JSON.stringify(message.split('').map(c => c + '(' + c.charCodeAt(0) + ')'))}`);
+
+        // Construct the full SSH public key string
+        const sshPublicKeyString = `ssh-${keyType} ${publicKey}`;
+        console.log(`  [${traceId}] Full SSH key string: ${sshPublicKeyString}`);
+
+        // Convert signature to buffer once
+        const signatureBuffer = Buffer.from(signature, 'hex');
+        console.log(`  [${traceId}] Signature buffer length: ${signatureBuffer.length} bytes`);
+
+        if (keyType === 'ed25519' && signatureBuffer.length === 64) {
+            // For Ed25519, use a completely isolated verification approach
+            try {
+                console.log(`  [${traceId}] Starting Ed25519 verification...`);
+
+                // Create fresh key object
+                const key = sshpk.parseKey(sshPublicKeyString, 'ssh');
+                console.log(`  [${traceId}] Parsed key type: ${key.type}, key size: ${key.size}`);
+
+                // Create fresh verifier
+                const verifier = key.createVerify('sha512');
+                console.log(`  [${traceId}] Created verifier with sha512`);
+
+                // Update verifier with message
+                verifier.update(messageBuffer);
+                console.log(`  [${traceId}] Updated verifier with message (${messageBuffer.length} bytes)`);
+
+                // Create fresh signature object from raw bytes
+                console.log(`  [${traceId}] Parsing signature as ed25519 raw format...`);
+                const signatureObj = sshpk.parseSignature(signatureBuffer, 'ed25519', 'raw');
+                console.log(`  [${traceId}] Parsed signature object: type=${signatureObj.type}, hashAlgorithm=${signatureObj.hashAlgorithm}`);
+
+                // Perform verification
+                console.log(`  [${traceId}] Calling verifier.verify()...`);
+                const result = verifier.verify(signatureObj);
+                console.log(`  [${traceId}] ✅ Signature verification result: ${result}`);
+
+                return result;
+
+            } catch (ed25519Error) {
+                console.log(`  [${traceId}] ❌ Ed25519 verification failed: ${ed25519Error}`);
+                return false;
+            }
+        }
+
+        // Fallback for other key types
+        try {
+            const key = sshpk.parseKey(sshPublicKeyString, 'ssh');
+            const hashAlgo = key.type === 'ed25519' ? 'sha512' : 'sha256';
+            const verifier = key.createVerify(hashAlgo);
+            verifier.update(Buffer.from(message, 'utf8'));
+
+            const signatureObj = sshpk.parseSignature(signatureBuffer, key.type as any, 'ssh');
+            const result = verifier.verify(signatureObj);
+            console.log(`  [${traceId}] ✅ Signature verification result: ${result}`);
+            return result;
+        } catch (fallbackError) {
+            console.log(`  [${traceId}] ❌ Fallback verification failed: ${fallbackError}`);
+            return false;
+        }
+
+    } catch (error) {
+        console.error("❌ Error verifying SSH signature:", error);
+        return false;
+    }
+}/**
+ * Generate message that should be signed for GitKeyClaim
+ * @param ethAddress - Ethereum address of the claimant
+ * @param nonce - Random nonce for uniqueness
+ * @returns Message string to be signed
+ */
+export function generateSigningMessage(ethAddress: string, nonce: string): string {
+    return `${ethAddress} ${nonce}`;
+}
+
+/**
+ * Verify GitKeyClaim signature
+ * @param gitKeyClaim - The Git key claim to verify
+ * @param ethAddress - Ethereum address that should have been signed
+ * @returns True if the signature is valid
+ */
+export function verifyGitKeyClaimSignature(
+    gitKeyClaim: GitKeyClaim,
+    ethAddress: string
+): boolean {
+    try {
+        console.log("🔍 Verifying GitKeyClaim signature:");
+        console.log("  Address:", ethAddress);
+        console.log("  Key Type:", getKeyTypeName(gitKeyClaim.keyType));
+
+        // Extract nonce from the nonceHash (since we're storing it as hex, not keccak256)
+        const nonceHash = gitKeyClaim.nonceHash.replace('0x', '');
+        let nonce: string;
+
+        try {
+            // Try to decode the nonce from hex
+            const nonceBuffer = Buffer.from(nonceHash, 'hex');
+            // Remove null bytes that might be present due to padding
+            const trimmedBuffer = Buffer.from(nonceBuffer.filter(byte => byte !== 0));
+            nonce = trimmedBuffer.toString('utf8');
+            console.log("  Extracted nonce:", nonce);
+        } catch (error) {
+            console.log("  ❌ Could not extract nonce from nonceHash");
+            return false;
+        }
+
+        const expectedMessage = generateSigningMessage(ethAddress, nonce);
+        console.log("  Expected signed message:", expectedMessage);
+
+        // Verify the actual signature using SSH cryptographic verification
+        const signature = gitKeyClaim.sig.replace('0x', '');
+        console.log(`  Signature from contract: ${signature.slice(0, 20)}... (length: ${signature.length})`);
+
+        const keyTypeForVerification = getKeyTypeName(gitKeyClaim.keyType).toLowerCase().replace('ssh ', '');
+        console.log(`  Key type for verification: "${keyTypeForVerification}"`);
+
+        const isSignatureValid = verifySSHSignature(
+            gitKeyClaim.publicKey,
+            expectedMessage,
+            signature,
+            keyTypeForVerification
+        );
+
+        if (isSignatureValid) {
+            console.log("  ✅ Cryptographic signature verification passed!");
+            return true;
+        } else {
+            console.log("  ❌ Cryptographic signature verification failed!");
+            return false;
+        }
+    } catch (error) {
+        console.error("❌ Error verifying GitKeyClaim signature:", error);
+        return false;
+    }
 }
 
 /**

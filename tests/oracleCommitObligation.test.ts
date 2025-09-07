@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { decodeAbiParameters, encodeAbiParameters, parseAbiParameters } from "viem";
+import sshpk from 'sshpk';
 import { setupTest } from "./utils/setup";
 import { teardownTestEnvironment, type TestContext } from "alkahest-ts/tests/utils/setup";
 import { CommitAlgo, type CommitObligationData } from "../src/clients/commitObligation";
@@ -7,7 +8,7 @@ import { KeyType } from "../src/clients/gitIdentityRegistry";
 import { GitTestExecution } from "../src/test-execution/";
 import { getSigningKeyFromGitHubCommit } from "../src/utils/gitUtils";
 import { calculateSSHFingerprint, getSSHFingerprintFormatted, extractSSHKeyMaterial } from "../src/utils/sshUtils";
-import { verifyCommitSignature } from "../src/utils/sshSignatureUtils";
+import { verifyCommitSignature, generateSigningMessage, verifyGitKeyClaimSignature, generateSSHSignature, verifySSHSignature } from "../src/utils/sshSignatureUtils";
 
 describe("Oracle CommitObligation Tests", () => {
     // Test context and variables
@@ -56,6 +57,7 @@ describe("Oracle CommitObligation Tests", () => {
 
     describe("Git App Flow", () => {
         test("Oracle CommitObligation Integration", async () => {
+            // Store the nonce for verification in the test scope
             const encodeCommitTestsDemand = (demand: {
                 testsCommitHash: string;
                 testsCommitAlgo: number; // 0 = Sha1, 1 = Sha256
@@ -111,26 +113,45 @@ describe("Oracle CommitObligation Tests", () => {
 
             // Calculate the actual fingerprint from the SSH public key
             const fingerprintHex = calculateSSHFingerprint(sshPublicKey);
-            const fingerprintFormatted = getSSHFingerprintFormatted(sshPublicKey);
 
             // Extract just the key material (since keyType already specifies it's ssh-ed25519)
             const keyMaterial = extractSSHKeyMaterial(sshPublicKey);
 
-            console.log("Calculated SSH fingerprint (hex):", fingerprintHex);
-            console.log("Calculated SSH fingerprint (SSH format):", fingerprintFormatted);
-            console.log("Expected SSH fingerprint: SHA256:5JNpw1y+TShTIRLyOvOO55vqizJLSWd6Ip5rbhJqah0");
-            console.log("Key material only:", keyMaterial);
+            // Generate a proper signing message and nonce
+            const nonce = `nonce_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-            // Create a mock signature and nonce for the key claim
-            const mockNonceHash = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
-            const mockSignature = "fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321";
+            // Create the nonce hash (keccak256 of the nonce)
+            const nonceHash = Buffer.from(nonce).toString('hex').padStart(64, '0');
+
+
+            // Load the private key that corresponds to the public key we're using
+            // The public key we're using: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDpOOgAtLLU/X72Fku+nmmAhgeXGDzfF7sdYRiyxS7Qt
+            // This should correspond to a private key file
+            const privateKeyPath = process.env.HOME + '/.ssh/id_ed25519'; // Standard SSH key location
+            let realSignature: string;
+
+            try {
+                // Try to read the private key file
+                const fs = require('fs');
+                const privateKeyPEM = fs.readFileSync(privateKeyPath, 'utf8');
+
+                // For GitKeyClaim signature: Git key signs '[eth address] [nonce]'
+                const gitKeySigningMessage = generateSigningMessage(bob, nonce);
+
+                // Generate real signature using the loaded private key
+                realSignature = generateSSHSignature(privateKeyPEM, gitKeySigningMessage);
+
+            } catch (error) {
+                console.log("Could not load private key from file, using mock signature:", error);
+                realSignature = "fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321";
+            }
 
             try {
                 const keyClaimResult = await bobClient.gitIdentityRegistry.claimKey({
                     keyType: KeyType.SSHEd25519, // SSHEd25519
                     fingerprint: `0x${fingerprintHex}`,
-                    nonceHash: `0x${mockNonceHash}`,
-                    sig: `0x${mockSignature}`,
+                    nonceHash: `0x${nonceHash}`,
+                    sig: `0x${realSignature}`,
                     publicKey: keyMaterial // Just the base64 key material, not the full SSH string
                 });
                 console.log("Bob's SSH key registered successfully:", keyClaimResult.hash);
@@ -166,16 +187,27 @@ describe("Oracle CommitObligation Tests", () => {
                             console.log("❌ No public key found for sender! Rejecting fulfillment.");
                             return false;
                         }
-                        console.log(`✅ Found key claim for sender:`);
-                        console.log(`   Key Type: ${senderKeyClaim.keyType}`);
-                        console.log(`   Public Key: ${senderPublicKey.substring(0, 50)}...`);
-                        console.log(`   Fingerprint: ${senderKeyClaim.fingerprint}`);
                     } catch (error) {
                         console.log("❌ Failed to get key claim for sender:", error);
                         return false;
                     }
 
-                    // Verify if the sender signed this commit
+                    // First verify the GitKeyClaim signature itself
+                    console.log("\n🔐 Verifying GitKeyClaim signature...");
+                    // Extract and verify nonce from the claim itself
+                    const isValidClaim = verifyGitKeyClaimSignature(
+                        senderKeyClaim,
+                        senderAddress
+                    );
+
+                    if (!isValidClaim) {
+                        console.log("❌ GitKeyClaim signature is invalid! Rejecting fulfillment.");
+                        return false;
+                    }
+
+                    console.log("✅ GitKeyClaim signature verified!");
+
+                    // Then verify if the sender signed this commit
                     console.log("\n🔐 Verifying commit signature...");
                     const isSignedBySender = verifyCommitSignature(gitMetadata, senderKeyClaim);
 

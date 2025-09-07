@@ -47,7 +47,6 @@ export async function getSigningKeyFromGitHubCommit(
     }
 
     const data = await res.json() as GitHubCommitResponse;
-    console.log(data);
     if (!data.commit.verification) {
         throw new Error("Commit has no verification data");
     }
