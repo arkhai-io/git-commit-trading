@@ -12,7 +12,6 @@ export enum KeyType {
 // Type for the GitKeyClaim data structure
 export type GitKeyClaim = {
     keyType: KeyType;
-    fingerprint: `0x${string}`;
     nonceHash: `0x${string}`;
     sig: `0x${string}`;
     publicKey: string;
@@ -57,16 +56,12 @@ export const makeGitIdentityRegistryClient = (
 // Helper function to create a proper Git key claim
 export function createGitKeyClaim(
     keyType: KeyType,
-    fingerprint: string,
     nonceHash: string,
     signature: string,
     publicKey: string
 ): GitKeyClaim {
     return {
         keyType,
-        fingerprint: fingerprint.startsWith("0x")
-            ? (fingerprint as `0x${string}`)
-            : `0x${fingerprint}`,
         nonceHash: nonceHash.startsWith("0x")
             ? (nonceHash as `0x${string}`)
             : `0x${nonceHash}`,

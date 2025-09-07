@@ -22,7 +22,6 @@ export function verifyCommitSignature(
         console.log("🔍 Signature verification with multi-key support:");
         console.log("  Key Type:", getKeyTypeName(gitKeyClaim.keyType));
         console.log("  Public Key:", gitKeyClaim.publicKey);
-        console.log("  Fingerprint:", gitKeyClaim.fingerprint);
         console.log("  GitHub verified:", gitMetadata.verified);
 
         // First check: GitHub already verified the signature
@@ -406,32 +405,5 @@ export function verifyGitKeyClaimSignature(
     } catch (error) {
         console.error("❌ Error verifying GitKeyClaim signature:", error);
         return false;
-    }
-}
-
-/**
- * Parse SSH public key using sshpk
- * @param sshPublicKey - SSH public key string (e.g., "ssh-ed25519 AAAAC3... user@host")
- * @returns Parsed key object
- */
-export function parseSSHPublicKey(sshPublicKey: string) {
-    try {
-        return sshpk.parseKey(sshPublicKey, 'ssh');
-    } catch (error) {
-        throw new Error(`Failed to parse SSH public key: ${error}`);
-    }
-}
-
-/**
- * Get SSH key fingerprint using sshpk
- * @param sshPublicKey - SSH public key string
- * @returns SHA256 fingerprint in standard SSH format
- */
-export function getSSHFingerprintWithSSHPK(sshPublicKey: string): string {
-    try {
-        const key = sshpk.parseKey(sshPublicKey, 'ssh');
-        return key.fingerprint('sha256').toString();
-    } catch (error) {
-        throw new Error(`Failed to get fingerprint: ${error}`);
     }
 }

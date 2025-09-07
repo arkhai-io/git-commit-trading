@@ -7,7 +7,7 @@ import { CommitAlgo, type CommitObligationData } from "../src/clients/commitObli
 import { KeyType } from "../src/clients/gitIdentityRegistry";
 import { GitTestExecution } from "../src/test-execution/";
 import { getSigningKeyFromGitHubCommit } from "../src/utils/gitUtils";
-import { calculateSSHFingerprint, getSSHFingerprintFormatted, extractSSHKeyMaterial } from "../src/utils/sshUtils";
+import { extractSSHKeyMaterial } from "../src/utils/gitUtils";
 import { verifyCommitSignature, generateSigningMessage, verifyGitKeyClaimSignature, generateSSHSignature, verifySSHSignature } from "../src/utils/sshSignatureUtils";
 
 describe("Oracle CommitObligation Tests", () => {
@@ -111,9 +111,6 @@ describe("Oracle CommitObligation Tests", () => {
             // SSH Ed25519 public key: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDpOOgAtLLU/X72Fku+nmmAhgeXGDzfF7sdYRiyxS7Qt ngochc1@gmail.com
             const sshPublicKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDpOOgAtLLU/X72Fku+nmmAhgeXGDzfF7sdYRiyxS7Qt ngochc1@gmail.com";
 
-            // Calculate the actual fingerprint from the SSH public key
-            const fingerprintHex = calculateSSHFingerprint(sshPublicKey);
-
             // Extract just the key material (since keyType already specifies it's ssh-ed25519)
             const keyMaterial = extractSSHKeyMaterial(sshPublicKey);
 
@@ -149,7 +146,6 @@ describe("Oracle CommitObligation Tests", () => {
             try {
                 const keyClaimResult = await bobClient.gitIdentityRegistry.claimKey({
                     keyType: KeyType.SSHEd25519, // SSHEd25519
-                    fingerprint: `0x${fingerprintHex}`,
                     nonceHash: `0x${nonceHash}`,
                     sig: `0x${realSignature}`,
                     publicKey: keyMaterial // Just the base64 key material, not the full SSH string

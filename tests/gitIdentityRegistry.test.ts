@@ -49,7 +49,6 @@ describe("GitIdentityRegistry Client", () => {
   it("should create a git key claim correctly", () => {
     const claim = createGitKeyClaim(
       KeyType.SSHEd25519,
-      "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
       "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
       "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
       "ssh-ed25519 AAAAC3Nz... alice@example.com"
@@ -62,15 +61,11 @@ describe("GitIdentityRegistry Client", () => {
   it("should handle hex strings with 0x prefix", () => {
     const claim = createGitKeyClaim(
       KeyType.PGPv4,
-      "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
       "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
       "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
       "pgp-pubkey text block"
     );
 
-    expect(claim.fingerprint).toBe(
-      "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
-    );
     expect(claim.publicKey).toBe("pgp-pubkey text block");
   });
 
@@ -79,7 +74,6 @@ describe("GitIdentityRegistry Client", () => {
       try {
         const claimData = createGitKeyClaim(
           KeyType.SSHEd25519,
-          "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
           "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
           "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
           "ssh-ed25519 AAAAC3... alice@example.com"
@@ -105,7 +99,6 @@ describe("GitIdentityRegistry Client", () => {
         // First claim should succeed
         const claimData1 = createGitKeyClaim(
           KeyType.PGPv4,
-          "9876543210fedcba9876543210fedcba9876543210fedcba9876543210fedcba",
           "fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321",
           "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe",
           "-----BEGIN PGP PUBLIC KEY BLOCK----- ..."
@@ -116,7 +109,6 @@ describe("GitIdentityRegistry Client", () => {
         // Second claim from same address should fail
         const claimData2 = createGitKeyClaim(
           KeyType.SSHEd25519,
-          "5555555555555555555555555555555555555555555555555555555555555555",
           "1111111111111111111111111111111111111111111111111111111111111111",
           "2222222222222222222222222222222222222222222222222222222222222222",
           "ssh-ed25519 AAAAB3... another@example.com"

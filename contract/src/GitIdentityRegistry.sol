@@ -11,7 +11,6 @@ contract GitIdentityRegistry {
 
     struct GitKeyClaim {
         KeyType keyType;
-        bytes32 fingerprint;
         bytes32 nonceHash; // keccak256(message): ensures unique claim
         bytes sig; // Signature: Git key signs "[eth pubkey] [nonce]"
         string publicKey; // Full GitHub public key (used to verify)
@@ -19,7 +18,6 @@ contract GitIdentityRegistry {
 
     event GitKeyClaimed(
         address indexed claimant,
-        bytes32 indexed fingerprint,
         GitKeyClaim claim
     );
 
@@ -28,7 +26,6 @@ contract GitIdentityRegistry {
 
     /// @notice Claim a Git key identity by proving ownership
     function claimKey(GitKeyClaim memory claim) external {
-        require(claim.fingerprint != bytes32(0), "Invalid fingerprint");
         require(bytes(claim.publicKey).length > 0, "Missing public key");
         require(
             bytes(addressToKeyClaim[msg.sender].publicKey).length == 0,
@@ -39,7 +36,7 @@ contract GitIdentityRegistry {
 
         addressToKeyClaim[msg.sender] = claim;
 
-        emit GitKeyClaimed(msg.sender, claim.fingerprint, claim);
+        emit GitKeyClaimed(msg.sender, claim);
     }
 
     /// @notice Get the full Git key claim for an address
