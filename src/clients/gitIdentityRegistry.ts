@@ -15,6 +15,7 @@ export type GitKeyClaim = {
     fingerprint: `0x${string}`;
     nonceHash: `0x${string}`;
     sig: `0x${string}`;
+    publicKey: string;
 };
 
 export type GitIdentityRegistryAddresses = {
@@ -37,37 +38,29 @@ export const makeGitIdentityRegistryClient = (
         return { hash };
     };
 
-    const getClaimant = async (fingerprint: `0x${string}`) => {
+    const getKeyClaim = async (addr: `0x${string}`) => {
         return await viemClient.readContract({
             address: addresses.gitIdentityRegistry,
             abi: gitIdentityRegistryAbi.abi,
-            functionName: "getClaimant",
-            args: [fingerprint],
-        });
-    };
-
-    const fingerprintToAddress = async (fingerprint: `0x${string}`) => {
-        return await viemClient.readContract({
-            address: addresses.gitIdentityRegistry,
-            abi: gitIdentityRegistryAbi.abi,
-            functionName: "fingerprintToAddress",
-            args: [fingerprint],
+            functionName: "getKeyClaim",
+            args: [addr],
         });
     };
 
     return {
         claimKey,
-        getClaimant,
-        fingerprintToAddress,
+        getKeyClaim,
     };
 };
+
 
 // Helper function to create a proper Git key claim
 export function createGitKeyClaim(
     keyType: KeyType,
     fingerprint: string,
     nonceHash: string,
-    signature: string
+    signature: string,
+    publicKey: string
 ): GitKeyClaim {
     return {
         keyType,
@@ -80,5 +73,6 @@ export function createGitKeyClaim(
         sig: signature.startsWith("0x")
             ? (signature as `0x${string}`)
             : `0x${signature}`,
+        publicKey,
     };
 }

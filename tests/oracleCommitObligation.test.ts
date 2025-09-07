@@ -3,8 +3,11 @@ import { decodeAbiParameters, encodeAbiParameters, parseAbiParameters } from "vi
 import { setupTest } from "./utils/setup";
 import { teardownTestEnvironment, type TestContext } from "alkahest-ts/tests/utils/setup";
 import { CommitAlgo, type CommitObligationData } from "../src/clients/commitObligation";
+import { KeyType } from "../src/clients/gitIdentityRegistry";
 import { GitTestExecution } from "../src/test-execution/";
 import { getSigningKeyFromGitHubCommit } from "../src/utils/gitUtils";
+import { calculateSSHFingerprint, getSSHFingerprintFormatted, extractSSHKeyMaterial } from "../src/utils/sshUtils";
+import { verifyCommitSignature } from "../src/utils/sshSignatureUtils";
 
 describe("Oracle CommitObligation Tests", () => {
     // Test context and variables
@@ -16,18 +19,25 @@ describe("Oracle CommitObligation Tests", () => {
     let bobClient: any;
     let arbiterClient: any;
     let commitObligationAddress: `0x${string}`;
+    let gitIdentityRegistryAddress: `0x${string}`;
     beforeAll(async () => {
         const setup = await setupTest();
         testContext = setup.testContext;
         aliceClient = setup.aliceClient;
         bobClient = setup.bobClient;
-        arbiterClient = testContext.charlieClient;
+
+        // Extend charlie client with our contracts
+        arbiterClient = testContext.charlieClient.extend((client: any) => ({
+            commitObligation: setup.aliceClient.commitObligation,
+            gitIdentityRegistry: setup.aliceClient.gitIdentityRegistry,
+        }));
 
         // Extract the values we need for tests
         alice = testContext.alice;
         bob = testContext.bob;
         oracle = testContext.charlie;
         commitObligationAddress = setup.commitObligationAddress;
+        gitIdentityRegistryAddress = setup.gitIdentityRegistryAddress;
     });
 
     beforeEach(async () => {
@@ -95,6 +105,39 @@ describe("Oracle CommitObligation Tests", () => {
 
             await Bun.sleep(150);
 
+            // Bob registers the signing key he used to sign the commit
+            // SSH Ed25519 public key: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDpOOgAtLLU/X72Fku+nmmAhgeXGDzfF7sdYRiyxS7Qt ngochc1@gmail.com
+            const sshPublicKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDpOOgAtLLU/X72Fku+nmmAhgeXGDzfF7sdYRiyxS7Qt ngochc1@gmail.com";
+
+            // Calculate the actual fingerprint from the SSH public key
+            const fingerprintHex = calculateSSHFingerprint(sshPublicKey);
+            const fingerprintFormatted = getSSHFingerprintFormatted(sshPublicKey);
+
+            // Extract just the key material (since keyType already specifies it's ssh-ed25519)
+            const keyMaterial = extractSSHKeyMaterial(sshPublicKey);
+
+            console.log("Calculated SSH fingerprint (hex):", fingerprintHex);
+            console.log("Calculated SSH fingerprint (SSH format):", fingerprintFormatted);
+            console.log("Expected SSH fingerprint: SHA256:5JNpw1y+TShTIRLyOvOO55vqizJLSWd6Ip5rbhJqah0");
+            console.log("Key material only:", keyMaterial);
+
+            // Create a mock signature and nonce for the key claim
+            const mockNonceHash = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
+            const mockSignature = "fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321";
+
+            try {
+                const keyClaimResult = await bobClient.gitIdentityRegistry.claimKey({
+                    keyType: KeyType.SSHEd25519, // SSHEd25519
+                    fingerprint: `0x${fingerprintHex}`,
+                    nonceHash: `0x${mockNonceHash}`,
+                    sig: `0x${mockSignature}`,
+                    publicKey: keyMaterial // Just the base64 key material, not the full SSH string
+                });
+                console.log("Bob's SSH key registered successfully:", keyClaimResult.hash);
+            } catch (error) {
+                console.log("Key registration failed (might already be registered):", error);
+            }
+
             // 2 .a Bob listens for the escrow and fulfills it by writing a commit that makes the test suite pass
             const { unwatch } = await arbiterClient.oracle.listenAndArbitrateForEscrow({
                 escrow: {
@@ -103,12 +146,46 @@ describe("Oracle CommitObligation Tests", () => {
                 },
                 fulfillment: {
                     attester: commitObligationAddress,
-                    obligationAbi: parseAbiParameters("(string commitHash, uint8 commitAlgo, string[] hosts)"),
+                    obligationAbi: parseAbiParameters("(string commitHash, uint8 commitAlgo, string[] hosts, address sender)"),
                 },
                 arbitrate: async (obligation: any, demand: any) => {
                     console.log("Arbitrating obligation:", obligation, "against demand:", demand);
                     const gitMetadata = await getSigningKeyFromGitHubCommit(obligation[0].hosts[0], obligation[0].commitHash);
                     console.log("Git Metadata from Commit:", gitMetadata);
+
+                    // Get the public key of the sender from GitIdentityRegistry
+                    const senderAddress = obligation[0].sender;
+                    console.log(`\n🔍 Looking up key claim for sender: ${senderAddress}`);
+
+                    let senderKeyClaim: any;
+                    let senderPublicKey: string;
+                    try {
+                        senderKeyClaim = await arbiterClient.gitIdentityRegistry.getKeyClaim(senderAddress);
+                        senderPublicKey = senderKeyClaim.publicKey;
+                        if (!senderPublicKey || senderPublicKey.trim() === "") {
+                            console.log("❌ No public key found for sender! Rejecting fulfillment.");
+                            return false;
+                        }
+                        console.log(`✅ Found key claim for sender:`);
+                        console.log(`   Key Type: ${senderKeyClaim.keyType}`);
+                        console.log(`   Public Key: ${senderPublicKey.substring(0, 50)}...`);
+                        console.log(`   Fingerprint: ${senderKeyClaim.fingerprint}`);
+                    } catch (error) {
+                        console.log("❌ Failed to get key claim for sender:", error);
+                        return false;
+                    }
+
+                    // Verify if the sender signed this commit
+                    console.log("\n🔐 Verifying commit signature...");
+                    const isSignedBySender = verifyCommitSignature(gitMetadata, senderKeyClaim);
+
+                    if (!isSignedBySender) {
+                        console.log("❌ Commit was not signed by the sender! Rejecting fulfillment.");
+                        return false;
+                    }
+
+                    console.log("✅ Commit signature verified - Sender signed this commit!");
+
                     //After Bob writes a commit that makes the test suite pass,
                     //Clone the repository, run the tests, and check if they pass
                     try {

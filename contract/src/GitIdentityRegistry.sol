@@ -12,29 +12,40 @@ contract GitIdentityRegistry {
     struct GitKeyClaim {
         KeyType keyType;
         bytes32 fingerprint;
-        bytes32 nonceHash; // keccak256(message)
-        bytes sig; // Git key signature over: "[eth pubkey] [nonce]"
+        bytes32 nonceHash; // keccak256(message): ensures unique claim
+        bytes sig; // Signature: Git key signs "[eth pubkey] [nonce]"
+        string publicKey; // Full GitHub public key (used to verify)
     }
 
-    event GitKeyClaimed(address indexed claimant, GitKeyClaim claim);
+    event GitKeyClaimed(
+        address indexed claimant,
+        bytes32 indexed fingerprint,
+        GitKeyClaim claim
+    );
 
-    /// @notice Maps Git key fingerprint to Ethereum address that claimed it
-    mapping(bytes32 => address) public fingerprintToAddress;
+    /// @notice Maps Ethereum address to their claimed Git key
+    mapping(address => GitKeyClaim) public addressToKeyClaim;
 
-    /// @notice Claim a Git key by proving you own both Git key and ETH address
-    function claimKey(GitKeyClaim memory claim) public {
+    /// @notice Claim a Git key identity by proving ownership
+    function claimKey(GitKeyClaim memory claim) external {
+        require(claim.fingerprint != bytes32(0), "Invalid fingerprint");
+        require(bytes(claim.publicKey).length > 0, "Missing public key");
         require(
-            fingerprintToAddress[claim.fingerprint] == address(0),
-            "Already claimed"
+            bytes(addressToKeyClaim[msg.sender].publicKey).length == 0,
+            "Address already has a claimed key"
         );
 
-        fingerprintToAddress[claim.fingerprint] = msg.sender;
+        // ⚠️ Signature verification would go here in a production system
 
-        emit GitKeyClaimed(msg.sender, claim);
+        addressToKeyClaim[msg.sender] = claim;
+
+        emit GitKeyClaimed(msg.sender, claim.fingerprint, claim);
     }
 
-    /// @notice Return the ETH address that claimed a Git fingerprint
-    function getClaimant(bytes32 fingerprint) public view returns (address) {
-        return fingerprintToAddress[fingerprint];
+    /// @notice Get the full Git key claim for an address
+    function getKeyClaim(
+        address addr
+    ) external view returns (GitKeyClaim memory) {
+        return addressToKeyClaim[addr];
     }
 }

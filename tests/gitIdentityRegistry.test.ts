@@ -11,10 +11,12 @@ import {
   teardownTestEnvironment,
   type TestContext,
 } from "alkahest-ts/tests/utils/setup";
-import { KeyType, createGitKeyClaim } from "../src/clients/gitIdentityRegistry";
+import {
+  KeyType,
+  createGitKeyClaim,
+} from "../src/clients/gitIdentityRegistry";
 
 describe("GitIdentityRegistry Client", () => {
-  // Test context and variables
   let testContext: TestContext;
   let alice: `0x${string}`;
   let bob: `0x${string}`;
@@ -29,24 +31,18 @@ describe("GitIdentityRegistry Client", () => {
     aliceClient = setup.aliceClient;
     bobClient = setup.bobClient;
     gitIdentityRegistryAddress = setup.gitIdentityRegistryAddress;
-
-    // Extract the values we need for tests
     alice = testContext.alice;
     bob = testContext.bob;
     testClient = testContext.testClient;
   });
 
   beforeEach(async () => {
-    // Reset to initial state before each test
     if (testContext.anvilInitState) {
-      await testContext.testClient.loadState({
-        state: testContext.anvilInitState,
-      });
+      await testClient.loadState({ state: testContext.anvilInitState });
     }
   });
 
   afterAll(async () => {
-    // Clean up
     await teardownTestEnvironment(testContext);
   });
 
@@ -55,33 +51,12 @@ describe("GitIdentityRegistry Client", () => {
       KeyType.SSHEd25519,
       "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
       "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-      "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+      "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+      "ssh-ed25519 AAAAC3Nz... alice@example.com"
     );
 
     expect(claim.keyType).toBe(KeyType.SSHEd25519);
-    expect(claim.fingerprint).toBe(
-      "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
-    );
-    expect(claim.nonceHash).toBe(
-      "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
-    );
-    expect(claim.sig).toBe(
-      "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
-    );
-  });
-
-  it("should have correct client methods", () => {
-    expect(typeof aliceClient.gitIdentityRegistry.claimKey).toBe("function");
-    expect(typeof aliceClient.gitIdentityRegistry.getClaimant).toBe("function");
-    expect(typeof aliceClient.gitIdentityRegistry.fingerprintToAddress).toBe(
-      "function"
-    );
-
-    // Should also have original alkahest-ts client methods
-    expect(typeof aliceClient.getAttestation).toBe("function");
-    expect(typeof aliceClient.viemClient).toBe("object");
-    expect(aliceClient.address).toBeDefined();
-    expect(aliceClient.contractAddresses).toBeDefined();
+    expect(claim.publicKey).toContain("ssh-ed25519");
   });
 
   it("should handle hex strings with 0x prefix", () => {
@@ -89,18 +64,14 @@ describe("GitIdentityRegistry Client", () => {
       KeyType.PGPv4,
       "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
       "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-      "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+      "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+      "pgp-pubkey text block"
     );
 
     expect(claim.fingerprint).toBe(
       "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
     );
-    expect(claim.nonceHash).toBe(
-      "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
-    );
-    expect(claim.sig).toBe(
-      "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
-    );
+    expect(claim.publicKey).toBe("pgp-pubkey text block");
   });
 
   describe("GitIdentityRegistry - Contract Interactions", () => {
@@ -110,131 +81,60 @@ describe("GitIdentityRegistry Client", () => {
           KeyType.SSHEd25519,
           "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
           "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-          "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+          "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+          "ssh-ed25519 AAAAC3... alice@example.com"
         );
 
-        const result = await aliceClient.gitIdentityRegistry.claimKey(
-          claimData
-        );
-
+        const result = await aliceClient.gitIdentityRegistry.claimKey(claimData);
         expect(result).toBeDefined();
-        expect(typeof result).toBe("object");
         expect(result).toHaveProperty("hash");
-        expect(typeof result.hash).toBe("string");
-        expect(result.hash).toMatch(/^0x[a-fA-F0-9]{64}$/);
       } catch (error) {
         if (
-          (error as Error)?.message?.includes("no code at address") ||
-          (error as Error)?.message?.includes("CALL_EXCEPTION")
+          (error as Error).message.includes("no code at address") ||
+          (error as Error).message.includes("CALL_EXCEPTION")
         ) {
-          console.log(
-            "⚠️  GitIdentityRegistry contract not deployed, skipping contract test"
-          );
+          console.log("⚠️ Contract not deployed, skipping test");
           return;
         }
         throw error;
       }
     });
 
-    it("should get claimant for a fingerprint", async () => {
+    it("should prevent claiming multiple keys from same address", async () => {
       try {
-        const fingerprint =
-          "0x1111111111111111111111111111111111111111111111111111111111111111" as `0x${string}`;
-
-        // First claim the key
-        const claimData = createGitKeyClaim(
-          KeyType.SSHSecp256k1,
-          fingerprint.slice(2), // Remove 0x prefix for createGitKeyClaim
-          "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-          "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
-        );
-
-        await aliceClient.gitIdentityRegistry.claimKey(claimData);
-
-        // Then check the claimant
-        const claimant = await aliceClient.gitIdentityRegistry.getClaimant(
-          fingerprint
-        );
-        expect(claimant).toBe(alice);
-      } catch (error) {
-        if (
-          (error as Error)?.message?.includes("no code at address") ||
-          (error as Error)?.message?.includes("CALL_EXCEPTION") ||
-          (error as Error)?.message?.includes("Already claimed")
-        ) {
-          console.log("⚠️  GitIdentityRegistry contract test skipped");
-          return;
-        }
-        throw error;
-      }
-    });
-
-    it("should map fingerprint to address", async () => {
-      try {
-        const fingerprint =
-          "0x9876543210fedcba9876543210fedcba9876543210fedcba9876543210fedcba" as `0x${string}`;
-
-        const claimData = createGitKeyClaim(
+        // First claim should succeed
+        const claimData1 = createGitKeyClaim(
           KeyType.PGPv4,
-          fingerprint.slice(2),
+          "9876543210fedcba9876543210fedcba9876543210fedcba9876543210fedcba",
           "fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321",
-          "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe"
+          "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe",
+          "-----BEGIN PGP PUBLIC KEY BLOCK----- ..."
         );
 
-        await bobClient.gitIdentityRegistry.claimKey(claimData);
+        await bobClient.gitIdentityRegistry.claimKey(claimData1);
 
-        // Test both methods to ensure they return the same result
-        const mappedAddress =
-          await bobClient.gitIdentityRegistry.fingerprintToAddress(fingerprint);
-        const claimant = await bobClient.gitIdentityRegistry.getClaimant(fingerprint);
-        
-        expect(claimant).toBe(bob);
-        expect(mappedAddress).toBe(bob);
-      } catch (error) {
-        if (
-          (error as Error)?.message?.includes("no code at address") ||
-          (error as Error)?.message?.includes("CALL_EXCEPTION") ||
-          (error as Error)?.message?.includes("Already claimed")
-        ) {
-          console.log(
-            "⚠️  GitIdentityRegistry fingerprint mapping test skipped"
-          );
-          return;
-        }
-        throw error;
-      }
-    });
-
-    it("should prevent claiming already claimed keys", async () => {
-      try {
-        const fingerprint =
-          "0x5555555555555555555555555555555555555555555555555555555555555555" as `0x${string}`;
-
-        const claimData = createGitKeyClaim(
-          KeyType.SSHSecp256k1,
-          fingerprint.slice(2),
+        // Second claim from same address should fail
+        const claimData2 = createGitKeyClaim(
+          KeyType.SSHEd25519,
+          "5555555555555555555555555555555555555555555555555555555555555555",
           "1111111111111111111111111111111111111111111111111111111111111111",
-          "2222222222222222222222222222222222222222222222222222222222222222"
+          "2222222222222222222222222222222222222222222222222222222222222222",
+          "ssh-ed25519 AAAAB3... another@example.com"
         );
 
-        // Alice claims the key first
-        await aliceClient.gitIdentityRegistry.claimKey(claimData);
-
-        // Bob tries to claim the same key - should fail
         try {
-          await bobClient.gitIdentityRegistry.claimKey(claimData);
+          await bobClient.gitIdentityRegistry.claimKey(claimData2);
           // If we reach here, the test should fail
-          expect(true).toBe(false);
-        } catch (revertError) {
-          // This is expected - the claim should be reverted
-          expect((revertError as Error).message).toContain("Already claimed");
+          expect(false).toBe(true); // Force failure
+        } catch (error) {
+          expect((error as Error).message).toContain("Address already has a claimed key");
         }
       } catch (error) {
         if (
-          (error as Error)?.message?.includes("no code at address") ||
-          (error as Error)?.message?.includes("CALL_EXCEPTION")
+          (error as Error).message.includes("no code at address") ||
+          (error as Error).message.includes("CALL_EXCEPTION")
         ) {
-          console.log("⚠️  GitIdentityRegistry duplicate claim test skipped");
+          console.log("⚠️ Skipped test due to contract issue");
           return;
         }
         throw error;

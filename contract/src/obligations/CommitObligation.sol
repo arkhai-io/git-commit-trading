@@ -16,6 +16,14 @@ contract CommitObligation is BaseObligation {
         string commitHash;
         CommitAlgo commitAlgo;
         string[] hosts; // optional if communicated out of band
+        address sender; // automatically filled with msg.sender
+    }
+
+    // Input struct for doObligation function (without sender)
+    struct ObligationInput {
+        string commitHash;
+        CommitAlgo commitAlgo;
+        string[] hosts;
     }
 
     constructor(
@@ -25,16 +33,24 @@ contract CommitObligation is BaseObligation {
         BaseObligation(
             _eas,
             _schemaRegistry,
-            "string commitHash,uint8 commitAlgo,string[] hosts",
+            "string commitHash,uint8 commitAlgo,string[] hosts,address sender",
             true
         )
     {}
 
     function doObligation(
-        ObligationData calldata data,
+        ObligationInput calldata data,
         bytes32 refUID
     ) public returns (bytes32 uid_) {
-        bytes memory encodedData = abi.encode(data);
+        // Create a new ObligationData with the sender automatically filled
+        ObligationData memory dataWithSender = ObligationData({
+            commitHash: data.commitHash,
+            commitAlgo: data.commitAlgo,
+            hosts: data.hosts,
+            sender: msg.sender
+        });
+
+        bytes memory encodedData = abi.encode(dataWithSender);
         uid_ = this.doObligationForRaw(
             encodedData,
             0,
