@@ -23,11 +23,12 @@
     "escrows fulfill": "bun run src/cli/git-escrows.ts fulfill",
     "escrows server": "bun run src/cli/git-escrows.ts server",
     "escrows collect": "bun run src/cli/git-escrows.ts collect",
-    "update:json-to-ts": "bun run script/jsonToTsConverter.ts"
+    "generate-ts": "bun run script/jsonToTsConverter.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/node": "^20.19.11",
+    "@types/sshpk": "^1.17.4",
     "@types/uuid": "^10.0.0"
   },
   "peerDependencies": {
@@ -39,6 +40,7 @@
     "chalk": "^5.6.0",
     "commander": "^12.1.0",
     "simple-git": "^3.28.0",
+    "sshpk": "^1.18.0",
     "uuid": "^10.0.0",
     "viem": "^2.35.1"
   }
