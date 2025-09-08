@@ -1,6 +1,7 @@
 import { TestExecutor } from './executor.js';
-import type { Config, ExecutionResult, TestResult } from './types.js';
+import type { Config, ExecutionResult, TestResult, ProjectLanguage } from './types.js';
 import { loadConfig, validateCommitHash } from './utils.js';
+import { detectProjectCommands } from './projectDetection.js';
 
 /**
  * SDK interface for programmatic test execution
@@ -10,12 +11,12 @@ export class GitTestExecution {
    * Execute tests with a configuration object
    * @param config - Test execution configuration
    * @param options - Optional execution options
-   * @returns Promise<ExecutionResult>
+   * @returns Promise<ExecutionResult & { detectedLanguage: ProjectLanguage | null }>
    */
   static async executeTests(config: Config, options?: {
     silent?: boolean;
     onProgress?: (step: string) => void;
-  }): Promise<ExecutionResult> {
+  }): Promise<ExecutionResult & { detectedLanguage: ProjectLanguage | null }> {
     const executor = new TestExecutor(config);
     
     // Set up progress callback if provided
@@ -23,21 +24,35 @@ export class GitTestExecution {
       // You can enhance this to hook into the executor's progress events
     }
     
-    return await executor.execute();
+    const result = await executor.execute();
+    return {
+      ...result,
+      detectedLanguage: executor.getDetectedLanguage()
+    };
   }
 
   /**
    * Execute tests with a configuration file path
    * @param configPath - Path to configuration file
    * @param options - Optional execution options
-   * @returns Promise<ExecutionResult>
+   * @returns Promise<ExecutionResult & { detectedLanguage: ProjectLanguage | null }>
    */
   static async executeTestsFromFile(configPath: string, options?: {
     silent?: boolean;
     onProgress?: (step: string) => void;
-  }): Promise<ExecutionResult> {
+  }): Promise<ExecutionResult & { detectedLanguage: ProjectLanguage | null }> {
     const config = await loadConfig(configPath);
     return await this.executeTests(config, options);
+  }
+
+  /**
+   * Detect project language from a directory
+   * @param projectPath - Path to the project directory
+   * @returns Promise<ProjectLanguage | null>
+   */
+  static async detectLanguage(projectPath: string): Promise<ProjectLanguage | null> {
+    const result = await detectProjectCommands(projectPath);
+    return result.language;
   }
 
   /**
@@ -88,7 +103,7 @@ export class GitTestExecution {
   }
 
   /**
-   * Create a sample configuration object
+   * Create a sample configuration object for TypeScript projects
    * @returns Config
    */
   static initConfig(): Config {
@@ -97,10 +112,73 @@ export class GitTestExecution {
         source: {
           url: 'https://github.com/your-org/source-repo/archive/{commit-sha}.tar.gz',
           commitHash: 'abc123def456', // Required: specific commit hash
+          language: 'typescript' // Optional: specify language explicitly
         },
         testcase: {
           url: 'https://github.com/your-org/testcase-repo/archive/{commit-sha}.tar.gz',
-          commitHash: 'def456ghi789', // Required: specific commit hash  
+          commitHash: 'def456ghi789', // Required: specific commit hash
+          language: 'typescript' // Optional: specify language explicitly
+        }
+      },
+      execution: {
+        timeout: 300000,
+        cleanupAfterExecution: true,
+        isolatedEnvironment: true,
+        tempDirectory: './temp'
+      }
+    };
+  }
+
+  /**
+   * Create a sample configuration object for Rust projects
+   * @returns Config
+   */
+  static initRustConfig(): Config {
+    return {
+      repositories: {
+        source: {
+          url: 'https://github.com/your-org/rust-solution/archive/{commit-sha}.tar.gz',
+          commitHash: 'abc123def456',
+          language: 'rust',
+          buildCommand: 'cargo build --release',
+          testCommand: 'cargo test'
+        },
+        testcase: {
+          url: 'https://github.com/your-org/rust-tests/archive/{commit-sha}.tar.gz',
+          commitHash: 'def456ghi789',
+          language: 'rust',
+          testCommand: 'cargo test'
+        }
+      },
+      execution: {
+        timeout: 300000,
+        cleanupAfterExecution: true,
+        isolatedEnvironment: true,
+        tempDirectory: './temp'
+      }
+    };
+  }
+
+  /**
+   * Create a sample configuration object for Python projects
+   * @returns Config
+   */
+  static initPythonConfig(): Config {
+    return {
+      repositories: {
+        source: {
+          url: 'https://github.com/your-org/python-solution/archive/{commit-sha}.tar.gz',
+          commitHash: 'abc123def456',
+          language: 'python',
+          installCommand: 'pip install -r requirements.txt',
+          testCommand: 'pytest'
+        },
+        testcase: {
+          url: 'https://github.com/your-org/python-tests/archive/{commit-sha}.tar.gz',
+          commitHash: 'def456ghi789',
+          language: 'python',
+          installCommand: 'pip install -r requirements.txt',
+          testCommand: 'pytest'
         }
       },
       execution: {
@@ -114,5 +192,5 @@ export class GitTestExecution {
 }
 
 // Export types for external use
-export type { Config, ExecutionResult, TestResult } from './types.js';
+export type { Config, ExecutionResult, TestResult, ProjectLanguage } from './types.js';
 export { TestExecutor } from './executor.js';

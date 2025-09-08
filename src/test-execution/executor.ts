@@ -1,9 +1,9 @@
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import chalk from 'chalk';
-import type { Config, ExecutionResult, TestResult, RepositoryConfig } from './types.js';
+import type { Config, ExecutionResult, TestResult, RepositoryConfig, ProjectLanguage } from './types.js';
 import { Logger, executeCommand, ensureDirectory, removeDirectory, copyDirectory, parseCommand, validateCommitHash, normalizeCommitHash, downloadAndExtractArchive } from './utils.js';
-import { detectProjectCommands } from './projectDetection.js';
+import { detectProjectCommands, detectPackageManager, updateCommandsForPackageManager, type ProjectCommands } from './projectDetection.js';
 
 export class TestExecutor {
   private config: Config;
@@ -11,6 +11,8 @@ export class TestExecutor {
   private sourceDir: string;
   private testcaseDir: string;
   private mergedDir: string;
+  private detectedLanguage: ProjectLanguage | null = null;
+  private projectCommands: ProjectCommands | null = null;
 
   constructor(config: Config) {
     this.config = config;
@@ -161,28 +163,40 @@ export class TestExecutor {
     Logger.step('Setting up Alice\'s test structure...');
     await copyDirectory(this.testcaseDir, this.mergedDir);
     
-    Logger.step('Merging Bob\'s solution into Alice\'s src directory...');
-    const bobSrcDir = path.join(this.sourceDir, 'src');
-    const aliceSrcDir = path.join(this.mergedDir, 'src');
+    Logger.step('Detecting language-specific merge strategy...');
+    const mergeStrategy = await this.getLanguageSpecificMergeStrategy();
     
-    // Ensure Alice's src directory exists
-    await ensureDirectory(aliceSrcDir);
+    Logger.step('Merging Bob\'s solution into Alice\'s project structure...');
     
-    // Copy Bob's src content into Alice's src
+    // Determine source and target directories
+    const bobSourceDir = mergeStrategy.sourceSubDir 
+      ? path.join(this.sourceDir, mergeStrategy.sourceSubDir)
+      : this.sourceDir;
+    
+    const aliceTargetDir = mergeStrategy.targetSubDir
+      ? path.join(this.mergedDir, mergeStrategy.targetSubDir)
+      : this.mergedDir;
+    
+    // Ensure Alice's target directory exists if needed
+    if (mergeStrategy.shouldCreateTarget) {
+      await ensureDirectory(aliceTargetDir);
+    }
+    
+    // Copy Bob's source content into Alice's target
     try {
-      await copyDirectory(bobSrcDir, aliceSrcDir);
-      Logger.success('Successfully merged Bob\'s solution code');
+      await copyDirectory(bobSourceDir, aliceTargetDir);
+      Logger.success(`Successfully merged Bob's ${this.detectedLanguage || 'code'} solution`);
     } catch (error) {
-      Logger.warning(`Could not copy from ${bobSrcDir}: ${error}`);
-      // If Bob doesn't have a src directory, try copying the entire repo content
-      Logger.step('Trying to copy all of Bob\'s content to src/...');
+      Logger.warning(`Could not copy from ${bobSourceDir}: ${error}`);
+      // If Bob doesn't have the expected structure, try copying the entire repo content
+      Logger.step('Trying to copy all of Bob\'s content to target directory...');
       const entries = await import('fs').then(fs => fs.promises.readdir(this.sourceDir, { withFileTypes: true }));
       
       for (const entry of entries) {
-        if (entry.name === '.git' || entry.name === 'node_modules') continue;
+        if (entry.name === '.git' || entry.name === 'node_modules' || entry.name === 'target' || entry.name === '__pycache__') continue;
         
         const srcPath = path.join(this.sourceDir, entry.name);
-        const destPath = path.join(aliceSrcDir, entry.name);
+        const destPath = path.join(aliceTargetDir, entry.name);
         
         if (entry.isDirectory()) {
           await copyDirectory(srcPath, destPath);
@@ -204,11 +218,27 @@ export class TestExecutor {
       // Fallback to auto-detection
       Logger.step('Auto-detecting install command from merged project...');
       const detectedCommands = await detectProjectCommands(this.mergedDir);
-      if (!detectedCommands.isTypeScriptProject || !detectedCommands.commands) {
-        throw new Error(`Failed to detect TypeScript project commands: ${detectedCommands.error || 'Not a valid TypeScript project'}`);
+      if (!detectedCommands.isValidProject || !detectedCommands.commands) {
+        throw new Error(`Failed to detect project commands: ${detectedCommands.error || 'Not a valid project'}`);
       }
+      
+      this.detectedLanguage = detectedCommands.language;
+      this.projectCommands = detectedCommands.commands;
+      
       installCommand = detectedCommands.commands.installCommand;
-      Logger.step(`Auto-detected install command: ${installCommand}`);
+      
+      // For TypeScript projects, update commands based on package manager
+      if (detectedCommands.language === 'typescript') {
+        const packageManager = await detectPackageManager(this.mergedDir);
+        const updatedCommands = updateCommandsForPackageManager(
+          detectedCommands.commands as any, 
+          packageManager
+        );
+        installCommand = updatedCommands.installCommand;
+        this.projectCommands = updatedCommands;
+      }
+      
+      Logger.step(`Auto-detected ${detectedCommands.language} project with install command: ${installCommand}`);
     }
     
     const { command, args } = parseCommand(installCommand);
@@ -236,15 +266,24 @@ export class TestExecutor {
     buildCommand = this.config.repositories.testcase.buildCommand || this.config.repositories.source.buildCommand;
     
     if (!buildCommand) {
-      // Fallback to auto-detection
-      Logger.step('Auto-detecting build command from merged project...');
-      const detectedCommands = await detectProjectCommands(this.mergedDir);
-      if (!detectedCommands.isTypeScriptProject || !detectedCommands.commands) {
-        Logger.warning('No build command detected, skipping build step');
-        return;
+      // Use cached detection result if available
+      if (this.projectCommands) {
+        buildCommand = this.projectCommands.buildCommand;
+        Logger.step(`Using cached build command: ${buildCommand}`);
+      } else {
+        // Fallback to auto-detection
+        Logger.step('Auto-detecting build command from merged project...');
+        const detectedCommands = await detectProjectCommands(this.mergedDir);
+        if (!detectedCommands.isValidProject || !detectedCommands.commands) {
+          Logger.warning('No build command detected, skipping build step');
+          return;
+        }
+        buildCommand = detectedCommands.commands.buildCommand;
+        this.detectedLanguage = detectedCommands.language;
+        this.projectCommands = detectedCommands.commands;
       }
-      buildCommand = detectedCommands.commands.buildCommand;
-      if (!buildCommand || buildCommand === 'echo "No build command"') {
+      
+      if (!buildCommand || buildCommand.includes('No build command')) {
         Logger.warning('No build command available, skipping build step');
         return;
       }
@@ -281,14 +320,22 @@ export class TestExecutor {
       testCommand = this.config.repositories.testcase.testCommand || this.config.repositories.source.testCommand;
       
       if (!testCommand) {
-        // Fallback to auto-detection
-        Logger.step('Auto-detecting test command from merged project...');
-        const detectedCommands = await detectProjectCommands(this.mergedDir);
-        if (!detectedCommands.isTypeScriptProject || !detectedCommands.commands) {
-          throw new Error(`Failed to detect TypeScript project commands: ${detectedCommands.error || 'Not a valid TypeScript project'}`);
+        // Use cached detection result if available
+        if (this.projectCommands) {
+          testCommand = this.projectCommands.testCommand;
+          Logger.step(`Using previous founded test command: ${testCommand}`);
+        } else {
+          // Fallback to auto-detection
+          Logger.step('Auto-detecting test command from merged project...');
+          const detectedCommands = await detectProjectCommands(this.mergedDir);
+          if (!detectedCommands.isValidProject || !detectedCommands.commands) {
+            throw new Error(`Failed to detect project commands: ${detectedCommands.error || 'Not a valid project'}`);
+          }
+          testCommand = detectedCommands.commands.testCommand;
+          this.detectedLanguage = detectedCommands.language;
+          this.projectCommands = detectedCommands.commands;
+          Logger.step(`Auto-detected ${detectedCommands.language} project with test command: ${testCommand}`);
         }
-        testCommand = detectedCommands.commands.testCommand;
-        Logger.step(`Auto-detected test command: ${testCommand}`);
       } else {
         Logger.step(`Using configured test command: ${testCommand}`);
       }
@@ -333,5 +380,95 @@ export class TestExecutor {
 
   getWorkingDirectory(): string {
     return this.workingDir;
+  }
+
+  getDetectedLanguage(): ProjectLanguage | null {
+    return this.detectedLanguage;
+  }
+
+  getProjectCommands(): ProjectCommands | null {
+    return this.projectCommands;
+  }
+
+  /**
+   * Get language-specific merge strategy
+   */
+  private async getLanguageSpecificMergeStrategy(): Promise<{
+    sourceSubDir?: string;
+    targetSubDir?: string;
+    shouldCreateTarget?: boolean;
+  }> {
+    // Detect language if not already detected
+    if (!this.detectedLanguage) {
+      const testcaseDetection = await detectProjectCommands(this.testcaseDir);
+      if (testcaseDetection.isValidProject) {
+        this.detectedLanguage = testcaseDetection.language;
+      }
+    }
+
+    switch (this.detectedLanguage) {
+      case 'typescript':
+        return {
+          sourceSubDir: 'src',
+          targetSubDir: 'src',
+          shouldCreateTarget: true
+        };
+      case 'rust':
+        return {
+          sourceSubDir: 'src',
+          targetSubDir: 'src',
+          shouldCreateTarget: true
+        };
+      case 'python':
+        return {
+          // Python projects might have various structures
+          // Try to detect if it's a package or simple scripts
+          sourceSubDir: await this.detectPythonSourceStructure(),
+          targetSubDir: 'src', // Standard target
+          shouldCreateTarget: true
+        };
+      default:
+        return {
+          sourceSubDir: 'src',
+          targetSubDir: 'src',
+          shouldCreateTarget: true
+        };
+    }
+  }
+
+  private async detectPythonSourceStructure(): Promise<string | undefined> {
+    try {
+      const entries = await import('fs').then(fs => fs.promises.readdir(this.sourceDir, { withFileTypes: true }));
+      
+      // Look for common Python source patterns
+      const patterns = ['src', 'lib', '*.py files in root'];
+      
+      // Check if there's a src directory
+      if (entries.some(entry => entry.isDirectory() && entry.name === 'src')) {
+        return 'src';
+      }
+      
+      // Check if there are Python files in root
+      if (entries.some(entry => entry.isFile() && entry.name.endsWith('.py'))) {
+        return undefined; // Use root directory
+      }
+      
+      // Look for a package directory (directory with __init__.py)
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          try {
+            const packageDir = path.join(this.sourceDir, entry.name);
+            await import('fs').then(fs => fs.promises.access(path.join(packageDir, '__init__.py')));
+            return entry.name; // Found a package directory
+          } catch {
+            // Not a package directory, continue
+          }
+        }
+      }
+      
+      return 'src'; // Default fallback
+    } catch {
+      return 'src'; // Error fallback
+    }
   }
 }
