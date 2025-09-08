@@ -37,10 +37,13 @@
     "typescript": "^5.9.2"
   },
   "dependencies": {
+    "@peculiar/x509": "^1.13.0",
+    "@types/openpgp": "^5.0.0",
     "@viem/anvil": "^0.0.10",
     "alkahest-ts": "git+https://github.com/VAR-META-Tech/alkahest-ts.git#gitapp",
     "chalk": "^5.6.0",
     "commander": "^12.1.0",
+    "openpgp": "^6.2.2",
     "simple-git": "^3.28.0",
     "sshpk": "^1.18.0",
     "uuid": "^10.0.0",

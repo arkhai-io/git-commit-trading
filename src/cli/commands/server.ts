@@ -108,7 +108,7 @@ export async function serverCommand(options: ServerOptions) {
 
           // Verify if the sender actually signed this commit
           console.log('🔐 Verifying commit signature matches registered key...');
-          const isSignedBySender = verifyCommitSignature(gitMetadata, senderKeyClaim);
+          const isSignedBySender = await verifyCommitSignature(gitMetadata, senderKeyClaim);
           if (!isSignedBySender) {
             console.log('❌ Commit was not signed by the sender\'s registered key');
             console.log('   Fulfillment rejected: commit must be signed by sender\'s registered Git key');

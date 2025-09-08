@@ -420,7 +420,7 @@ describe("Oracle CommitObligation Tests", () => {
 
                     // Then verify if the sender signed this commit
                     console.log("\n🔐 Verifying commit signature...");
-                    const isSignedBySender = verifyCommitSignature(gitMetadata, senderKeyClaim);
+                    const isSignedBySender = await verifyCommitSignature(gitMetadata, senderKeyClaim);
 
                     if (!isSignedBySender) {
                         console.log("❌ Commit was not signed by the sender! Rejecting fulfillment.");

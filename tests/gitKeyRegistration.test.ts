@@ -103,7 +103,8 @@ eFeHt6fLHfn4FcBUU2LNAAAADnRlc3RAZXhhbXBsZS5jb20BAgMEBQ==
             const result = await runCLICommand(['register-key', '--help']);
             
             expect(result.exitCode).toBe(0);
-            expect(result.stdout).toContain('Register your Git SSH key to your Ethereum address');
+            expect(result.stdout).toContain('Register your Git cryptographic key (SSH, PGP, or X509) to your Ethereum');
+            expect(result.stdout).toContain('address for commit verification');
             expect(result.stdout).toContain('--path');
             expect(result.stdout).toContain('--private-key-file');
             expect(result.stdout).toContain('--public-key-file');
@@ -121,11 +122,11 @@ eFeHt6fLHfn4FcBUU2LNAAAADnRlc3RAZXhhbXBsZS5jb20BAgMEBQ==
             const result = await runCLICommand(['register-key', '--path', nonExistentPath]);
             
             expect(result.exitCode).toBe(1);
-            // More flexible error checking
-            const hasExpectedError = result.stderr.includes('SSH public key file not found') || 
-                   result.stderr.includes('No SSH public key found') ||
+            // More flexible error checking - updated for new multi-key system
+            const hasExpectedError = result.stderr.includes('Key file not found') ||
+                   result.stderr.includes('No key found') ||
                    result.stderr.includes('not found') ||
-                   result.stderr.includes('SSH key');
+                   result.stderr.includes('key');
             expect(hasExpectedError).toBeTruthy();
         });
 
@@ -412,7 +413,7 @@ describe("Multi-Key Type Verification", () => {
         verified: true
     };
 
-    test("SSH Ed25519 verification", () => {
+    test("SSH Ed25519 verification", async () => {
         const { verifyCommitSignature } = require("../src/utils/sshSignatureUtils");
         const { KeyType } = require("../src/clients/gitIdentityRegistry");
 
@@ -424,11 +425,11 @@ describe("Multi-Key Type Verification", () => {
             publicKey: "AAAAC3NzaC1lZDI1NTE5AAAAIDpOOgAtLLU/X72Fku+nmmAhgeXGDzfF7sdYRiyxS7Qt"
         };
 
-        const result = verifyCommitSignature(mockGitMetadata, gitKeyClaim);
+        const result = await verifyCommitSignature(mockGitMetadata, gitKeyClaim);
         expect(result).toBe(true);
     });
 
-    test("PGP verification (fallback to GitHub)", () => {
+    test("PGP verification (fallback to GitHub)", async () => {
         const { verifyCommitSignature } = require("../src/utils/sshSignatureUtils");
         const { KeyType } = require("../src/clients/gitIdentityRegistry");
 
@@ -446,11 +447,11 @@ describe("Multi-Key Type Verification", () => {
             publicKey: "mQINBFWMQw4BEADOqQQGY9gP..."
         };
 
-        const result = verifyCommitSignature(pgpGitMetadata, gitKeyClaim);
+        const result = await verifyCommitSignature(pgpGitMetadata, gitKeyClaim);
         expect(result).toBe(true);
     });
 
-    test("SSH Secp256k1 verification (fallback to GitHub)", () => {
+    test("SSH Secp256k1 verification (fallback to GitHub)", async () => {
         const { verifyCommitSignature } = require("../src/utils/sshSignatureUtils");
         const { KeyType } = require("../src/clients/gitIdentityRegistry");
 
@@ -462,11 +463,11 @@ describe("Multi-Key Type Verification", () => {
             publicKey: "AAAAB3NzaC1yc2EAAAADAQABAAABAQC..."
         };
 
-        const result = verifyCommitSignature(mockGitMetadata, gitKeyClaim);
+        const result = await verifyCommitSignature(mockGitMetadata, gitKeyClaim);
         expect(result).toBe(true);
     });
 
-    test("X509 verification (fallback to GitHub)", () => {
+    test("X509 verification (fallback to GitHub)", async () => {
         const { verifyCommitSignature } = require("../src/utils/sshSignatureUtils");
         const { KeyType } = require("../src/clients/gitIdentityRegistry");
 
@@ -478,11 +479,11 @@ describe("Multi-Key Type Verification", () => {
             publicKey: "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgK..."
         };
 
-        const result = verifyCommitSignature(mockGitMetadata, gitKeyClaim);
+        const result = await verifyCommitSignature(mockGitMetadata, gitKeyClaim);
         expect(result).toBe(true);
     });
 
-    test("Unsupported key type", () => {
+    test("Unsupported key type", async () => {
         const { verifyCommitSignature } = require("../src/utils/sshSignatureUtils");
         const { KeyType } = require("../src/clients/gitIdentityRegistry");
 
@@ -494,7 +495,7 @@ describe("Multi-Key Type Verification", () => {
             publicKey: "invalid"
         };
 
-        const result = verifyCommitSignature(mockGitMetadata, gitKeyClaim);
+        const result = await verifyCommitSignature(mockGitMetadata, gitKeyClaim);
         expect(result).toBe(false);
     });
 });
