@@ -58,7 +58,8 @@ NETWORK=${options.network}
     }
 
     // Add placeholder for commit obligation address
-    envContent += `COMMIT_OBLIGATION_ADDRESS=# Add the deployed CommitObligation contract address here
+    envContent += `COMMIT_OBLIGATION_ADDRESS= #Add the deployed CommitObligation contract address here
+GIT_IDENTITY_REGISTRY_ADDRESS= #Add the deployed GitIdentityRegistry contract address here
 
 # Optional additional contract addresses:
 # ERC20_ESCROW_OBLIGATION_ADDRESS=
@@ -73,10 +74,14 @@ NETWORK=${options.network}
     console.log(chalk.green(`✅ .env file created successfully!`));
     console.log(chalk.yellow('\nNext steps:'));
     console.log(chalk.gray('1. Add the COMMIT_OBLIGATION_ADDRESS to your .env file'));
-    console.log(chalk.gray('2. If using a network other than anvil, add the RPC_URL'));
-    console.log(chalk.gray('3. Test your configuration with: git-escrows list'));
+    console.log(chalk.gray('2. Add the GIT_IDENTITY_REGISTRY_ADDRESS to your .env file'));
+    console.log(chalk.gray('3. If using a network other than anvil, add the RPC_URL'));
+    console.log(chalk.gray('4. Test your configuration with: git-escrows list'));
+    console.log(chalk.gray('5. Register your Git SSH key with: git-escrows register-key'));
     
     console.log(chalk.cyan('\nExample usage:'));
+    console.log(chalk.gray('git-escrows register-key'));
+    console.log(chalk.gray('git-escrows check-key'));
     console.log(chalk.gray('git-escrows submit --tests-repo "repo-url" --tests-commit "hash" --reward "1000" --arbiter "0x..." --oracle "0x..." --token "0x..."'));
 
     // Exit successfully

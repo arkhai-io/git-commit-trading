@@ -4,6 +4,7 @@ import { createWalletClient, http, nonceManager } from 'viem';
 import { foundry, sepolia, mainnet } from 'viem/chains';
 import { makeClient } from 'alkahest-ts';
 import { makeCommitObligationClient, type CommitObligationAddresses } from '../../clients/commitObligation.js';
+import { makeGitIdentityRegistryClient, type GitIdentityRegistryAddresses } from '../../clients/gitIdentityRegistry.js';
 import chalk from 'chalk';
 
 export interface EnvConfig {
@@ -12,6 +13,7 @@ export interface EnvConfig {
   network?: string;
   rpcUrl?: string;
   commitObligationAddress?: string;
+  gitIdentityRegistryAddress?: string;
 }
 
 /**
@@ -70,6 +72,7 @@ function validateEnvConfig(envVars: Record<string, string>): EnvConfig {
     network: envVars.NETWORK || 'anvil',
     rpcUrl: envVars.RPC_URL,
     commitObligationAddress: envVars.COMMIT_OBLIGATION_ADDRESS,
+    gitIdentityRegistryAddress: envVars.GIT_IDENTITY_REGISTRY_ADDRESS,
   };
 }
 
@@ -141,22 +144,49 @@ export async function createClientFromEnv(envPath: string = '.env') {
   // Create alkahest client
   const alkahestClient = makeClient(walletClient as any);
 
-  // If commit obligation address is provided, extend the client
+  // Build extensions object for the client
+  const extensions: any = {};
+  let hasExtensions = false;
+
+  // Add CommitObligation if available
   if (config.commitObligationAddress) {
     console.log(chalk.gray(`  Commit Obligation: ${config.commitObligationAddress}`));
     
     const commitObligationAddresses: CommitObligationAddresses = {
       commitObligation: config.commitObligationAddress as `0x${string}`,
     };
+    
+    extensions.commitObligation = (client: any) => makeCommitObligationClient(client.viemClient, commitObligationAddresses);
+    hasExtensions = true;
+  }
 
-    const extendedClient = alkahestClient.extend((client: any) => ({
-      commitObligation: makeCommitObligationClient(client.viemClient, commitObligationAddresses),
-    }));
+  // Add GitIdentityRegistry if available
+  if (config.gitIdentityRegistryAddress) {
+    console.log(chalk.gray(`  Git Identity Registry: ${config.gitIdentityRegistryAddress}`));
+    
+    const gitIdentityRegistryAddresses: GitIdentityRegistryAddresses = {
+      gitIdentityRegistry: config.gitIdentityRegistryAddress as `0x${string}`,
+    };
+    
+    extensions.gitIdentityRegistry = (client: any) => makeGitIdentityRegistryClient(client.viemClient, gitIdentityRegistryAddresses);
+    hasExtensions = true;
+  }
+
+  // Extend client if we have any extensions
+  if (hasExtensions) {
+    const extendedClient = alkahestClient.extend((client: any) => {
+      const result: any = {};
+      Object.keys(extensions).forEach(key => {
+        result[key] = extensions[key](client);
+      });
+      return result;
+    });
 
     return {
       client: extendedClient,
       config,
-      hasCommitObligation: true,
+      hasCommitObligation: !!config.commitObligationAddress,
+      hasGitIdentityRegistry: !!config.gitIdentityRegistryAddress,
     };
   }
 
@@ -164,6 +194,7 @@ export async function createClientFromEnv(envPath: string = '.env') {
     client: alkahestClient,
     config,
     hasCommitObligation: false,
+    hasGitIdentityRegistry: false,
   };
 }
 
@@ -179,11 +210,46 @@ export function requireEnvFile(envPath: string = '.env'): void {
     console.error(chalk.gray('NETWORK=anvil  # optional: anvil, localhost, sepolia, mainnet'));
     console.error(chalk.gray('RPC_URL=http://127.0.0.1:8545  # optional for anvil/localhost'));
     console.error(chalk.gray('COMMIT_OBLIGATION_ADDRESS=0x...  # optional'));
+    console.error(chalk.gray('GIT_IDENTITY_REGISTRY_ADDRESS=0x...  # optional'));
     console.error(chalk.yellow('\nExample .env file:'));
     console.error(chalk.cyan(`PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 ADDRESS=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
 NETWORK=anvil
-RPC_URL=http://127.0.0.1:8545`));
+RPC_URL=http://127.0.0.1:8545
+GIT_IDENTITY_REGISTRY_ADDRESS=0x...`));
+    process.exit(1);
+  }
+}
+
+/**
+ * Check if .env has all required fields for Git Key operations (register-key, check-key)
+ */
+export function validateGitKeyEnv(envPath: string = '.env'): void {
+  requireEnvFile(envPath);
+  
+  try {
+    const env = loadEnvFile(envPath);
+    const missing: string[] = [];
+    
+    if (!env.PRIVATE_KEY) missing.push('PRIVATE_KEY');
+    if (!env.ADDRESS) missing.push('ADDRESS');
+    if (!env.GIT_IDENTITY_REGISTRY_ADDRESS || env.GIT_IDENTITY_REGISTRY_ADDRESS.startsWith('#')) {
+      missing.push('GIT_IDENTITY_REGISTRY_ADDRESS');
+    }
+    
+    if (missing.length > 0) {
+      console.error(chalk.red('❌ Missing required environment variables for Git Key operations:'));
+      missing.forEach(field => console.error(chalk.red(`   - ${field}`)));
+      console.error(chalk.yellow('\nPlease update your .env file or generate a new one with:'));
+      console.error(chalk.cyan('git-escrows new-client --privateKey 0x... --network anvil'));
+      console.error(chalk.yellow('\nThen add the deployed GitIdentityRegistry contract address.'));
+      process.exit(1);
+    }
+    
+    console.log(chalk.green('✅ Environment validated for Git Key operations'));
+  } catch (error) {
+    console.error(chalk.red('❌ Failed to validate .env file:'));
+    console.error(chalk.red(error instanceof Error ? error.message : String(error)));
     process.exit(1);
   }
 }

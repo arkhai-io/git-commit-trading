@@ -8,6 +8,8 @@ import { serverCommand } from './commands/server.js';
 import { collectCommand } from './commands/collect.js';
 import { listCommand } from './commands/list.js';
 import { newClientCommand } from './commands/new-client.js';
+import { registerKeyCommand } from './commands/register-key.js';
+import { checkKeyCommand } from './commands/check-key.js';
 
 const program = new Command();
 
@@ -23,6 +25,24 @@ program
   .requiredOption('--privateKey <key>', 'Private key for the client (0x...)')
   .requiredOption('--network <network>', 'Network to connect to (anvil, localhost, sepolia, mainnet)')
   .action(newClientCommand);
+
+// Register Key command - Register Git SSH key to blockchain address
+program
+  .command('register-key')
+  .description('Register your Git SSH key to your Ethereum address for commit verification')
+  .option('--path <path>', 'Path to SSH public key file (default: ~/.ssh/id_ed25519.pub or ~/.ssh/id_rsa.pub)')
+  .option('--private-key-file <path>', 'Path to SSH private key file for signing (default: same as public key without .pub)')
+  .option('--public-key-file <path>', 'Path to SSH public key file (alternative to --path)')
+  .option('--key-type <type>', 'SSH key type (auto-detected from key content)', 'auto')
+  .action(registerKeyCommand);
+
+// Check Key command - Check if Git SSH key is registered
+program
+  .command('check-key')
+  .description('Check if your Git SSH key is registered to your Ethereum address')
+  .option('--address <address>', 'Ethereum address to check (default: from .env)')
+  .option('--verbose', 'Show detailed key information', false)
+  .action(checkKeyCommand);
 
 // List command - Show all available escrows
 program
@@ -57,6 +77,8 @@ program
   .requiredOption('--solution-commit <hash>', 'Commit hash of the solution')
   .option('--solution-algo <algo>', 'Commit hash algorithm', 'sha1')
   .option('--additional-hosts <hosts>', 'Additional host URLs (comma-separated)')
+  .option('--verify-key', 'Verify that your registered Git key matches the commit (default: true)', true)
+  .option('--no-verify-key', 'Skip Git key verification (not recommended)')
   .action(fulfillCommand);
 
 // Collect command - Bob collects the reward
@@ -77,6 +99,7 @@ program
   .option('--polling-interval <ms>', 'Polling interval for new escrows (ms)', '1000')
   .option('--timeout <ms>', 'Test execution timeout (ms)', '300000')
   .option('--cleanup', 'Cleanup temporary directories after execution', true)
+  .option('--skip-key-verification', 'Skip Git key verification (not recommended)', false)
   .action(serverCommand);
 
 // Global error handling

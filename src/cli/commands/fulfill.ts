@@ -8,6 +8,7 @@ interface FulfillOptions {
   solutionCommit: string;
   solutionAlgo?: string;
   additionalHosts?: string;
+  verifyKey?: boolean;
 }
 
 export async function fulfillCommand(options: FulfillOptions) {
@@ -35,10 +36,27 @@ export async function fulfillCommand(options: FulfillOptions) {
     requireEnvFile();
     
     console.log(chalk.gray('Setting up blockchain client...'));
-    const { client, config, hasCommitObligation } = await createClientFromEnv();
+    const { client, config, hasCommitObligation, hasGitIdentityRegistry } = await createClientFromEnv();
     
     if (!hasCommitObligation) {
       throw new Error('COMMIT_OBLIGATION_ADDRESS is required in .env file for this command');
+    }
+
+    // Verify git key registration if requested
+    if (options.verifyKey !== false && hasGitIdentityRegistry) {
+      console.log(chalk.gray('Verifying registered Git key...'));
+      try {
+        const keyClaim = await client.gitIdentityRegistry.getKeyClaim(config.address as `0x${string}`);
+        if (!keyClaim || !keyClaim.publicKey || keyClaim.publicKey.trim() === "") {
+          console.log(chalk.yellow('⚠️ No Git key registered for this address.'));
+          console.log(chalk.yellow('   Register your Git SSH key first with: git-escrows register-key'));
+          console.log(chalk.yellow('   Or use --no-verify-key to skip verification (not recommended)'));
+        } else {
+          console.log(chalk.green('✓ Git key registration verified'));
+        }
+      } catch (error) {
+        console.log(chalk.yellow('⚠️ Could not verify Git key registration:', error));
+      }
     }
 
     // Parse additional hosts

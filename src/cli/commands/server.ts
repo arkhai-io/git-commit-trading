@@ -2,6 +2,8 @@ import chalk from 'chalk';
 import { parseAbiParameters } from 'viem';
 import { createClientFromEnv, requireEnvFile } from '../utils/envLoader.js';
 import { GitTestExecution } from '../../test-execution/index.js';
+import { getSigningKeyFromGitHubCommit } from '../../utils/gitUtils.js';
+import { verifyCommitSignature, verifyGitKeyClaimSignature } from '../../utils/sshSignatureUtils.js';
 
 interface ServerOptions {
   port?: string;
@@ -10,6 +12,7 @@ interface ServerOptions {
   cleanup?: boolean;
   past?: boolean;
   listen?: boolean;
+  skipKeyVerification?: boolean;
 }
 
 export async function serverCommand(options: ServerOptions) {
@@ -39,7 +42,7 @@ export async function serverCommand(options: ServerOptions) {
     requireEnvFile();
 
     console.log(chalk.gray('Setting up blockchain client...'));
-    const { client, config, hasCommitObligation } = await createClientFromEnv();
+    const { client, config, hasCommitObligation, hasGitIdentityRegistry } = await createClientFromEnv();
 
     if (!hasCommitObligation) {
       throw new Error('COMMIT_OBLIGATION_ADDRESS is required in .env file for the server command');
@@ -48,11 +51,84 @@ export async function serverCommand(options: ServerOptions) {
     console.log(chalk.green('Blockchain environment ready'));
     console.log(chalk.gray(`  Oracle Address: ${config.address}`));
     console.log(chalk.gray(`  CommitObligation Contract: ${config.commitObligationAddress}`));
+    
+    if (hasGitIdentityRegistry) {
+      console.log(chalk.gray(`  GitIdentityRegistry Contract: ${config.gitIdentityRegistryAddress}`));
+      console.log(chalk.green('✓ Git key verification enabled'));
+    } else {
+      console.log(chalk.yellow('⚠️ GitIdentityRegistry not available - Git key verification disabled'));
+    }
 
-    // Define the arbitration logic
+    // Define the arbitration logic with Git key verification
     const arbitrate = async (obligation: any, demand: any) => {
       console.log("Arbitrating obligation:", obligation, "against demand:", demand);
+      
+      // Extract sender address from the obligation
+      const senderAddress = obligation[0].sender;
+      console.log(`🔍 Fulfillment submitted by: ${senderAddress}`);
 
+      // Step 1: Verify Git key registration and commit signature (if enabled)
+      if (!options.skipKeyVerification && hasGitIdentityRegistry && client.gitIdentityRegistry) {
+        console.log('\n🔐 Verifying Git key registration and commit signature...');
+        
+        try {
+          // Get Git metadata from the commit
+          const gitMetadata = await getSigningKeyFromGitHubCommit(
+            obligation[0].hosts[0], 
+            obligation[0].commitHash
+          );
+          console.log('📝 Git commit metadata retrieved:', {
+            verified: gitMetadata.verified,
+            reason: gitMetadata.reason
+          });
+
+          // Get the registered key claim for the sender
+          let senderKeyClaim: any;
+          try {
+            senderKeyClaim = await client.gitIdentityRegistry.getKeyClaim(senderAddress);
+            if (!senderKeyClaim || !senderKeyClaim.publicKey || senderKeyClaim.publicKey.trim() === "") {
+              console.log('❌ No registered Git key found for sender address');
+              console.log('   Fulfillment rejected: sender must register their Git SSH key first');
+              return false;
+            }
+            console.log('✅ Found registered Git key for sender');
+          } catch (error) {
+            console.log('❌ Failed to retrieve Git key registration:', error);
+            return false;
+          }
+
+          // Verify the GitKeyClaim signature itself
+          console.log('🔐 Verifying GitKeyClaim signature...');
+          const isValidClaim = verifyGitKeyClaimSignature(senderKeyClaim, senderAddress);
+          if (!isValidClaim) {
+            console.log('❌ GitKeyClaim signature is invalid');
+            return false;
+          }
+          console.log('✅ GitKeyClaim signature verified');
+
+          // Verify if the sender actually signed this commit
+          console.log('🔐 Verifying commit signature matches registered key...');
+          const isSignedBySender = verifyCommitSignature(gitMetadata, senderKeyClaim);
+          if (!isSignedBySender) {
+            console.log('❌ Commit was not signed by the sender\'s registered key');
+            console.log('   Fulfillment rejected: commit must be signed by sender\'s registered Git key');
+            return false;
+          }
+          console.log('✅ Commit signature verified - sender signed this commit');
+          
+        } catch (error) {
+          console.error('❌ Error during Git key verification:', error);
+          console.log('   Fulfillment rejected due to verification error');
+          return false;
+        }
+      } else if (options.skipKeyVerification) {
+        console.log('⚠️ Git key verification skipped due to --skip-key-verification flag');
+      } else {
+        console.log('⚠️ Git key verification disabled (GitIdentityRegistry not available)');
+      }
+
+      // Step 2: Run the tests to verify the solution
+      console.log('\n🧪 Running test execution...');
       try {
         const testConfig = GitTestExecution.initConfig();
 
@@ -71,14 +147,24 @@ export async function serverCommand(options: ServerOptions) {
         testConfig.execution.timeout = timeout;
         testConfig.execution.cleanupAfterExecution = cleanup;
 
+        console.log('📁 Repository configuration:');
+        console.log(`   Test repo: ${testConfig.repositories.testcase.url}`);
+        console.log(`   Test commit: ${testConfig.repositories.testcase.commitHash}`);  
+        console.log(`   Solution repo: ${testConfig.repositories.source.url}`);
+        console.log(`   Solution commit: ${testConfig.repositories.source.commitHash}`);
+
         const result = await GitTestExecution.executeTests(testConfig, {
           onProgress: (step) => console.log(`  → ${step}`)
         });
 
-        console.log("Execution result:", result.testResult.success);
+        console.log(`\n🎯 Test execution result: ${result.testResult.success ? 'PASSED ✅' : 'FAILED ❌'}`);
+        if (!result.testResult.success && result.testResult.error) {
+          console.log('   Error details:', result.testResult.error);
+        }
+        
         return result.testResult.success;
       } catch (error) {
-        console.error("Error during test execution:", error);
+        console.error('❌ Error during test execution:', error);
         return false;
       }
     };

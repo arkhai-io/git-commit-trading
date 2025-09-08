@@ -23,6 +23,8 @@
     "escrows fulfill": "bun run src/cli/git-escrows.ts fulfill",
     "escrows server": "bun run src/cli/git-escrows.ts server",
     "escrows collect": "bun run src/cli/git-escrows.ts collect",
+    "escrows register-key": "bun run src/cli/git-escrows.ts register-key",
+    "escrows check-key": "bun run src/cli/git-escrows.ts check-key",
     "generate-ts": "bun run script/jsonToTsConverter.ts"
   },
   "devDependencies": {
