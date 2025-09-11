@@ -16,33 +16,14 @@ contract GitIdentityRegistry {
         string publicKey; // Full GitHub public key (used to verify)
     }
 
-    event GitKeyClaimed(
-        address indexed claimant,
-        GitKeyClaim claim
-    );
-
-    /// @notice Maps Ethereum address to their claimed Git key
-    mapping(address => GitKeyClaim) public addressToKeyClaim;
+    event GitKeyClaimed(address indexed claimant, GitKeyClaim claim);
 
     /// @notice Claim a Git key identity by proving ownership
     function claimKey(GitKeyClaim memory claim) external {
         require(bytes(claim.publicKey).length > 0, "Missing public key");
-        require(
-            bytes(addressToKeyClaim[msg.sender].publicKey).length == 0,
-            "Address already has a claimed key"
-        );
 
         // ⚠️ Signature verification would go here in a production system
 
-        addressToKeyClaim[msg.sender] = claim;
-
         emit GitKeyClaimed(msg.sender, claim);
-    }
-
-    /// @notice Get the full Git key claim for an address
-    function getKeyClaim(
-        address addr
-    ) external view returns (GitKeyClaim memory) {
-        return addressToKeyClaim[addr];
     }
 }

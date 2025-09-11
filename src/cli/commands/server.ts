@@ -51,7 +51,7 @@ export async function serverCommand(options: ServerOptions) {
     console.log(chalk.green('Blockchain environment ready'));
     console.log(chalk.gray(`  Oracle Address: ${config.address}`));
     console.log(chalk.gray(`  CommitObligation Contract: ${config.commitObligationAddress}`));
-    
+
     if (hasGitIdentityRegistry) {
       console.log(chalk.gray(`  GitIdentityRegistry Contract: ${config.gitIdentityRegistryAddress}`));
       console.log(chalk.green('✓ Git key verification enabled'));
@@ -62,7 +62,7 @@ export async function serverCommand(options: ServerOptions) {
     // Define the arbitration logic with Git key verification
     const arbitrate = async (obligation: any, demand: any) => {
       console.log("Arbitrating obligation:", obligation, "against demand:", demand);
-      
+
       // Extract sender address from the obligation
       const senderAddress = obligation[0].sender;
       console.log(`🔍 Fulfillment submitted by: ${senderAddress}`);
@@ -70,11 +70,11 @@ export async function serverCommand(options: ServerOptions) {
       // Step 1: Verify Git key registration and commit signature (if enabled)
       if (!options.skipKeyVerification && hasGitIdentityRegistry && client.gitIdentityRegistry) {
         console.log('\n🔐 Verifying Git key registration and commit signature...');
-        
+
         try {
           // Get Git metadata from the commit
           const gitMetadata = await getSigningKeyFromGitHubCommit(
-            obligation[0].hosts[0], 
+            obligation[0].hosts[0],
             obligation[0].commitHash
           );
           console.log('📝 Git commit metadata retrieved:', {
@@ -85,7 +85,7 @@ export async function serverCommand(options: ServerOptions) {
           // Get the registered key claim for the sender
           let senderKeyClaim: any;
           try {
-            senderKeyClaim = await client.gitIdentityRegistry.getKeyClaim(senderAddress);
+            senderKeyClaim = await client.gitIdentityRegistry.getLatestKeyClaim(senderAddress);
             if (!senderKeyClaim || !senderKeyClaim.publicKey || senderKeyClaim.publicKey.trim() === "") {
               console.log('❌ No registered Git key found for sender address');
               console.log('   Fulfillment rejected: sender must register their Git SSH key first');
@@ -115,7 +115,7 @@ export async function serverCommand(options: ServerOptions) {
             return false;
           }
           console.log('✅ Commit signature verified - sender signed this commit');
-          
+
         } catch (error) {
           console.error('❌ Error during Git key verification:', error);
           console.log('   Fulfillment rejected due to verification error');
@@ -149,7 +149,7 @@ export async function serverCommand(options: ServerOptions) {
 
         console.log('📁 Repository configuration:');
         console.log(`   Test repo: ${testConfig.repositories.testcase.url}`);
-        console.log(`   Test commit: ${testConfig.repositories.testcase.commitHash}`);  
+        console.log(`   Test commit: ${testConfig.repositories.testcase.commitHash}`);
         console.log(`   Solution repo: ${testConfig.repositories.source.url}`);
         console.log(`   Solution commit: ${testConfig.repositories.source.commitHash}`);
 
@@ -161,7 +161,7 @@ export async function serverCommand(options: ServerOptions) {
         if (!result.testResult.success && result.testResult.error) {
           console.log('   Error details:', result.testResult.error);
         }
-        
+
         return result.testResult.success;
       } catch (error) {
         console.error('❌ Error during test execution:', error);

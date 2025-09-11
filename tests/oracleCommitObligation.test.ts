@@ -120,7 +120,7 @@ describe("Oracle CommitObligation Tests", () => {
                     console.log("Arbitrating Python obligation:", obligation, "against demand:", demand);
                     try {
                         const config = GitTestExecution.initConfig();
-                        
+
                         // Configure Python test repository (Alice's tests)
                         config.repositories.testcase.url = demand[0].hosts[0];
                         config.repositories.testcase.commitHash = demand[0].testsCommitHash;
@@ -128,15 +128,15 @@ describe("Oracle CommitObligation Tests", () => {
                         // Configure Python solution repository (Bob's solution)
                         config.repositories.source.url = obligation[0].hosts[0];
                         config.repositories.source.commitHash = obligation[0].commitHash;
-                        
+
                         config.execution.timeout = 60000; // 60 seconds for Python setup
                         config.execution.cleanupAfterExecution = true;
-                        
+
                         console.log("Starting Python test execution...");
                         const res = await GitTestExecution.executeTests(config, {
                             onProgress: (step) => console.log(`  → ${step}`)
                         });
-                        
+
                         console.log(`Python execution result: ${res.testResult.success ? 'PASSED' : 'FAILED'}`);
                         if (!res.testResult.success && res.testResult.error) {
                             console.log("Error details:", res.testResult.error);
@@ -227,7 +227,7 @@ describe("Oracle CommitObligation Tests", () => {
                     console.log("Arbitrating Rust obligation:", obligation, "against demand:", demand);
                     try {
                         const config = GitTestExecution.initConfig();
-                        
+
                         // Configure Rust test repository (Alice's tests)
                         config.repositories.testcase.url = demand[0].hosts[0];
                         config.repositories.testcase.commitHash = demand[0].testsCommitHash;
@@ -237,15 +237,15 @@ describe("Oracle CommitObligation Tests", () => {
                         config.repositories.source.url = obligation[0].hosts[0];
                         config.repositories.source.commitHash = obligation[0].commitHash;
                         // config.repositories.source.language = "rust";
-                        
+
                         config.execution.timeout = 45000; // 45 seconds for Rust compilation
                         config.execution.cleanupAfterExecution = true;
-                        
+
                         console.log("Starting Rust test execution...");
                         const res = await GitTestExecution.executeTests(config, {
                             onProgress: (step) => console.log(`  → ${step}`)
                         });
-                        
+
                         console.log(`Rust execution result: ${res.testResult.success ? 'PASSED' : 'FAILED'}`);
                         if (!res.testResult.success && res.testResult.error) {
                             console.log("Error details:", res.testResult.error);
@@ -392,7 +392,11 @@ describe("Oracle CommitObligation Tests", () => {
                     let senderKeyClaim: any;
                     let senderPublicKey: string;
                     try {
-                        senderKeyClaim = await arbiterClient.gitIdentityRegistry.getKeyClaim(senderAddress);
+                        senderKeyClaim = await arbiterClient.gitIdentityRegistry.getLatestKeyClaim(senderAddress);
+                        if (!senderKeyClaim) {
+                            console.log("❌ No key claim found for sender! Rejecting fulfillment.");
+                            return false;
+                        }
                         senderPublicKey = senderKeyClaim.publicKey;
                         if (!senderPublicKey || senderPublicKey.trim() === "") {
                             console.log("❌ No public key found for sender! Rejecting fulfillment.");

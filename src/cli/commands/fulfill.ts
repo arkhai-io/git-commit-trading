@@ -14,7 +14,7 @@ interface FulfillOptions {
 export async function fulfillCommand(options: FulfillOptions) {
   try {
     console.log(chalk.blue('Submitting solution to fulfill escrow...'));
-    
+
     // Validate inputs
     if (!options.escrowUid || !options.solutionRepo || !options.solutionCommit) {
       throw new Error('Missing required options: --escrow-uid, --solution-repo, --solution-commit');
@@ -26,7 +26,7 @@ export async function fulfillCommand(options: FulfillOptions) {
       'sha256': CommitAlgo.SHA256,
       'md5': CommitAlgo.MD5,
     };
-    
+
     const solutionAlgo = commitAlgoMap[options.solutionAlgo?.toLowerCase() || 'sha1'];
     if (solutionAlgo === undefined) {
       throw new Error(`Invalid commit algorithm: ${options.solutionAlgo}. Use: sha1, sha256, or md5`);
@@ -34,10 +34,10 @@ export async function fulfillCommand(options: FulfillOptions) {
 
     // Check for .env file and load client
     requireEnvFile();
-    
+
     console.log(chalk.gray('Setting up blockchain client...'));
     const { client, config, hasCommitObligation, hasGitIdentityRegistry } = await createClientFromEnv();
-    
+
     if (!hasCommitObligation) {
       throw new Error('COMMIT_OBLIGATION_ADDRESS is required in .env file for this command');
     }
@@ -46,7 +46,7 @@ export async function fulfillCommand(options: FulfillOptions) {
     if (options.verifyKey !== false && hasGitIdentityRegistry) {
       console.log(chalk.gray('Verifying registered Git key...'));
       try {
-        const keyClaim = await client.gitIdentityRegistry.getKeyClaim(config.address as `0x${string}`);
+        const keyClaim = await client.gitIdentityRegistry.getLatestKeyClaim(config.address as `0x${string}`);
         if (!keyClaim || !keyClaim.publicKey || keyClaim.publicKey.trim() === "") {
           console.log(chalk.yellow('⚠️ No Git key registered for this address.'));
           console.log(chalk.yellow('   Register your Git SSH key first with: git-escrows register-key'));
@@ -95,7 +95,7 @@ export async function fulfillCommand(options: FulfillOptions) {
     console.log(chalk.gray(`  Recipient: ${fulfillment.recipient}`));
     console.log(chalk.gray(`  Schema UID: ${fulfillment.schema}`));
     console.log(chalk.gray(`  Reference UID: ${options.escrowUid}`));
-    
+
     console.log(chalk.yellow('\nNext steps:'));
     console.log(chalk.yellow('  1. The arbiter server will automatically test your solution'));
     console.log(chalk.yellow('  2. If tests pass, you can collect the reward with:'));
