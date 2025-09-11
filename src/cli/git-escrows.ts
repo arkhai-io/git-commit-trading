@@ -26,14 +26,16 @@ program
   .requiredOption('--network <network>', 'Network to connect to (anvil, localhost, sepolia, mainnet)')
   .action(newClientCommand);
 
-// Register Key command - Register Git SSH key to blockchain address
+// Register Key command - Register Git cryptographic key to blockchain address
 program
   .command('register-key')
-  .description('Register your Git SSH key to your Ethereum address for commit verification')
-  .option('--path <path>', 'Path to SSH public key file (default: ~/.ssh/id_ed25519.pub or ~/.ssh/id_rsa.pub)')
-  .option('--private-key-file <path>', 'Path to SSH private key file for signing (default: same as public key without .pub)')
-  .option('--public-key-file <path>', 'Path to SSH public key file (alternative to --path)')
-  .option('--key-type <type>', 'SSH key type (auto-detected from key content)', 'auto')
+  .description('Register your Git cryptographic key (SSH, PGP, or X509) to your Ethereum address for commit verification')
+  .option('--path <path>', 'Path to key file (SSH public key, PGP public key, or X509 certificate)')
+  .option('--private-key-file <path>', 'Path to SSH private key file for signing (SSH keys only)')
+  .option('--public-key-file <path>', 'Path to SSH public key file (alternative to --path for SSH keys)')
+  .option('--pgp-key-file <path>', 'Path to PGP public key file (armored format)')
+  .option('--x509-cert-file <path>', 'Path to X509 certificate file (PEM format)')
+  .option('--key-type <type>', 'Key type (auto-detected from key content)', 'auto')
   .action(registerKeyCommand);
 
 // Check Key command - Check if Git SSH key is registered
