@@ -37,18 +37,81 @@ export const makeGitIdentityRegistryClient = (
         return { hash };
     };
 
-    const getKeyClaim = async (addr: `0x${string}`) => {
-        return await viemClient.readContract({
+    // Get key claims by listening to events from the blockchain
+    const getKeyClaims = async (
+        claimant: `0x${string}`,
+        fromBlock?: bigint
+    ): Promise<GitKeyClaim[]> => {
+        const events = await viemClient.getLogs({
+            address: addresses.gitIdentityRegistry,
+            event: {
+                type: 'event',
+                name: 'GitKeyClaimed',
+                inputs: [
+                    { name: 'claimant', type: 'address', indexed: true },
+                    {
+                        name: 'claim', type: 'tuple', components: [
+                            { name: 'keyType', type: 'uint8' },
+                            { name: 'nonceHash', type: 'bytes32' },
+                            { name: 'sig', type: 'bytes' },
+                            { name: 'publicKey', type: 'string' }
+                        ]
+                    }
+                ]
+            },
+            args: {
+                claimant
+            },
+            fromBlock: fromBlock || 0n,
+            toBlock: 'latest'
+        });
+
+        return events.map(event => event.args.claim as GitKeyClaim);
+    };
+
+    // Get the most recent key claim for an address
+    const getLatestKeyClaim = async (
+        claimant: `0x${string}`,
+        fromBlock?: bigint
+    ): Promise<GitKeyClaim | null> => {
+        const claims = await getKeyClaims(claimant, fromBlock);
+        return claims.length > 0 ? claims[claims.length - 1]! : null;
+    };
+
+    // Check if an address has any key claims
+    const hasKeyClaim = async (
+        claimant: `0x${string}`,
+        fromBlock?: bigint
+    ): Promise<boolean> => {
+        const claims = await getKeyClaims(claimant, fromBlock);
+        return claims.length > 0;
+    };
+
+    // Watch for new key claim events in real-time
+    const watchKeyClaimEvents = (
+        onEvent: (claimant: `0x${string}`, claim: GitKeyClaim) => void,
+        claimant?: `0x${string}` // Optional filter for specific claimant
+    ) => {
+        return viemClient.watchContractEvent({
             address: addresses.gitIdentityRegistry,
             abi: gitIdentityRegistryAbi.abi,
-            functionName: "getKeyClaim",
-            args: [addr],
+            eventName: 'GitKeyClaimed',
+            args: claimant ? { claimant } : undefined,
+            onLogs: (logs) => {
+                logs.forEach((log: any) => {
+                    const { claimant, claim } = log.args;
+                    onEvent(claimant as `0x${string}`, claim as GitKeyClaim);
+                });
+            }
         });
     };
 
     return {
         claimKey,
-        getKeyClaim,
+        getKeyClaims,
+        getLatestKeyClaim,
+        hasKeyClaim,
+        watchKeyClaimEvents,
     };
 };
 
