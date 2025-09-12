@@ -1,7 +1,7 @@
 {
   "repositories": {
     "source": {
-      "url": "https://github.com/VAR-META-Tech/alkahest-rs/archive/{commit-sha}.tar.gz",
+      "url": "https://github.com/VAR-META-Tech/alkahest-rs.git",
       "commitHash": "main",
       "language": "rust",
       "buildCommand": "cargo build --release",
@@ -9,7 +9,7 @@
       "installCommand": "cargo build"
     },
     "testcase": {
-      "url": "https://github.com/VAR-META-Tech/alkahest-rs/archive/{commit-sha}.tar.gz",
+      "url": "https://github.com/VAR-META-Tech/alkahest-rs.git",
       "commitHash": "main",
       "language": "rust",
       "testCommand": "cargo test"

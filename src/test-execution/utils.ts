@@ -229,21 +229,36 @@ export function normalizeCommitHash(commitHash: string): string {
 
 
 /**
- * Download a tar.gz archive from a URL and extract it to a target directory using curl and tar.
- * @param url The direct download URL (e.g. https://.../archive/{commit-sha}.tar.gz)
- * @param targetDir The directory to extract the archive into
+ * Clone a git repository and checkout a specific commit.
+ * @param gitUrl The git repository URL (e.g. https://github.com/user/repo.git)
+ * @param targetDir The directory to clone the repository into
+ * @param commitHash The specific commit hash to checkout (optional)
  */
-export async function downloadAndExtractArchive(url: string, targetDir: string): Promise<void> {
+export async function cloneGitRepository(gitUrl: string, targetDir: string, commitHash?: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    // -L follows redirects, --fail for proper error code, -s for silent
-    // --strip-components=1 removes the top-level folder from the archive
-    const cmd = `curl -L --fail -s "${url}" | tar -xz --strip-components=1 -C "${targetDir}"`;
-    exec(cmd, (error, stdout, stderr) => {
+    // First, clone the repository
+    const cloneCmd = `git clone "${gitUrl}" "${targetDir}"`;
+    exec(cloneCmd, (error, stdout, stderr) => {
       if (error) {
-        reject(new Error(`Failed to download or extract archive: ${stderr || error.message}`));
-      } else {
-        resolve();
+        reject(new Error(`Failed to clone repository: ${stderr || error.message}`));
+        return;
       }
+
+      // If no commit hash is specified, we're done
+      if (!commitHash) {
+        resolve();
+        return;
+      }
+
+      // Checkout the specific commit
+      const checkoutCmd = `cd "${targetDir}" && git checkout "${commitHash}"`;
+      exec(checkoutCmd, (checkoutError, checkoutStdout, checkoutStderr) => {
+        if (checkoutError) {
+          reject(new Error(`Failed to checkout commit ${commitHash}: ${checkoutStderr || checkoutError.message}`));
+        } else {
+          resolve();
+        }
+      });
     });
   });
 }

@@ -110,12 +110,12 @@ export class GitTestExecution {
     return {
       repositories: {
         source: {
-          url: 'https://github.com/your-org/source-repo/archive/{commit-sha}.tar.gz',
+          url: 'https://github.com/your-org/source-repo.git',
           commitHash: 'abc123def456', // Required: specific commit hash
           language: 'typescript' // Optional: specify language explicitly
         },
         testcase: {
-          url: 'https://github.com/your-org/testcase-repo/archive/{commit-sha}.tar.gz',
+          url: 'https://github.com/your-org/testcase-repo.git',
           commitHash: 'def456ghi789', // Required: specific commit hash
           language: 'typescript' // Optional: specify language explicitly
         }
@@ -137,14 +137,14 @@ export class GitTestExecution {
     return {
       repositories: {
         source: {
-          url: 'https://github.com/your-org/rust-solution/archive/{commit-sha}.tar.gz',
+          url: 'https://github.com/your-org/rust-solution.git',
           commitHash: 'abc123def456',
           language: 'rust',
           buildCommand: 'cargo build --release',
           testCommand: 'cargo test'
         },
         testcase: {
-          url: 'https://github.com/your-org/rust-tests/archive/{commit-sha}.tar.gz',
+          url: 'https://github.com/your-org/rust-tests.git',
           commitHash: 'def456ghi789',
           language: 'rust',
           testCommand: 'cargo test'
@@ -167,14 +167,14 @@ export class GitTestExecution {
     return {
       repositories: {
         source: {
-          url: 'https://github.com/your-org/python-solution/archive/{commit-sha}.tar.gz',
+          url: 'https://github.com/your-org/python-solution.git',
           commitHash: 'abc123def456',
           language: 'python',
           installCommand: 'pip install -r requirements.txt',
           testCommand: 'pytest'
         },
         testcase: {
-          url: 'https://github.com/your-org/python-tests/archive/{commit-sha}.tar.gz',
+          url: 'https://github.com/your-org/python-tests.git',
           commitHash: 'def456ghi789',
           language: 'python',
           installCommand: 'pip install -r requirements.txt',

@@ -108,7 +108,7 @@ async function generateSampleConfig(outputPath: string, language: ProjectLanguag
       sampleConfig = {
         repositories: {
           source: {
-            url: 'https://github.com/your-org/rust-solution/archive/{commit-sha}.tar.gz',
+            url: 'https://github.com/your-org/rust-solution.git',
             commitHash: 'abc123def456',
             commitAlgo: 'sha1',
             language: 'rust',
@@ -117,7 +117,7 @@ async function generateSampleConfig(outputPath: string, language: ProjectLanguag
             installCommand: 'cargo build'
           },
           testcase: {
-            url: 'https://github.com/your-org/rust-tests/archive/{commit-sha}.tar.gz',
+            url: 'https://github.com/your-org/rust-tests.git',
             commitHash: 'def456ghi789',
             commitAlgo: 'sha1',
             language: 'rust',
@@ -136,7 +136,7 @@ async function generateSampleConfig(outputPath: string, language: ProjectLanguag
       sampleConfig = {
         repositories: {
           source: {
-            url: 'https://github.com/your-org/python-solution/archive/{commit-sha}.tar.gz',
+            url: 'https://github.com/your-org/python-solution.git',
             commitHash: 'abc123def456',
             commitAlgo: 'sha1',
             language: 'python',
@@ -145,7 +145,7 @@ async function generateSampleConfig(outputPath: string, language: ProjectLanguag
             buildCommand: 'echo "No build needed for Python"'
           },
           testcase: {
-            url: 'https://github.com/your-org/python-tests/archive/{commit-sha}.tar.gz',
+            url: 'https://github.com/your-org/python-tests.git',
             commitHash: 'def456ghi789',
             commitAlgo: 'sha1',
             language: 'python',
@@ -165,7 +165,7 @@ async function generateSampleConfig(outputPath: string, language: ProjectLanguag
       sampleConfig = {
         repositories: {
           source: {
-            url: 'https://github.com/your-org/source-repo/archive/{commit-sha}.tar.gz',
+            url: 'https://github.com/your-org/source-repo.git',
             commitHash: 'abc123def456',
             commitAlgo: 'sha1',
             language: 'typescript',
@@ -174,7 +174,7 @@ async function generateSampleConfig(outputPath: string, language: ProjectLanguag
             installCommand: 'bun install'
           },
           testcase: {
-            url: 'https://github.com/your-org/testcase-repo/archive/{commit-sha}.tar.gz',
+            url: 'https://github.com/your-org/testcase-repo.git',
             commitHash: 'def456ghi789',
             commitAlgo: 'sha1',
             language: 'typescript',

@@ -289,9 +289,9 @@ describe("Oracle CommitObligation Tests", () => {
             //  Alice make an escrow deposit, released to anyone who writes a commit that makes the test suite pass
 
             const commitTestsData = encodeCommitTestsDemand({
-                testsCommitHash: "71b4477668d8d6efe6cbc219ec4fd30bc2883f3c",
+                testsCommitHash: "ab940eceae6702e05b9c03765b7407a054ea84c9",
                 testsCommitAlgo: CommitAlgo.SHA256,
-                hosts: ["https://github.com/thanhngoc541/test-repo.git"]
+                hosts: ["https://github.com/thinhnx-var/testcase-repo-alice.git"]
             });
 
             const demand = aliceClient.arbiters.encodeTrustedOracleDemand({
@@ -313,9 +313,9 @@ describe("Oracle CommitObligation Tests", () => {
             const { attested: fulfillment } =
                 await bobClient.commitObligation.doObligation(
                     {
-                        commitHash: "fcec3615fbb4feb3204b111db620f5b9023095b9", // success. to be fail use: 11e0ecb39cc93f999cd5b5afb8a93d90ecb0add5
+                        commitHash: "be24984150e1b92e7fb1cd48dd4308fa6ee5ddb5", // success. to be fail use: 11e0ecb39cc93f999cd5b5afb8a93d90ecb0add5
                         commitAlgo: CommitAlgo.SHA256,
-                        hosts: ["https://github.com/thanhngoc541/test-repo.git", "additional.host.com"],
+                        hosts: ["https://github.com/thinhnx-var/solution-repo-bob.git"],
                     },
                     escrow.uid,
                 );
@@ -324,7 +324,7 @@ describe("Oracle CommitObligation Tests", () => {
 
             // Bob registers the signing key he used to sign the commit
             // SSH Ed25519 public key: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDpOOgAtLLU/X72Fku+nmmAhgeXGDzfF7sdYRiyxS7Qt ngochc1@gmail.com
-            const sshPublicKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDpOOgAtLLU/X72Fku+nmmAhgeXGDzfF7sdYRiyxS7Qt ngochc1@gmail.com";
+            const sshPublicKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFHxJQmkJz8of2SAQWSDaRiPXUzpoJ7NSsEFqBl0NZPy thinhnx@var-meta.com";
 
             // Extract just the key material (since keyType already specifies it's ssh-ed25519)
             const keyMaterial = extractSSHKeyMaterial(sshPublicKey);
@@ -339,7 +339,7 @@ describe("Oracle CommitObligation Tests", () => {
             // Load the private key that corresponds to the public key we're using
             // The public key we're using: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDpOOgAtLLU/X72Fku+nmmAhgeXGDzfF7sdYRiyxS7Qt
             // This should correspond to a private key file
-            const privateKeyPath = process.env.HOME + '/.ssh/id_ed25519'; // Standard SSH key location
+            const privateKeyPath = process.env.HOME + '/.ssh/git-alkahest/id_ed25519'; // Standard SSH key location
             let realSignature: string;
 
             try {
@@ -420,7 +420,7 @@ describe("Oracle CommitObligation Tests", () => {
 
                     // Then verify if the sender signed this commit
                     console.log("\n🔐 Verifying commit signature...");
-                    const isSignedBySender = await verifyCommitSignature(gitMetadata, senderKeyClaim);
+                    const isSignedBySender = verifyCommitSignature(gitMetadata, senderKeyClaim);
 
                     if (!isSignedBySender) {
                         console.log("❌ Commit was not signed by the sender! Rejecting fulfillment.");
@@ -437,27 +437,26 @@ describe("Oracle CommitObligation Tests", () => {
                         // rewrite config with data from obligation and demand
                         config.repositories.testcase.url = demand[0].hosts[0];
                         config.repositories.testcase.commitHash = demand[0].testsCommitHash;
-                        // config.repositories.testcase.buildCommand = "npm run build";
-                        // config.repositories.testcase.testCommand = demand[0].testsCommand;
-                        // config.repositories.testcase.testCommand = "bun test";
+                        config.repositories.testcase.buildCommand = "npm run build";
+                        config.repositories.testcase.testCommand = demand[0].testsCommand;
+                        config.repositories.testcase.testCommand = "bun test";
 
                         config.repositories.source.url = obligation[0].hosts[0];
                         config.repositories.source.commitHash = obligation[0].commitHash;
-                        // config.repositories.source.testCommand = "bun test";
-                        // config.repositories.source.installCommand = "npm install";
+                        config.repositories.source.testCommand = "npm run test";
+                        config.repositories.source.installCommand = "npm install";
 
-                        // console.log("Starting test execution with config:", config);
+                        console.log("Starting test execution with config:", config);
 
                         // Set a shorter timeout for the execution to prevent hanging
                         config.execution.timeout = 45000; // 45 seconds
                         config.execution.cleanupAfterExecution = true;
 
-                        // const res = await GitTestExecution.executeTests(config, {
-                        //     onProgress: (step) => console.log(`  → ${step}`)
-                        // });
-                        // console.log("Execution result: ", res.testResult.success);
-                        // return res.testResult.success;
-                        return true;
+                        const res = await GitTestExecution.executeTests(config, {
+                            onProgress: (step) => console.log(`  → ${step}`)
+                        });
+                        console.log("Execution result: ", res.testResult.success);
+                        return res.testResult.success;
                     } catch (error) {
                         console.error("Error during test execution:", error);
                         return false; // Return false instead of throwing to allow test to continue

@@ -1,9 +1,9 @@
 export type ProjectLanguage = 'typescript' | 'rust' | 'python';
 
 export interface RepositoryConfig {
-  url: string;
+  url: string; // Git repository URL (e.g. https://github.com/user/repo.git)
   branch?: string; // Optional, only used for fallback scenarios
-  commitHash: string; // Required for archive downloads
+  commitHash: string; // Required for git checkout to specific commit
   commitAlgo?: 'sha256' | 'md5' | 'sha1'; // Algorithm used for commit hash format validation
   language?: ProjectLanguage; // Explicit language specification, if not provided, will be auto-detected
   buildCommand?: string; // Full command like "npm run build", "cargo build", "python -m build"

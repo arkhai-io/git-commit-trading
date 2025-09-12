@@ -1,7 +1,7 @@
 {
   "repositories": {
     "source": {
-      "url": "https://github.com/VAR-META-Tech/alkahest-ts/archive/{commit-sha}.tar.gz",
+      "url": "https://github.com/VAR-META-Tech/alkahest-ts.git",
       "commitHash": "main",
       "language": "typescript",
       "buildCommand": "bun run build",
@@ -9,7 +9,7 @@
       "installCommand": "bun install"
     },
     "testcase": {
-      "url": "https://github.com/VAR-META-Tech/alkahest-ts/archive/{commit-sha}.tar.gz",
+      "url": "https://github.com/VAR-META-Tech/alkahest-ts.git",
       "commitHash": "main",
       "language": "typescript",
       "testCommand": "bun test"
