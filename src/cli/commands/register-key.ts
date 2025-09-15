@@ -8,7 +8,11 @@ import {
     detectKeyTypeFromContent, 
     formatKeyForStorage, 
     validateKeyForGitSigning,
-    getKeyTypeName 
+    getKeyTypeName,
+    importSSHKeyToServer,
+    importGPGKeyToServer,
+    isSSHKeyImported,
+    isGPGKeyImported
 } from '../../utils/keyUtils.js';
 import sshpk from 'sshpk';
 
@@ -19,6 +23,8 @@ interface RegisterKeyOptions {
   publicKeyFile?: string;
   pgpKeyFile?: string;
   x509CertFile?: string;
+  importToServer?: boolean;
+  skipServerImport?: boolean;
 }
 
 /**
@@ -224,10 +230,25 @@ export async function registerKeyCommand(options: RegisterKeyOptions) {
     console.log(chalk.gray(`  Ethereum Address: ${config.address}`));
     console.log(chalk.gray(`  Nonce: ${nonce}`));
     
+    // Import key to server for local verification (if not skipped)
+    if (!options.skipServerImport) {
+      console.log(chalk.blue('\n🔑 Importing key to server for local verification...'));
+      
+      const serverImportResult = await importKeyToServer(gitKeyClaim, config.address as string);
+      if (serverImportResult) {
+        console.log(chalk.green('✅ Key imported to server successfully'));
+      } else {
+        console.log(chalk.yellow('⚠️ Key import to server failed (verification may fail without proper key import)'));
+      }
+    } else {
+      console.log(chalk.gray('\n⏭️ Server key import skipped (--skip-server-import flag)'));
+    }
+    
     console.log(chalk.yellow('\nNext steps:'));
     console.log(chalk.yellow(`  1. Your Git commits signed with this ${getKeyTypeName(keyType)} key are now linked to your Ethereum address`));
     console.log(chalk.yellow('  2. You can now fulfill escrows and prove authorship of commits'));
     console.log(chalk.yellow('  3. Use this same key to sign Git commits for escrow fulfillments'));
+    console.log(chalk.yellow('  4. The server can now verify your commit signatures locally'));
 
   } catch (error) {
     console.error(chalk.red('❌ Failed to register cryptographic key:'));
@@ -240,7 +261,61 @@ export async function registerKeyCommand(options: RegisterKeyOptions) {
     console.log(chalk.yellow('  3. For X509 certificates: Use --x509-cert-file to specify certificate file'));
     console.log(chalk.yellow('  4. Check that your .env file contains GIT_IDENTITY_REGISTRY_ADDRESS'));
     console.log(chalk.yellow('  5. Verify your private key has sufficient gas for the transaction'));
+    console.log(chalk.yellow('  6. Use --skip-server-import if server key import is not needed'));
     
     process.exit(1);
+  }
+}
+
+/**
+ * Import a Git key claim to the server for local verification
+ * @param gitKeyClaim - The Git key claim to import
+ * @param address - Ethereum address associated with the key
+ * @returns Promise<boolean> - Success status
+ */
+async function importKeyToServer(gitKeyClaim: any, address: string): Promise<boolean> {
+  try {
+    switch (gitKeyClaim.keyType) {
+      case KeyType.PGPv4:
+        // Check if already imported
+        try {
+          const openpgp = await import('openpgp');
+          const key = await openpgp.readKey({ armoredKey: gitKeyClaim.publicKey });
+          const fingerprint = key.getFingerprint();
+          const alreadyImported = await isGPGKeyImported(fingerprint);
+          
+          if (alreadyImported) {
+            console.log(chalk.gray('   GPG key already imported to server'));
+            return true;
+          }
+        } catch (error) {
+          // Continue with import attempt
+        }
+        
+        return await importGPGKeyToServer(gitKeyClaim.publicKey, address);
+        
+      case KeyType.SSHEd25519:
+      case KeyType.SSHSecp256k1:
+        // Check if already imported
+        const alreadyImported = await isSSHKeyImported(address);
+        if (alreadyImported) {
+          console.log(chalk.gray('   SSH key already imported to server'));
+          return true;
+        }
+        
+        return await importSSHKeyToServer(gitKeyClaim.publicKey, address);
+        
+      case KeyType.X509:
+        console.log(chalk.yellow('   X509 certificate import not yet implemented'));
+        return false;
+        
+      default:
+        console.log(chalk.red(`   Unsupported key type: ${gitKeyClaim.keyType}`));
+        return false;
+    }
+    
+  } catch (error) {
+    console.error(chalk.red('   Server import error:'), error);
+    return false;
   }
 }

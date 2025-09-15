@@ -10,6 +10,8 @@ export interface RepositoryConfig {
   testCommand?: string; // Full command like "npm run test", "cargo test", "pytest"
   testDirectory?: string;
   installCommand?: string; // Full command like "npm install", "cargo build", "pip install -r requirements.txt"
+  verifySignature?: boolean; // Whether to verify commit signature
+  allowedSigners?: string[]; // Allowed signer identities (email addresses)
 }
 
 export interface ExecutionConfig {
@@ -17,6 +19,9 @@ export interface ExecutionConfig {
   cleanupAfterExecution: boolean;
   isolatedEnvironment: boolean;
   tempDirectory: string;
+  verifyCommitSignatures?: boolean; // Enable signature verification
+  contractAddress?: string; // GitIdentityRegistry contract address
+  fallbackToGitHub?: boolean; // Whether to fallback to GitHub API (default: false)
 }
 
 export interface Config {
@@ -38,6 +43,8 @@ export interface TestResult {
 export interface ExecutionResult {
   sourceCloned: boolean;
   testcaseCloned: boolean;
+  sourceSignatureVerified?: boolean;
+  testcaseSignatureVerified?: boolean;
   dependenciesInstalled: boolean;
   testsExecuted: boolean;
   testResult: TestResult;

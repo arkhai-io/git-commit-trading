@@ -36,6 +36,7 @@ program
   .option('--pgp-key-file <path>', 'Path to PGP public key file (armored format)')
   .option('--x509-cert-file <path>', 'Path to X509 certificate file (PEM format)')
   .option('--key-type <type>', 'Key type (auto-detected from key content)', 'auto')
+  .option('--skip-server-import', 'Skip importing key to server for local verification', false)
   .action(registerKeyCommand);
 
 // Check Key command - Check if Git SSH key is registered
@@ -102,6 +103,8 @@ program
   .option('--timeout <ms>', 'Test execution timeout (ms)', '300000')
   .option('--cleanup', 'Cleanup temporary directories after execution', true)
   .option('--skip-key-verification', 'Skip Git key verification (not recommended)', false)
+  .option('--use-git-verify-commit', 'Use local git verify-commit for signature verification', true)
+  .option('--fallback-to-github', 'Fallback to GitHub API if git verify-commit fails', false)
   .action(serverCommand);
 
 // Global error handling

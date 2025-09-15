@@ -48,6 +48,22 @@ async function executeTests(configPath: string, options: any) {
       console.log(chalk.yellow(`Override testcase language: ${options.testcaseLanguage}`));
     }
     
+    // Override signature verification options if provided via CLI
+    if (options.verifySignatures !== undefined) {
+      config.execution.verifyCommitSignatures = options.verifySignatures;
+      console.log(chalk.yellow(`Override signature verification: ${options.verifySignatures}`));
+    }
+    
+    if (options.contractAddress) {
+      config.execution.contractAddress = options.contractAddress;
+      console.log(chalk.yellow(`Override contract address: ${options.contractAddress}`));
+    }
+    
+    if (options.fallbackToGithub !== undefined) {
+      config.execution.fallbackToGitHub = options.fallbackToGithub;
+      console.log(chalk.yellow(`Override GitHub fallback: ${options.fallbackToGithub}`));
+    }
+    
     const executor = new TestExecutor(config);
     
     const startTime = Date.now();
@@ -240,6 +256,11 @@ program
   .option('--testcase-commit-algo <algo>', 'Override testcase repository commit algorithm (sha256|md5|sha1)')
   .option('--source-language <lang>', 'Override source repository language (typescript|rust|python)')
   .option('--testcase-language <lang>', 'Override testcase repository language (typescript|rust|python)')
+  .option('--verify-signatures', 'Enable commit signature verification (default: false)')
+  .option('--no-verify-signatures', 'Disable commit signature verification')
+  .option('--contract-address <address>', 'GitIdentityRegistry contract address for key verification')
+  .option('--fallback-to-github', 'Enable fallback to GitHub API for signature verification (default: false)')
+  .option('--no-fallback-to-github', 'Disable fallback to GitHub API')
   .action(async (options) => {
     await executeTests(options.config, options);
   });

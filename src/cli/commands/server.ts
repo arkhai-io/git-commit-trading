@@ -4,6 +4,7 @@ import { createClientFromEnv, requireEnvFile } from '../utils/envLoader.js';
 import { GitTestExecution } from '../../test-execution/index.js';
 import { getSigningKeyFromGitHubCommit } from '../../utils/gitUtils.js';
 import { verifyCommitSignature, verifyGitKeyClaimSignature } from '../../utils/sshSignatureUtils.js';
+import { getGitVerificationService } from '../../services/verificationService.js';
 
 interface ServerOptions {
   port?: string;
@@ -13,6 +14,8 @@ interface ServerOptions {
   past?: boolean;
   listen?: boolean;
   skipKeyVerification?: boolean;
+  useGitVerifyCommit?: boolean;
+  fallbackToGitHub?: boolean;
 }
 
 export async function serverCommand(options: ServerOptions) {
@@ -31,12 +34,16 @@ export async function serverCommand(options: ServerOptions) {
     const pollingInterval = parseInt(options.pollingInterval || '1000');
     const timeout = parseInt(options.timeout || '300000');
     const cleanup = options.cleanup !== false;
+    const useGitVerifyCommit = options.useGitVerifyCommit ?? true;
+    const fallbackToGitHub = options.fallbackToGitHub ?? false;
 
     console.log(chalk.gray('Server configuration:'));
     console.log(chalk.gray(`  Mode: ${options.past ? 'Arbitrate Past' : 'Listen and Arbitrate'}`));
     console.log(chalk.gray(`  Polling Interval: ${pollingInterval}ms`));
     console.log(chalk.gray(`  Test Timeout: ${timeout}ms`));
     console.log(chalk.gray(`  Cleanup: ${cleanup}`));
+    console.log(chalk.gray(`  Git Verify Commit: ${useGitVerifyCommit ? 'Enabled' : 'Disabled'}`));
+    console.log(chalk.gray(`  GitHub Fallback: ${fallbackToGitHub ? 'Enabled' : 'Disabled'}`));
 
     // Check for .env file and load client
     requireEnvFile();
@@ -59,6 +66,35 @@ export async function serverCommand(options: ServerOptions) {
       console.log(chalk.yellow('⚠️ GitIdentityRegistry not available - Git key verification disabled'));
     }
 
+    // Initialize Git verification service if enabled
+    let gitVerificationService = null;
+    if (!options.skipKeyVerification && hasGitIdentityRegistry && useGitVerifyCommit) {
+      console.log(chalk.blue('🔧 Initializing Git verification service...'));
+      
+      gitVerificationService = getGitVerificationService({
+        fallbackToGitHub: fallbackToGitHub,
+        timeoutMs: timeout,
+        cleanupAfterVerification: cleanup,
+      });
+      
+      const initialized = await gitVerificationService.initialize();
+      if (initialized) {
+        console.log(chalk.green('✅ Git verification service initialized'));
+        
+        // Log service capabilities
+        const stats = gitVerificationService.getStats();
+        console.log(chalk.gray('  Git verification capabilities:'));
+        console.log(chalk.gray(`    SSH: ${stats.config.enableSSH ? '✅' : '❌'}`));
+        console.log(chalk.gray(`    GPG: ${stats.config.enableGPG ? '✅' : '❌'}`));
+        console.log(chalk.gray(`    X509: ${stats.config.enableX509 ? '✅' : '❌'}`));
+        console.log(chalk.gray(`    Auto-import keys: ${stats.config.autoImportKeys ? '✅' : '❌'}`));
+        console.log(chalk.gray(`    Caching: ${stats.config.enableCaching ? '✅' : '❌'}`));
+      } else {
+        console.log(chalk.yellow('⚠️ Git verification service initialization failed, falling back to GitHub API'));
+        gitVerificationService = null;
+      }
+    }
+
     // Define the arbitration logic with Git key verification
     const arbitrate = async (obligation: any, demand: any) => {
       console.log("Arbitrating obligation:", obligation, "against demand:", demand);
@@ -72,16 +108,9 @@ export async function serverCommand(options: ServerOptions) {
         console.log('\n🔐 Verifying Git key registration and commit signature...');
 
         try {
-          // Get Git metadata from the commit
-          const gitMetadata = await getSigningKeyFromGitHubCommit(
-            obligation[0].hosts[0],
-            obligation[0].commitHash
-          );
-          console.log('📝 Git commit metadata retrieved:', {
-            verified: gitMetadata.verified,
-            reason: gitMetadata.reason
-          });
-
+          // Get all registered keys for verification
+          const registeredKeys = new Map();
+          
           // Get the registered key claim for the sender
           let senderKeyClaim: any;
           try {
@@ -92,6 +121,7 @@ export async function serverCommand(options: ServerOptions) {
               return false;
             }
             console.log('✅ Found registered Git key for sender');
+            registeredKeys.set(senderAddress, senderKeyClaim);
           } catch (error) {
             console.log('❌ Failed to retrieve Git key registration:', error);
             return false;
@@ -106,15 +136,49 @@ export async function serverCommand(options: ServerOptions) {
           }
           console.log('✅ GitKeyClaim signature verified');
 
-          // Verify if the sender actually signed this commit
-          console.log('🔐 Verifying commit signature matches registered key...');
-          const isSignedBySender = await verifyCommitSignature(gitMetadata, senderKeyClaim);
-          if (!isSignedBySender) {
-            console.log('❌ Commit was not signed by the sender\'s registered key');
-            console.log('   Fulfillment rejected: commit must be signed by sender\'s registered Git key');
-            return false;
+          // Use enhanced Git verification service if available
+          if (gitVerificationService) {
+            console.log('🔐 Verifying commit signature using git verify-commit...');
+            
+            const verificationResult = await gitVerificationService.verifyCommit(
+              obligation[0].hosts[0],
+              obligation[0].commitHash,
+              registeredKeys
+            );
+            
+            if (!verificationResult.isValid) {
+              console.log('❌ Commit signature verification failed');
+              console.log(`   Method: ${verificationResult.verificationDetails.method}`);
+              console.log(`   Error: ${verificationResult.error}`);
+              console.log('   Fulfillment rejected: commit must be signed by sender\'s registered Git key');
+              return false;
+            }
+            
+            console.log('✅ Commit signature verified using git verify-commit');
+            console.log(`   Method: ${verificationResult.verificationDetails.method}`);
+            console.log(`   Signed by: ${verificationResult.registeredAddress}`);
+            
+          } else {
+            // Fallback to GitHub API verification (original method)
+            console.log('🔐 Verifying commit signature using GitHub API (fallback)...');
+            
+            const gitMetadata = await getSigningKeyFromGitHubCommit(
+              obligation[0].hosts[0],
+              obligation[0].commitHash
+            );
+            console.log('📝 Git commit metadata retrieved:', {
+              verified: gitMetadata.verified,
+              reason: gitMetadata.reason
+            });
+
+            const isSignedBySender = await verifyCommitSignature(gitMetadata, senderKeyClaim);
+            if (!isSignedBySender) {
+              console.log('❌ Commit was not signed by the sender\'s registered key');
+              console.log('   Fulfillment rejected: commit must be signed by sender\'s registered Git key');
+              return false;
+            }
+            console.log('✅ Commit signature verified using GitHub API');
           }
-          console.log('✅ Commit signature verified - sender signed this commit');
 
         } catch (error) {
           console.error('❌ Error during Git key verification:', error);

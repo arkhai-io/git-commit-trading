@@ -4,6 +4,7 @@ import chalk from 'chalk';
 import type { Config, ExecutionResult, TestResult, RepositoryConfig, ProjectLanguage } from './types.js';
 import { Logger, executeCommand, ensureDirectory, removeDirectory, copyDirectory, parseCommand, validateCommitHash, normalizeCommitHash, cloneGitRepository } from './utils.js';
 import { detectProjectCommands, detectPackageManager, updateCommandsForPackageManager, type ProjectCommands } from './projectDetection.js';
+import { GitCommitVerifier } from '../utils/gitVerification.js';
 
 export class TestExecutor {
   private config: Config;
@@ -13,6 +14,7 @@ export class TestExecutor {
   private mergedDir: string;
   private detectedLanguage: ProjectLanguage | null = null;
   private projectCommands: ProjectCommands | null = null;
+  private gitVerifier: GitCommitVerifier | null = null;
 
   constructor(config: Config) {
     this.config = config;
@@ -20,12 +22,21 @@ export class TestExecutor {
     this.sourceDir = path.join(this.workingDir, 'source');
     this.testcaseDir = path.join(this.workingDir, 'testcase');
     this.mergedDir = path.join(this.workingDir, 'merged');
+    
+    // Initialize git verifier if signature verification is enabled
+    if (config.execution.verifyCommitSignatures) {
+      this.gitVerifier = new GitCommitVerifier({
+        fallbackToGitHub: config.execution.fallbackToGitHub || false
+      });
+    }
   }
 
   async execute(): Promise<ExecutionResult> {
     const result: ExecutionResult = {
       sourceCloned: false,
       testcaseCloned: false,
+      sourceSignatureVerified: undefined,
+      testcaseSignatureVerified: undefined,
       dependenciesInstalled: false,
       testsExecuted: false,
       testResult: {
@@ -48,7 +59,7 @@ export class TestExecutor {
         ? `${this.config.repositories.source.url} (commit: ${this.config.repositories.source.commitHash})`
         : `${this.config.repositories.source.url} (branch: ${this.config.repositories.source.branch})`;
       console.log(chalk.gray(`Source: ${sourceRepoInfo}`));
-      await this.cloneRepository(this.config.repositories.source, this.sourceDir);
+      result.sourceSignatureVerified = await this.cloneRepository(this.config.repositories.source, this.sourceDir, 'source');
       result.sourceCloned = true;
 
       // Step 2: Clone testcase repository (Alice's tests)
@@ -57,7 +68,7 @@ export class TestExecutor {
         ? `${this.config.repositories.testcase.url} (commit: ${this.config.repositories.testcase.commitHash})`
         : `${this.config.repositories.testcase.url} (branch: ${this.config.repositories.testcase.branch})`;
       console.log(chalk.gray(`Testcase: ${testcaseRepoInfo}`));
-      await this.cloneRepository(this.config.repositories.testcase, this.testcaseDir);
+      result.testcaseSignatureVerified = await this.cloneRepository(this.config.repositories.testcase, this.testcaseDir, 'testcase');
       result.testcaseCloned = true;
 
       // Step 3: Merge Bob's solution into Alice's test structure
@@ -101,7 +112,7 @@ export class TestExecutor {
     return result;
   }
 
-  private async cloneRepository(repo: RepositoryConfig, targetDir: string): Promise<void> {
+  private async cloneRepository(repo: RepositoryConfig, targetDir: string, repoType: 'source' | 'testcase' = 'source'): Promise<boolean> {
     const gitUrl = repo.url;
 
     // Validate commit hash format if algorithm is specified
@@ -118,6 +129,32 @@ export class TestExecutor {
     await ensureDirectory(targetDir);
     await cloneGitRepository(gitUrl, targetDir, repo.commitHash);
     Logger.success('Repository cloned successfully');
+
+    // Verify commit signature if enabled
+    let signatureVerified = false;
+    if (this.config.execution.verifyCommitSignatures && this.gitVerifier && repo.commitHash) {
+      Logger.step(`Verifying commit signature for ${repo.commitHash}...`);
+      try {
+        const verification = await this.gitVerifier.verifyCommitInDirectory(targetDir, repo.commitHash);
+        signatureVerified = verification.isValid;
+        
+        if (verification.isValid) {
+          Logger.success(`✅ Commit signature verified for ${repoType} repository`);
+          Logger.step(`Signer: ${verification.keyFingerprint || 'Unknown'}`);
+        } else {
+          Logger.error(`❌ Commit signature verification failed for ${repoType} repository`);
+          Logger.error(`Reason: ${verification.error || 'Unknown error'}`);
+          
+          // Fail the process if signature verification is required
+          throw new Error(`Commit signature verification failed for ${repoType}: ${verification.error}`);
+        }
+      } catch (error) {
+        Logger.error(`❌ Error during signature verification for ${repoType}: ${error instanceof Error ? error.message : String(error)}`);
+        throw error;
+      }
+    }
+
+    return signatureVerified;
   }
 
   private async mergeTestcases(): Promise<void> {
