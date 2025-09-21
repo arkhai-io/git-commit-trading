@@ -37,7 +37,6 @@ export class GitVerificationService {
       enableGPG: config.enableGPG ?? true,
       enableX509: config.enableX509 ?? true,
       cleanupAfterVerification: config.cleanupAfterVerification ?? true,
-      fallbackToGitHub: config.fallbackToGitHub ?? false,
       autoImportKeys: config.autoImportKeys ?? true,
       enableCaching: config.enableCaching ?? true,
       cacheExpiryMs: config.cacheExpiryMs || 3600000, // 1 hour
@@ -362,7 +361,6 @@ export class GitVerificationService {
         enableX509: this.config.enableX509,
         autoImportKeys: this.config.autoImportKeys,
         enableCaching: this.config.enableCaching,
-        fallbackToGitHub: this.config.fallbackToGitHub,
       },
     };
   }

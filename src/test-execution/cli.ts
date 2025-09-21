@@ -59,11 +59,6 @@ async function executeTests(configPath: string, options: any) {
       console.log(chalk.yellow(`Override contract address: ${options.contractAddress}`));
     }
     
-    if (options.fallbackToGithub !== undefined) {
-      config.execution.fallbackToGitHub = options.fallbackToGithub;
-      console.log(chalk.yellow(`Override GitHub fallback: ${options.fallbackToGithub}`));
-    }
-    
     const executor = new TestExecutor(config);
     
     const startTime = Date.now();
@@ -259,8 +254,6 @@ program
   .option('--verify-signatures', 'Enable commit signature verification (default: false)')
   .option('--no-verify-signatures', 'Disable commit signature verification')
   .option('--contract-address <address>', 'GitIdentityRegistry contract address for key verification')
-  .option('--fallback-to-github', 'Enable fallback to GitHub API for signature verification (default: false)')
-  .option('--no-fallback-to-github', 'Disable fallback to GitHub API')
   .action(async (options) => {
     await executeTests(options.config, options);
   });

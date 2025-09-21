@@ -2,8 +2,7 @@ import chalk from 'chalk';
 import { parseAbiParameters } from 'viem';
 import { createClientFromEnv, requireEnvFile } from '../utils/envLoader.js';
 import { GitTestExecution } from '../../test-execution/index.js';
-import { getSigningKeyFromGitHubCommit } from '../../utils/gitUtils.js';
-import { verifyCommitSignature, verifyGitKeyClaimSignature } from '../../utils/sshSignatureUtils.js';
+import { verifyGitKeyClaimSignature } from '../../utils/sshSignatureUtils.js';
 import { getGitVerificationService } from '../../services/verificationService.js';
 
 interface ServerOptions {
@@ -15,7 +14,6 @@ interface ServerOptions {
   listen?: boolean;
   skipKeyVerification?: boolean;
   useGitVerifyCommit?: boolean;
-  fallbackToGitHub?: boolean;
 }
 
 export async function serverCommand(options: ServerOptions) {
@@ -35,7 +33,6 @@ export async function serverCommand(options: ServerOptions) {
     const timeout = parseInt(options.timeout || '300000');
     const cleanup = options.cleanup !== false;
     const useGitVerifyCommit = options.useGitVerifyCommit ?? true;
-    const fallbackToGitHub = options.fallbackToGitHub ?? false;
 
     console.log(chalk.gray('Server configuration:'));
     console.log(chalk.gray(`  Mode: ${options.past ? 'Arbitrate Past' : 'Listen and Arbitrate'}`));
@@ -43,7 +40,6 @@ export async function serverCommand(options: ServerOptions) {
     console.log(chalk.gray(`  Test Timeout: ${timeout}ms`));
     console.log(chalk.gray(`  Cleanup: ${cleanup}`));
     console.log(chalk.gray(`  Git Verify Commit: ${useGitVerifyCommit ? 'Enabled' : 'Disabled'}`));
-    console.log(chalk.gray(`  GitHub Fallback: ${fallbackToGitHub ? 'Enabled' : 'Disabled'}`));
 
     // Check for .env file and load client
     requireEnvFile();
@@ -72,7 +68,6 @@ export async function serverCommand(options: ServerOptions) {
       console.log(chalk.blue('🔧 Initializing Git verification service...'));
       
       gitVerificationService = getGitVerificationService({
-        fallbackToGitHub: fallbackToGitHub,
         timeoutMs: timeout,
         cleanupAfterVerification: cleanup,
       });
@@ -90,7 +85,7 @@ export async function serverCommand(options: ServerOptions) {
         console.log(chalk.gray(`    Auto-import keys: ${stats.config.autoImportKeys ? '✅' : '❌'}`));
         console.log(chalk.gray(`    Caching: ${stats.config.enableCaching ? '✅' : '❌'}`));
       } else {
-        console.log(chalk.yellow('⚠️ Git verification service initialization failed, falling back to GitHub API'));
+        console.log(chalk.yellow('⚠️ Git verification service initialization failed'));
         gitVerificationService = null;
       }
     }
@@ -159,25 +154,9 @@ export async function serverCommand(options: ServerOptions) {
             console.log(`   Signed by: ${verificationResult.registeredAddress}`);
             
           } else {
-            // Fallback to GitHub API verification (original method)
-            console.log('🔐 Verifying commit signature using GitHub API (fallback)...');
-            
-            const gitMetadata = await getSigningKeyFromGitHubCommit(
-              obligation[0].hosts[0],
-              obligation[0].commitHash
-            );
-            console.log('📝 Git commit metadata retrieved:', {
-              verified: gitMetadata.verified,
-              reason: gitMetadata.reason
-            });
-
-            const isSignedBySender = await verifyCommitSignature(gitMetadata, senderKeyClaim);
-            if (!isSignedBySender) {
-              console.log('❌ Commit was not signed by the sender\'s registered key');
-              console.log('   Fulfillment rejected: commit must be signed by sender\'s registered Git key');
-              return false;
-            }
-            console.log('✅ Commit signature verified using GitHub API');
+            console.log('❌ Git verification service not available');
+            console.log('   Fulfillment rejected: cannot verify commit signature without git verify-commit');
+            return false;
           }
 
         } catch (error) {

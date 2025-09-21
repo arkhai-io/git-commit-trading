@@ -17,7 +17,7 @@ export interface GitVerificationResult {
     timestamp: number;
     commitHash: string;
     rawGitOutput?: string;
-    method: 'git-verify-commit' | 'github-api';
+    method: 'git-verify-commit';
   };
   error?: string;
 }
@@ -29,7 +29,6 @@ export interface GitVerificationConfig {
   enableGPG?: boolean;
   enableX509?: boolean;
   cleanupAfterVerification?: boolean;
-  fallbackToGitHub?: boolean;
 }
 
 export class GitCommitVerifier {
@@ -43,7 +42,6 @@ export class GitCommitVerifier {
       enableGPG: config.enableGPG ?? true,
       enableX509: config.enableX509 ?? true,
       cleanupAfterVerification: config.cleanupAfterVerification ?? true,
-      fallbackToGitHub: config.fallbackToGitHub ?? false,
     };
   }
 
@@ -103,50 +101,6 @@ export class GitCommitVerifier {
         commitHash,
         'git-verify-commit'
       );
-      
-      // If git verify-commit failed and GitHub fallback is enabled
-      if (!result.isValid && this.config.fallbackToGitHub) {
-        console.log(`⚠️ Git verify-commit failed, falling back to GitHub API...`);
-        const { getSigningKeyFromGitHubCommit } = await import('../utils/gitUtils.js');
-        const { verifyCommitSignature: githubVerifyCommitSignature } = await import('../utils/sshSignatureUtils.js');
-        
-        try {
-          const gitMetadata = await getSigningKeyFromGitHubCommit(repositoryUrl, commitHash);
-          
-          // Find matching registered key using GitHub verification
-          for (const [address, keyClaim] of registeredKeys.entries()) {
-            const isSignedBySender = await githubVerifyCommitSignature(gitMetadata, keyClaim);
-            if (isSignedBySender) {
-              return {
-                isValid: true,
-                keyFingerprint: await this.extractKeyFingerprint(keyClaim.publicKey, keyClaim.keyType),
-                signatureType: this.getSignatureTypeFromKeyType(keyClaim.keyType),
-                registeredAddress: address,
-                verificationDetails: {
-                  gitOutput: `GitHub API verification successful. ${gitMetadata.reason}`,
-                  timestamp: Date.now(),
-                  commitHash,
-                  method: 'github-api',
-                },
-              };
-            }
-          }
-          
-          return {
-            isValid: false,
-            signatureType: this.getSignatureTypeFromKeyType(Array.from(registeredKeys.values())[0]?.keyType || 0),
-            verificationDetails: {
-              gitOutput: `GitHub API: ${gitMetadata.verified ? 'Verified' : 'Not verified'} - ${gitMetadata.reason}`,
-              timestamp: Date.now(),
-              commitHash,
-              method: 'github-api',
-            },
-            error: 'No registered key matches the commit signature (GitHub fallback)',
-          };
-        } catch (githubError) {
-          result.verificationDetails.gitOutput += `\nGitHub fallback failed: ${githubError}`;
-        }
-      }
       
       return result;
       
@@ -374,7 +328,7 @@ export class GitCommitVerifier {
     signatureInfo: any,
     registeredKeys: Map<string, GitKeyClaim>,
     commitHash: string,
-    method: 'git-verify-commit' | 'github-api'
+    method: 'git-verify-commit'
   ): Promise<GitVerificationResult> {
     const timestamp = Date.now();
     

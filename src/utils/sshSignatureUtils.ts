@@ -7,6 +7,9 @@ import { X509Certificate } from '@peculiar/x509';
 import type { GitKeyClaim, KeyType } from '../clients/gitIdentityRegistry';
 
 /**
+ * @deprecated This function was designed for GitHub API verification which has been removed.
+ * Use git native verification through GitCommitVerifier instead.
+ * 
  * Verify if a commit signature was made by a specific SSH public key using sshpk
  * @param gitMetadata - Git metadata containing signature and payload
  * @param gitKeyClaim - The Git key claim containing public key and metadata
@@ -20,6 +23,8 @@ export async function verifyCommitSignature(
     },
     gitKeyClaim: GitKeyClaim
 ): Promise<boolean> {
+    console.warn("⚠️ verifyCommitSignature is deprecated. Use git native verification instead.");
+    
     try {
         console.log("🔍 Signature verification with multi-key support:");
         console.log("  Key Type:", getKeyTypeName(gitKeyClaim.keyType));

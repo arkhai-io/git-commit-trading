@@ -104,7 +104,6 @@ program
   .option('--cleanup', 'Cleanup temporary directories after execution', true)
   .option('--skip-key-verification', 'Skip Git key verification (not recommended)', false)
   .option('--use-git-verify-commit', 'Use local git verify-commit for signature verification', true)
-  .option('--fallback-to-github', 'Fallback to GitHub API if git verify-commit fails', false)
   .action(serverCommand);
 
 // Global error handling

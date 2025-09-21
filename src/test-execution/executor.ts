@@ -25,9 +25,7 @@ export class TestExecutor {
     
     // Initialize git verifier if signature verification is enabled
     if (config.execution.verifyCommitSignatures) {
-      this.gitVerifier = new GitCommitVerifier({
-        fallbackToGitHub: config.execution.fallbackToGitHub || false
-      });
+      this.gitVerifier = new GitCommitVerifier({});
     }
   }
 

@@ -5,7 +5,7 @@ import { teardownTestEnvironment, type TestContext } from "alkahest-ts/tests/uti
 import { CommitAlgo, type CommitObligationData } from "../src/clients/commitObligation";
 import { KeyType, createGitKeyClaim } from "../src/clients/gitIdentityRegistry";
 import { GitTestExecution } from "../src/test-execution/";
-import { getSigningKeyFromGitHubCommit, extractSSHKeyMaterial } from "../src/utils/gitUtils";
+import { extractSSHKeyMaterial } from "../src/utils/gitUtils";
 import { verifyCommitSignature, generateSigningMessage, verifyGitKeyClaimSignature, generateSSHSignature } from "../src/utils/sshSignatureUtils";
 
 describe("Oracle CommitObligation Integration Tests", () => {

@@ -21,7 +21,6 @@ export interface ExecutionConfig {
   tempDirectory: string;
   verifyCommitSignatures?: boolean; // Enable signature verification
   contractAddress?: string; // GitIdentityRegistry contract address
-  fallbackToGitHub?: boolean; // Whether to fallback to GitHub API (default: false)
 }
 
 export interface Config {
