@@ -1,0 +1,94 @@
+{
+  "description": "Integration test configuration - Fill in your real values for end-to-end testing",
+  "version": "1.0.0",
+  
+  "blockchain": {
+    "description": "Local blockchain configuration",
+    "rpcUrl": "http://127.0.0.1:8545",
+    "chainId": 31337,
+    "comment": "Make sure local hardhat node is running on port 8545"
+  },
+  
+  "keys": {
+    "description": "Real cryptographic keys for testing - YOU MUST FILL THESE",
+    "preferredKeyType": "both",
+    "comment": "Set preferredKeyType to 'pgp', 'ssh', or 'both' to choose which key type(s) to use for testing",
+    "pgp": {
+      "publicKeyPath": "/path/to/bob-gpg-public.asc",
+      "privateKeyPath": "/path/to/bob-gpg-private.asc",
+      "keyId": "ABCD1234EFGH5678",
+      "passphrase": "YOUR_PASSPHRASE_HERE",
+      "comment": "Generate real PGP key pair and put paths here"
+    },
+    "ssh": {
+      "publicKeyPath": "~/.ssh/git-alkahest/id_ed25519.pub",
+      "privateKeyPath": "~/.ssh/git-alkahest/id_ed25519",
+      "keyType": "ed25519",
+      "comment": "Generate real SSH key pair and put paths here"
+    }
+  },
+  
+  "repositories": {
+    "description": "Real Git repositories with actual commits - YOU MUST FILL THESE",
+    "alice": {
+      "name": "Alice's Test Repository",
+      "url": "https://github.com/thinhnx-var/testcase-repo-alice.git",
+      "testsCommitHash": "ab940eceae6702e05b9c03765b7407a054ea84c9",
+      "testsCommitAlgo": 0,
+      "localClonePath": "./temp/alice-tests",
+      "comment": "Alice's repository containing test cases"
+    },
+    "bob": {
+      "name": "Bob's Solution Repository", 
+      "url": "https://github.com/thinhnx-var/solution-repo-bob.git",
+      "solutionCommitHash": "be24984150e1b92e7fb1cd48dd4308fa6ee5ddb5",
+      "solutionCommitAlgo": 0,
+      "localClonePath": "./temp/bob-solution",
+      "comment": "Bob's repository containing solution code"
+    }
+  },
+  
+  "escrow": {
+    "description": "Test escrow configuration",
+    "tokenAmount": "10000000000000000000",
+    "tokenSymbol": "ETH",
+    "expirationHours": 24,
+    "comment": "Amount in wei (10 ETH), expires in 24 hours"
+  },
+  
+  "server": {
+    "description": "Oracle server configuration",
+    "pollingInterval": 1000,
+    "timeout": 300000,
+    "skipKeyVerification": false,
+    "useGitVerifyCommit": true,
+    "comment": "Server settings for arbitration"
+  },
+  
+  "test": {
+    "description": "Test execution settings",
+    "waitTimeMs": 5000,
+    "maxRetries": 3,
+    "cleanupAfterTest": true,
+    "enableDetailedLogs": true,
+    "comment": "Test behavior configuration"
+  },
+  
+  "_instructions": {
+    "setup_steps": [
+      "1. Generate real PGP key: gpg --gen-key",
+      "2. Export PGP keys: gpg --export --armor > public.asc && gpg --export-secret-keys --armor > private.asc",
+      "3. Generate SSH key: ssh-keygen -t ed25519 -f ./test-keys/bob-ssh",
+      "4. Create real commits in both Alice and Bob repositories",
+      "5. Sign commits with your keys: git commit -S (PGP) or git commit (SSH)",
+      "6. Fill in commit hashes, key paths, and other config values",
+      "7. Start local hardhat node: npx hardhat node",
+      "8. Run integration test: bun test integration-test"
+    ],
+    "required_commits": {
+      "alice": "Commit containing test cases that Bob's solution should pass",
+      "bob": "Commit containing solution code signed with your registered key"
+    },
+    "security_note": "This config contains sensitive key information - DO NOT commit to public repos"
+  }
+}
