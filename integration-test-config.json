@@ -41,10 +41,18 @@
     "bob": {
       "name": "Bob's Solution Repository", 
       "url": "https://github.com/thinhnx-var/solution-repo-bob.git",
-      "solutionCommitHash": "be24984150e1b92e7fb1cd48dd4308fa6ee5ddb5",
-      "solutionCommitAlgo": 0,
+      "ssh": {
+        "solutionCommitHash": "be24984150e1b92e7fb1cd48dd4308fa6ee5ddb5",
+        "solutionCommitAlgo": 0,
+        "comment": "Commit signed with SSH key for SSH testing"
+      },
+      "pgp": {
+        "solutionCommitHash": "2816bfe4a841f76239a1cfb3e14dcf579d108964",
+        "solutionCommitAlgo": 0,
+        "comment": "Commit signed with PGP key for PGP testing"
+      },
       "localClonePath": "./temp/bob-solution",
-      "comment": "Bob's repository containing solution code"
+      "comment": "Bob's repository containing solution code with separate commits for SSH and PGP testing"
     }
   },
   
@@ -79,15 +87,23 @@
       "1. Generate real PGP key: gpg --gen-key",
       "2. Export PGP keys: gpg --export --armor > public.asc && gpg --export-secret-keys --armor > private.asc",
       "3. Generate SSH key: ssh-keygen -t ed25519 -f ./test-keys/bob-ssh",
-      "4. Create real commits in both Alice and Bob repositories",
-      "5. Sign commits with your keys: git commit -S (PGP) or git commit (SSH)",
-      "6. Fill in commit hashes, key paths, and other config values",
+      "4. Create real commits in Bob's repository for both key types:",
+      "   - Make one commit and sign with SSH key: git commit -S",
+      "   - Make another commit and sign with PGP key: git commit -S",
+      "5. Fill in both SSH and PGP commit hashes in repositories.bob.ssh/pgp sections",
+      "6. Fill in key paths and other config values",
       "7. Start local hardhat node: npx hardhat node",
       "8. Run integration test: bun test integration-test"
     ],
     "required_commits": {
       "alice": "Commit containing test cases that Bob's solution should pass",
-      "bob": "Commit containing solution code signed with your registered key"
+      "bob_ssh": "Commit containing solution code signed with SSH key",
+      "bob_pgp": "Commit containing solution code signed with PGP key"
+    },
+    "testing_flow": {
+      "ssh_test": "Uses repositories.bob.ssh.solutionCommitHash for SSH key verification",
+      "pgp_test": "Uses repositories.bob.pgp.solutionCommitHash for PGP key verification",
+      "both_mode": "Runs both SSH and PGP tests sequentially with their respective commits"
     },
     "security_note": "This config contains sensitive key information - DO NOT commit to public repos"
   }
