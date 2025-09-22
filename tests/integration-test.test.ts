@@ -8,6 +8,7 @@ import { CommitAlgo, type CommitObligationData } from "../src/clients/commitObli
 import { KeyType, createGitKeyClaim } from "../src/clients/gitIdentityRegistry";
 import { GitTestExecution } from "../src/test-execution/";
 import { extractSSHKeyMaterial } from "../src/utils/gitUtils";
+import { GitVerificationService } from "../src/services/verificationService";
 import { 
   verifyCommitSignature, 
   generateSigningMessage, 
@@ -392,13 +393,13 @@ async function loadRealKeys(config: IntegrationConfig) {
       resolve(__dirname, "..", config.keys.pgp.publicKeyPath);
     const pgpPublicKey = readFileSync(pgpPublicKeyPath, "utf-8").trim();
     
-    // Extract PGP key material
+    // For blockchain registration, extract base64 content
     const publicKeyMaterial = extractPGPKeyMaterial(pgpPublicKey);
     
     return {
       keyType: KeyType.PGPv4,
       publicKeyMaterial,
-      fullPublicKey: pgpPublicKey,
+      fullPublicKey: pgpPublicKey, // Store full armored key for GitVerificationService
       keyId: config.keys.pgp.keyId,
       passphrase: config.keys.pgp.passphrase,
     };
@@ -558,14 +559,66 @@ async function performCompleteArbitration(
       return false;
     }
     console.log(chalk.green("   ✅ Key registration verified"));
+    console.log(chalk.gray(`      Registered key type: ${KeyType[senderKeyClaim.keyType]}`));
 
-    // Step 2: Verify signatures
-    console.log(chalk.yellow("   🔐 Step 2: Verifying signatures..."));
+    // Step 2: Verify commit signature against registered key
+    console.log(chalk.yellow("   🔐 Step 2: Verifying commit signature..."));
     
-    // For testing, we accept the mock signature validation
-    console.log(chalk.green("   ✅ Signatures verified (test mode)"));
+    const solutionCommitHash = obligation[0].commitHash;
+    const solutionRepoUrl = obligation[0].hosts[0];
+    
+    console.log(chalk.gray(`      Verifying commit: ${solutionCommitHash}`));
+    console.log(chalk.gray(`      From repository: ${solutionRepoUrl}`));
+    
+    // Create a map of registered keys for the verifier
+    const registeredKeys = new Map();
+    registeredKeys.set(senderAddress, senderKeyClaim);
+    
+    // Use GitVerificationService like the server does (skip GitKeyClaim signature verification for testing)
+    const gitVerificationService = new GitVerificationService({
+      tempDirectory: './temp/git-verification',
+      timeoutMs: config.server.timeout,
+      enableSSH: true,
+      enableGPG: true,
+      enableX509: true,
+      cleanupAfterVerification: true,
+      autoImportKeys: true,
+    });
+    
+    let verificationResult;
+    try {
+      console.log('🔐 Verifying commit signature using git verify-commit...');
+      verificationResult = await gitVerificationService.verifyCommit(
+        solutionRepoUrl,
+        solutionCommitHash,
+        registeredKeys
+      );
+      
+      if (!verificationResult.isValid) {
+        console.log(chalk.red("   ❌ Commit signature verification FAILED"));
+        console.log(chalk.red(`      Method: ${verificationResult.verificationDetails.method}`));
+        console.log(chalk.red(`      Reason: ${verificationResult.error || 'Invalid signature'}`));
+        console.log(chalk.red("   🚨 SECURITY VIOLATION: Solution commit not signed by registered key"));
+        return false;
+      }
+      
+      console.log(chalk.green("   ✅ Commit signature verification PASSED"));
+      console.log(chalk.gray(`      Verified signature type: ${verificationResult.signatureType}`));
+      if (verificationResult.keyFingerprint) {
+        console.log(chalk.gray(`      Key fingerprint: ${verificationResult.keyFingerprint}`));
+      }
+      if (verificationResult.registeredAddress) {
+        console.log(chalk.gray(`      Matched registered address: ${verificationResult.registeredAddress}`));
+      }
+      
+    } catch (verificationError) {
+      console.log(chalk.red("   ❌ Error during commit verification"));
+      console.log(chalk.red(`      Error: ${verificationError instanceof Error ? verificationError.message : String(verificationError)}`));
+      console.log(chalk.red("   🚨 SECURITY VIOLATION: Could not verify commit signature"));
+      return false;
+    }
 
-    // Step 3: Execute real tests
+    // Step 3: Execute real tests (only if signature verification passed)
     console.log(chalk.yellow("   🧪 Step 3: Executing real tests..."));
     
     const testResult = await executeRealTests(obligation, demand, config);
@@ -598,6 +651,8 @@ async function executeRealTests(obligation: any, demand: any, config: Integratio
 
     testConfig.execution.timeout = config.server.timeout;
     testConfig.execution.cleanupAfterExecution = config.test.cleanupAfterTest;
+    // Note: Unlike the original integration test, the server does NOT disable signature verification
+    // The server does verification separately before test execution, but allows test execution to also verify if needed
 
     console.log(chalk.gray(`      📁 Test repo: ${testConfig.repositories.testcase.url}`));
     console.log(chalk.gray(`      📁 Test commit: ${testConfig.repositories.testcase.commitHash}`));

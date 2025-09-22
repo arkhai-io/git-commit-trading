@@ -3,7 +3,9 @@ import { promisify } from 'util';
 import fs from 'fs/promises';
 import path from 'path';
 import { randomUUID } from 'crypto';
-import type { GitKeyClaim, KeyType } from '../clients/gitIdentityRegistry.js';
+import { createHash } from 'crypto';
+import type { GitKeyClaim } from '../clients/gitIdentityRegistry.js';
+import { KeyType } from '../clients/gitIdentityRegistry.js';
 
 const execAsync = promisify(exec);
 
@@ -189,28 +191,31 @@ export class GitCommitVerifier {
       );
       
       const hasGpgSignature = stdout.includes('gpg:') || stdout.includes('Good signature');
-      const hasSshSignature = stdout.includes('Good "git" signature') || stdout.includes('ssh-');
+      const hasSshSignature = stdout.includes('Good "git" signature') || stdout.includes('with ED25519 key') || stdout.includes('with RSA key') || stdout.includes('with ECDSA key');
       
       if (hasGpgSignature) {
         // Extract GPG key information
+        // Format: gpg: using RSA key DFD1B1D239EF95F7EE2373B39F21AEE1C65BCC33
         const keyIdMatch = stdout.match(/using (?:RSA|DSA|ECDSA|EdDSA) key ([A-F0-9]+)/i);
-        const fingerprintMatch = stdout.match(/Primary key fingerprint: ([A-F0-9 ]+)/i);
         
         return {
           hasSignature: true,
           signatureType: 'gpg',
           keyId: keyIdMatch?.[1],
-          fingerprint: fingerprintMatch?.[1]?.replace(/\s/g, ''),
+          fingerprint: keyIdMatch?.[1], // For GPG, the key ID is the full fingerprint
           rawSignature: stdout,
         };
       } else if (hasSshSignature) {
         // Extract SSH key information
-        const sshKeyMatch = stdout.match(/ssh-([a-zA-Z0-9]+) ([A-Za-z0-9+/=]+)/);
+        // Format: Good "git" signature for user@example.com with ED25519 key SHA256:fingerprint
+        const sshKeyMatch = stdout.match(/with ([A-Z0-9]+) key SHA256:([A-Za-z0-9+/=]+)/);
+        const emailMatch = stdout.match(/Good "git" signature for ([^\s]+)/);
         
         return {
           hasSignature: true,
           signatureType: 'ssh',
-          keyId: sshKeyMatch?.[2], // SSH key material
+          keyId: sshKeyMatch?.[2], // SHA256 fingerprint
+          fingerprint: sshKeyMatch?.[2], // SSH key SHA256 fingerprint
           rawSignature: stdout,
         };
       } else {
@@ -355,17 +360,18 @@ export class GitCommitVerifier {
     let keyId: string | undefined;
     
     if (signatureInfo.signatureType === 'gpg') {
-      // Parse GPG verification output
-      const validSigMatch = gitResult.rawOutput.match(/\\[GNUPG:\\] VALIDSIG ([A-F0-9]+)/i);
-      const goodSigMatch = gitResult.rawOutput.match(/\\[GNUPG:\\] GOODSIG ([A-F0-9]+)/i);
+      // Parse GPG verification output - GPG output goes to stderr
+      const gpgOutput = gitResult.rawOutput + '\n' + gitResult.stderr;
+      const validSigMatch = gpgOutput.match(/\[GNUPG:\] VALIDSIG ([A-F0-9]+)/i);
+      const goodSigMatch = gpgOutput.match(/\[GNUPG:\] GOODSIG ([A-F0-9]+)/i);
       
       keyFingerprint = validSigMatch?.[1] || goodSigMatch?.[1];
       keyId = keyFingerprint;
       
     } else if (signatureInfo.signatureType === 'ssh') {
-      // For SSH signatures, use the key material from signature info
+      // For SSH signatures, use the SHA256 fingerprint from signature info
       keyId = signatureInfo.keyId;
-      keyFingerprint = keyId; // For SSH, key material serves as identifier
+      keyFingerprint = signatureInfo.fingerprint; // SSH SHA256 fingerprint
     }
     
     // Find matching registered key
@@ -397,6 +403,21 @@ export class GitCommitVerifier {
   }
 
   /**
+   * Calculate SHA256 fingerprint for SSH key
+   */
+  private calculateSSHFingerprint(sshKeyBase64: string): string {
+    try {
+      // Decode base64 key material
+      const keyBuffer = Buffer.from(sshKeyBase64, 'base64');
+      // Calculate SHA256 hash and remove base64 padding
+      const hash = createHash('sha256').update(keyBuffer).digest('base64').replace(/=+$/, '');
+      return hash;
+    } catch (error) {
+      return '';
+    }
+  }
+
+  /**
    * Check if a registered key matches the signature
    */
   private async isKeyMatch(
@@ -412,23 +433,71 @@ export class GitCommitVerifier {
     // Match based on key type
     switch (keyClaim.keyType) {
       case 0: // PGPv4
-        if (signatureType !== 'gpg') return false;
-        // For GPG keys, try to extract fingerprint from stored key
+        if (signatureType !== 'gpg') {
+          return false;
+        }
+        // For GPG keys, extract fingerprint from stored key and compare
         try {
           const openpgp = await import('openpgp');
-          const key = await openpgp.readKey({ armoredKey: keyClaim.publicKey });
-          const fingerprint = key.getFingerprint().toUpperCase();
-          return fingerprint === keyFingerprint?.toUpperCase();
-        } catch {
+          
+          let key;
+          // Handle both armored key format and base64 key material
+          if (keyClaim.publicKey.includes('-----BEGIN PGP')) {
+            // Full armored key
+            key = await openpgp.readKey({ armoredKey: keyClaim.publicKey });
+          } else {
+            // Base64 key material - reconstruct armor
+            const armoredKey = `-----BEGIN PGP PUBLIC KEY BLOCK-----\n\n${keyClaim.publicKey}\n-----END PGP PUBLIC KEY BLOCK-----`;
+            key = await openpgp.readKey({ armoredKey });
+          }
+          
+          const fullFingerprint = key.getFingerprint().toUpperCase();
+          
+          // Git shows either the full fingerprint or the short key ID (last 16 chars)
+          const cleanStoredFingerprint = fullFingerprint.replace(/\s/g, '');
+          const cleanCommitFingerprint = keyFingerprint?.replace(/\s/g, '').toUpperCase();
+          
+          if (!cleanCommitFingerprint) {
+            return false;
+          }
+          
+          // Check if it's the full fingerprint match
+          if (cleanStoredFingerprint === cleanCommitFingerprint) {
+            return true;
+          }
+          
+          // Check if it's the short key ID (last 16 characters of fingerprint)
+          const shortKeyId = cleanStoredFingerprint.slice(-16);
+          if (shortKeyId === cleanCommitFingerprint) {
+            return true;
+          }
+          
+          return false;
+        } catch (error) {
           return false;
         }
         
       case 1: // SSHEd25519
       case 2: // SSHSecp256k1
-        if (signatureType !== 'ssh') return false;
-        // For SSH keys, compare the key material
-        const keyMaterial = keyClaim.publicKey.trim();
-        return keyMaterial === keyId?.trim();
+        if (signatureType !== 'ssh') {
+          return false;
+        }
+        
+        // For SSH keys, calculate SHA256 fingerprint from registered key and compare
+        const registeredKeyMaterial = keyClaim.publicKey.trim();
+        const calculatedFingerprint = this.calculateSSHFingerprint(registeredKeyMaterial);
+        
+        // Compare SHA256 fingerprints
+        if (calculatedFingerprint && keyFingerprint && calculatedFingerprint === keyFingerprint) {
+          return true;
+        }
+        
+        // Fallback: try direct comparison of base64 key material (for backwards compatibility)
+        if (keyId && registeredKeyMaterial === keyId.trim()) {
+          return true;
+        }
+        
+        return false;
         
       case 3: // X509
         if (signatureType !== 'x509') return false;
