@@ -234,7 +234,24 @@ export class GitVerificationService {
           // Check if already imported (using key fingerprint if possible)
           try {
             const openpgp = await import('openpgp');
-            const key = await openpgp.readKey({ armoredKey: keyClaim.publicKey });
+            let key;
+            
+            // Handle both armored key format and base64 key material
+            if (keyClaim.publicKey.includes('-----BEGIN PGP')) {
+              // Full armored key
+              key = await openpgp.readKey({ armoredKey: keyClaim.publicKey });
+            } else {
+              // Base64 key material - reconstruct armored format first
+              try {
+                const keyBytes = Buffer.from(keyClaim.publicKey, 'base64');
+                key = await openpgp.readKey({ binaryKey: keyBytes });
+              } catch {
+                // Fallback: try as armored key with wrapper
+                const armoredKey = `-----BEGIN PGP PUBLIC KEY BLOCK-----\n\n${keyClaim.publicKey}\n-----END PGP PUBLIC KEY BLOCK-----`;
+                key = await openpgp.readKey({ armoredKey });
+              }
+            }
+            
             const fingerprint = key.getFingerprint();
             alreadyImported = await isGPGKeyImported(fingerprint);
           } catch {
@@ -246,7 +263,21 @@ export class GitVerificationService {
             return 'skipped';
           }
 
-          importSuccess = await importGPGKeyToServer(keyClaim.publicKey, address);
+          // For import, we need the full armored key
+          let keyForImport = keyClaim.publicKey;
+          if (!keyClaim.publicKey.includes('-----BEGIN PGP')) {
+            try {
+              const openpgp = await import('openpgp');
+              const keyBytes = Buffer.from(keyClaim.publicKey, 'base64');
+              const key = await openpgp.readKey({ binaryKey: keyBytes });
+              keyForImport = key.armor();
+            } catch {
+              console.warn(chalk.yellow(`⚠️ Failed to convert PGP key material to armored format for ${address}`));
+              return 'failed';
+            }
+          }
+
+          importSuccess = await importGPGKeyToServer(keyForImport, address);
           break;
 
         case 1: // SSHEd25519

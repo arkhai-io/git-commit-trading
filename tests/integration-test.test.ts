@@ -393,8 +393,9 @@ async function loadRealKeys(config: IntegrationConfig) {
       resolve(__dirname, "..", config.keys.pgp.publicKeyPath);
     const pgpPublicKey = readFileSync(pgpPublicKeyPath, "utf-8").trim();
     
-    // For blockchain registration, extract base64 content
-    const publicKeyMaterial = extractPGPKeyMaterial(pgpPublicKey);
+    // For blockchain registration, extract base64 content using the new utility
+    const { extractPGPKeyMaterial } = await import('../src/utils/keyUtils.js');
+    const publicKeyMaterial = await extractPGPKeyMaterial(pgpPublicKey);
     
     return {
       keyType: KeyType.PGPv4,
@@ -428,22 +429,6 @@ async function loadRealKeys(config: IntegrationConfig) {
       privateKeyPath: sshPrivateKeyPath,
     };
   }
-}
-
-function extractPGPKeyMaterial(pgpPublicKey: string): string {
-  // Remove PGP armor headers and footers, extract base64 content
-  const lines = pgpPublicKey.split('\n');
-  const keyLines = lines.filter(line => 
-    !line.startsWith('-----') && 
-    !line.startsWith('Version:') && 
-    !line.startsWith('Comment:') &&
-    !line.startsWith('Hash:') &&
-    line.trim().length > 0
-  );
-  
-  // Join the base64 content
-  const keyData = keyLines.join('');
-  return keyData;
 }
 
 async function registerBobKey(bobClient: any, keyData: any, bobAddress: `0x${string}`, config: IntegrationConfig) {

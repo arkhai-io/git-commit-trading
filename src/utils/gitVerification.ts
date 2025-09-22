@@ -446,9 +446,15 @@ export class GitCommitVerifier {
             // Full armored key
             key = await openpgp.readKey({ armoredKey: keyClaim.publicKey });
           } else {
-            // Base64 key material - reconstruct armor
-            const armoredKey = `-----BEGIN PGP PUBLIC KEY BLOCK-----\n\n${keyClaim.publicKey}\n-----END PGP PUBLIC KEY BLOCK-----`;
-            key = await openpgp.readKey({ armoredKey });
+            // Base64 key material - try to parse as binary first
+            try {
+              const keyBytes = Buffer.from(keyClaim.publicKey, 'base64');
+              key = await openpgp.readKey({ binaryKey: keyBytes });
+            } catch {
+              // Fallback: try as armored key with wrapper (legacy format)
+              const armoredKey = `-----BEGIN PGP PUBLIC KEY BLOCK-----\n\n${keyClaim.publicKey}\n-----END PGP PUBLIC KEY BLOCK-----`;
+              key = await openpgp.readKey({ armoredKey });
+            }
           }
           
           const fullFingerprint = key.getFingerprint().toUpperCase();
@@ -472,8 +478,17 @@ export class GitCommitVerifier {
             return true;
           }
           
+          // Also check key ID from Git output
+          if (keyId) {
+            const cleanKeyId = keyId.replace(/\s/g, '').toUpperCase();
+            if (cleanStoredFingerprint.endsWith(cleanKeyId) || cleanKeyId.endsWith(cleanStoredFingerprint.slice(-16))) {
+              return true;
+            }
+          }
+          
           return false;
         } catch (error) {
+          console.warn('⚠️ Error parsing PGP key for matching:', error);
           return false;
         }
         

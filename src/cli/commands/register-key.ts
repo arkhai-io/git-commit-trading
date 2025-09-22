@@ -12,7 +12,10 @@ import {
     importSSHKeyToServer,
     importGPGKeyToServer,
     isSSHKeyImported,
-    isGPGKeyImported
+    isGPGKeyImported,
+    generatePGPSignature,
+    preparePGPKeyForRegistration,
+    extractPGPKeyMaterial
 } from '../../utils/keyUtils.js';
 import sshpk from 'sshpk';
 
@@ -22,6 +25,8 @@ interface RegisterKeyOptions {
   privateKeyFile?: string;
   publicKeyFile?: string;
   pgpKeyFile?: string;
+  pgpPrivateKeyFile?: string;
+  pgpPassphrase?: string;
   x509CertFile?: string;
   importToServer?: boolean;
   skipServerImport?: boolean;
@@ -151,6 +156,52 @@ function readSSHPrivateKey(options: RegisterKeyOptions, publicKeyPath?: string):
   return privateKeyContent;
 }
 
+/**
+ * Read PGP private key for signing
+ */
+function readPGPPrivateKey(options: RegisterKeyOptions): string {
+  let privateKeyPath: string;
+
+  if (options.pgpPrivateKeyFile) {
+    privateKeyPath = options.pgpPrivateKeyFile;
+  } else {
+    // Try common PGP private key locations
+    const homeDir = process.env.HOME || process.env.USERPROFILE;
+    if (!homeDir) {
+      throw new Error('Could not determine home directory');
+    }
+
+    const commonPaths = [
+      `${homeDir}/.gnupg/secring.gpg`,
+      `${homeDir}/.gnupg/private-keys-v1.d`,
+      `${homeDir}/.ssh/id_pgp.asc`,
+      `${homeDir}/private.asc`
+    ];
+
+    // For ASCII armored keys, check for .asc files
+    privateKeyPath = commonPaths.find(path => existsSync(path)) || '';
+    
+    if (!privateKeyPath) {
+      throw new Error('No PGP private key found for signing. Use --pgp-private-key-file to specify the private key location.');
+    }
+  }
+
+  if (!existsSync(privateKeyPath)) {
+    throw new Error(`PGP private key file not found: ${privateKeyPath}`);
+  }
+
+  const privateKeyContent = readFileSync(privateKeyPath, 'utf8').trim();
+  if (!privateKeyContent) {
+    throw new Error(`PGP private key file is empty: ${privateKeyPath}`);
+  }
+
+  if (!privateKeyContent.includes('-----BEGIN PGP PRIVATE KEY BLOCK-----')) {
+    throw new Error('Invalid PGP private key format. Expected ASCII armored format.');
+  }
+
+  return privateKeyContent;
+}
+
 export async function registerKeyCommand(options: RegisterKeyOptions) {
   try {
     console.log(chalk.blue('Registering cryptographic key with blockchain...'));
@@ -181,7 +232,14 @@ export async function registerKeyCommand(options: RegisterKeyOptions) {
     }
     
     // Format key material for storage
-    const keyMaterial = formatKeyForStorage(keyType, keyContent);
+    let keyMaterial: string;
+    if (keyType === KeyType.PGPv4) {
+      // For PGP keys, extract base64 key material for blockchain registration
+      keyMaterial = await extractPGPKeyMaterial(keyContent);
+    } else {
+      // For other key types, use the existing formatter
+      keyMaterial = formatKeyForStorage(keyType, keyContent);
+    }
     console.log(chalk.gray(`Key material prepared for storage (${keyMaterial.length} characters)`));
     
     // Generate nonce and signing message
@@ -199,10 +257,23 @@ export async function registerKeyCommand(options: RegisterKeyOptions) {
       // For SSH keys, use existing SSH signature method
       const privateKeyContent = readSSHPrivateKey(options, options.path);
       signature = generateSSHSignature(privateKeyContent, signingMessage);
+    } else if (keyType === KeyType.PGPv4) {
+      // For PGP keys, use PGP signature method
+      const privateKeyContent = readPGPPrivateKey(options);
+      const passphrase = options.pgpPassphrase || process.env.PGP_PASSPHRASE;
+      
+      console.log(chalk.gray('Generating PGP signature...'));
+      try {
+        const pgpSignature = await generatePGPSignature(signingMessage, privateKeyContent, passphrase);
+        
+        // Convert PGP signature to hex format for blockchain storage
+        signature = '0x' + Buffer.from(pgpSignature).toString('hex');
+      } catch (error) {
+        throw new Error(`Failed to generate PGP signature: ${error}`);
+      }
     } else {
-      // For PGP and X509, we'll implement signing later
-      // For now, use a placeholder signature to complete the registration flow
-      console.log(chalk.yellow('⚠️ PGP and X509 signature generation not yet implemented'));
+      // For X509, implementation coming later
+      console.log(chalk.yellow('⚠️ X509 signature generation not yet implemented'));
       console.log(chalk.yellow('   Using placeholder signature for testing'));
       signature = '0x' + Buffer.from(`placeholder_sig_${keyType}_${Date.now()}`).toString('hex').padStart(128, '0');
     }
@@ -234,7 +305,9 @@ export async function registerKeyCommand(options: RegisterKeyOptions) {
     if (!options.skipServerImport) {
       console.log(chalk.blue('\n🔑 Importing key to server for local verification...'));
       
-      const serverImportResult = await importKeyToServer(gitKeyClaim, config.address as string);
+      // For server import, we need the original key format, not the blockchain-stored format
+      const keyForServerImport = keyType === KeyType.PGPv4 ? keyContent : gitKeyClaim.publicKey;
+      const serverImportResult = await importKeyToServer(gitKeyClaim.keyType, keyForServerImport, config.address as string);
       if (serverImportResult) {
         console.log(chalk.green('✅ Key imported to server successfully'));
       } else {
@@ -273,14 +346,14 @@ export async function registerKeyCommand(options: RegisterKeyOptions) {
  * @param address - Ethereum address associated with the key
  * @returns Promise<boolean> - Success status
  */
-async function importKeyToServer(gitKeyClaim: any, address: string): Promise<boolean> {
+async function importKeyToServer(keyType: KeyType, publicKey: string, address: string): Promise<boolean> {
   try {
-    switch (gitKeyClaim.keyType) {
+    switch (keyType) {
       case KeyType.PGPv4:
         // Check if already imported
         try {
           const openpgp = await import('openpgp');
-          const key = await openpgp.readKey({ armoredKey: gitKeyClaim.publicKey });
+          const key = await openpgp.readKey({ armoredKey: publicKey });
           const fingerprint = key.getFingerprint();
           const alreadyImported = await isGPGKeyImported(fingerprint);
           
@@ -292,7 +365,7 @@ async function importKeyToServer(gitKeyClaim: any, address: string): Promise<boo
           // Continue with import attempt
         }
         
-        return await importGPGKeyToServer(gitKeyClaim.publicKey, address);
+        return await importGPGKeyToServer(publicKey, address);
         
       case KeyType.SSHEd25519:
       case KeyType.SSHSecp256k1:
@@ -303,14 +376,14 @@ async function importKeyToServer(gitKeyClaim: any, address: string): Promise<boo
           return true;
         }
         
-        return await importSSHKeyToServer(gitKeyClaim.publicKey, address);
+        return await importSSHKeyToServer(publicKey, address);
         
       case KeyType.X509:
         console.log(chalk.yellow('   X509 certificate import not yet implemented'));
         return false;
         
       default:
-        console.log(chalk.red(`   Unsupported key type: ${gitKeyClaim.keyType}`));
+        console.log(chalk.red(`   Unsupported key type: ${keyType}`));
         return false;
     }
     

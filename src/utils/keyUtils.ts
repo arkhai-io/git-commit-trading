@@ -44,17 +44,55 @@ export function detectKeyTypeFromContent(keyContent: string): KeyType {
 /**
  * Extract key material from PGP public key
  * @param pgpKey - PGP public key in armored format
- * @returns Base64-encoded key material
+ * @returns Base64-encoded key material for blockchain registration
  */
 export async function extractPGPKeyMaterial(pgpKey: string): Promise<string> {
     try {
         const key = await openpgp.readKey({ armoredKey: pgpKey });
         
-        // For GitHub integration, we might want to store the full armored key
-        // or extract specific key material. For now, return the full armored key
-        return pgpKey;
+        // Extract the binary key data and encode as base64
+        const keyBytes = key.write();
+        const keyMaterial = Buffer.from(keyBytes).toString('base64');
+        
+        return keyMaterial;
     } catch (error) {
         throw new Error(`Failed to parse PGP key: ${error}`);
+    }
+}
+
+/**
+ * Get full armored PGP key for Git verification
+ * @param pgpKey - PGP public key in armored format
+ * @returns Full armored key for Git import
+ */
+export function getFullPGPKey(pgpKey: string): string {
+    return pgpKey;
+}
+
+/**
+ * Generate PGP key fingerprint for verification matching
+ * @param pgpKey - PGP public key in armored format or base64 material
+ * @returns Uppercase fingerprint without spaces
+ */
+export async function generatePGPKeyFingerprint(pgpKey: string): Promise<string> {
+    try {
+        let key;
+        
+        // Handle both armored format and base64 key material
+        if (pgpKey.includes('-----BEGIN PGP PUBLIC KEY BLOCK-----')) {
+            // Full armored key
+            key = await openpgp.readKey({ armoredKey: pgpKey });
+        } else {
+            // Base64 key material - construct armored format
+            const armoredKey = `-----BEGIN PGP PUBLIC KEY BLOCK-----\n\n${pgpKey}\n-----END PGP PUBLIC KEY BLOCK-----`;
+            key = await openpgp.readKey({ armoredKey });
+        }
+        
+        // Get fingerprint and format consistently
+        const fingerprint = key.getFingerprint().toUpperCase();
+        return fingerprint;
+    } catch (error) {
+        throw new Error(`Failed to generate PGP key fingerprint: ${error}`);
     }
 }
 
@@ -400,6 +438,23 @@ export async function importGPGKeyToServer(publicKey: string, identity: string):
         const { promisify } = await import('util');
         const execAsync = promisify(exec);
         
+        // Validate the PGP key first
+        try {
+            const openpgp = await import('openpgp');
+            const key = await openpgp.readKey({ armoredKey: publicKey });
+            const fingerprint = key.getFingerprint();
+            
+            // Check if key is already imported
+            const isImported = await isGPGKeyImported(fingerprint);
+            if (isImported) {
+                console.log(`✅ GPG key already imported for identity: ${identity}`);
+                return true;
+            }
+        } catch (validationError) {
+            console.error('❌ Invalid PGP key format:', validationError);
+            return false;
+        }
+        
         // Create temporary file for the key
         const tempDir = '/tmp';
         const tempKeyFile = path.join(tempDir, `gpg-key-${identity}-${Date.now()}.asc`);
@@ -407,31 +462,33 @@ export async function importGPGKeyToServer(publicKey: string, identity: string):
         await fs.writeFile(tempKeyFile, publicKey);
         
         try {
-            // Import to GPG keyring
-            const { stdout, stderr } = await execAsync(`gpg --import "${tempKeyFile}"`, {
+            // Import to GPG keyring with batch mode for non-interactive operation
+            const importCommand = `gpg --batch --import "${tempKeyFile}"`;
+            const { stdout, stderr } = await execAsync(importCommand, {
                 timeout: 30000,
+                env: { ...process.env, GNUPGHOME: process.env.GNUPGHOME || `${process.env.HOME}/.gnupg` }
             });
             
             console.log(`✅ GPG key imported for identity: ${identity}`);
             if (stdout) console.log('GPG import output:', stdout);
-            if (stderr && !stderr.includes('unchanged')) {
+            if (stderr && !stderr.includes('unchanged') && !stderr.includes('not changed')) {
                 console.warn('GPG import warnings:', stderr);
             }
             
-            // Extract key ID from the imported key for trust setting
+            // Set trust level for verification (non-interactive)
             try {
-                const listResult = await execAsync(`gpg --list-keys --with-colons`, { timeout: 10000 });
-                const keyLines = listResult.stdout.split('\n').filter(line => line.startsWith('pub:'));
+                const openpgp = await import('openpgp');
+                const key = await openpgp.readKey({ armoredKey: publicKey });
+                const fingerprint = key.getFingerprint();
                 
-                // Set trust level to ultimate for the imported key (optional)
-                // This is commented out as it requires interactive confirmation in production
-                // const keyId = keyLines[keyLines.length - 1]?.split(':')[4];
-                // if (keyId) {
-                //     await execAsync(`echo "5\ny\n" | gpg --command-fd 0 --edit-key ${keyId} trust quit`, { timeout: 10000 });
-                // }
+                // Set trust to full for verification purposes
+                const trustCommand = `echo "${fingerprint}:6:" | gpg --batch --import-ownertrust`;
+                await execAsync(trustCommand, { timeout: 10000 });
+                console.log(`✅ Trust level set for key: ${fingerprint}`);
                 
             } catch (trustError) {
-                console.warn('Could not set trust level for GPG key:', trustError);
+                console.warn('⚠️ Could not set trust level for GPG key:', trustError);
+                // This is not critical for verification, so we continue
             }
             
             return true;
@@ -689,4 +746,181 @@ export async function getServerGitCapabilities(): Promise<{ssh: boolean, gpg: bo
     }
     
     return capabilities;
+}
+
+/**
+ * PGP Key Registration Workflow Helpers
+ */
+
+/**
+ * Generate PGP signature for key registration
+ * @param message - Message to sign (usually "[eth_address] [nonce]")
+ * @param privateKeyArmored - PGP private key in armored format
+ * @param passphrase - Private key passphrase (optional)
+ * @returns Promise<string> - Armored signature
+ */
+export async function generatePGPSignature(
+    message: string,
+    privateKeyArmored: string,
+    passphrase?: string
+): Promise<string> {
+    try {
+        const privateKey = await openpgp.readPrivateKey({ armoredKey: privateKeyArmored });
+        
+        // Decrypt the private key if passphrase is provided
+        const decryptedKey = passphrase 
+            ? await openpgp.decryptKey({ privateKey, passphrase })
+            : privateKey;
+
+        // Create signature
+        const unsignedMessage = await openpgp.createCleartextMessage({ text: message });
+        const cleartextMessage = await openpgp.sign({
+            message: unsignedMessage,
+            signingKeys: decryptedKey,
+            format: 'armored'
+        });
+
+        return cleartextMessage as string;
+    } catch (error) {
+        throw new Error(`Failed to generate PGP signature: ${error}`);
+    }
+}
+
+/**
+ * Verify PGP signature for key registration
+ * @param signature - Armored PGP signature
+ * @param publicKeyArmored - PGP public key in armored format
+ * @returns Promise<{verified: boolean, message: string}> - Verification result
+ */
+export async function verifyPGPSignature(
+    signature: string,
+    publicKeyArmored: string
+): Promise<{verified: boolean, message: string}> {
+    try {
+        const publicKey = await openpgp.readKey({ armoredKey: publicKeyArmored });
+        
+        // Verify the signature
+        const message = await openpgp.readCleartextMessage({ cleartextMessage: signature });
+        const verificationResult = await openpgp.verify({
+            message,
+            verificationKeys: publicKey
+        });
+
+        const { verified } = verificationResult.signatures[0] || { verified: false };
+        const originalMessage = message.getText();
+
+        return {
+            verified: await verified,
+            message: originalMessage
+        };
+    } catch (error) {
+        return {
+            verified: false,
+            message: `Verification failed: ${error}`
+        };
+    }
+}
+
+/**
+ * Prepare PGP key for blockchain registration
+ * @param publicKeyArmored - PGP public key in armored format
+ * @param ethereumAddress - Ethereum address to associate
+ * @param nonce - Unique nonce for registration
+ * @returns Promise<{keyMaterial: string, fullKey: string, fingerprint: string, keyId: string}>
+ */
+export async function preparePGPKeyForRegistration(
+    publicKeyArmored: string,
+    ethereumAddress: string,
+    nonce: string
+): Promise<{
+    keyMaterial: string;
+    fullKey: string;
+    fingerprint: string;
+    keyId: string;
+    message: string;
+}> {
+    try {
+        // Extract key material for blockchain storage
+        const keyMaterial = await extractPGPKeyMaterial(publicKeyArmored);
+        
+        // Generate fingerprint for verification
+        const fingerprint = await generatePGPKeyFingerprint(publicKeyArmored);
+        
+        // Get key ID
+        const key = await openpgp.readKey({ armoredKey: publicKeyArmored });
+        const keyIds = key.getKeyIDs();
+        const keyId = keyIds.length > 0 ? keyIds[0]!.toHex() : '';
+        
+        // Create message to sign
+        const message = `${ethereumAddress} ${nonce}`;
+        
+        return {
+            keyMaterial,
+            fullKey: publicKeyArmored,
+            fingerprint,
+            keyId,
+            message
+        };
+    } catch (error) {
+        throw new Error(`Failed to prepare PGP key for registration: ${error}`);
+    }
+}
+
+/**
+ * Validate PGP key registration data
+ * @param registrationData - Registration data to validate
+ * @returns Promise<{valid: boolean, errors: string[]}> - Validation result
+ */
+export async function validatePGPKeyRegistration(registrationData: {
+    publicKey: string;
+    signature: string;
+    ethereumAddress: string;
+    nonce: string;
+}): Promise<{valid: boolean, errors: string[]}> {
+    const errors: string[] = [];
+    
+    try {
+        // Validate public key format
+        if (!registrationData.publicKey.includes('-----BEGIN PGP PUBLIC KEY BLOCK-----')) {
+            errors.push('Invalid PGP public key format');
+        }
+        
+        // Validate signature format
+        if (!registrationData.signature.includes('-----BEGIN PGP SIGNED MESSAGE-----')) {
+            errors.push('Invalid PGP signature format');
+        }
+        
+        // Verify the signature
+        const verificationResult = await verifyPGPSignature(
+            registrationData.signature,
+            registrationData.publicKey
+        );
+        
+        if (!verificationResult.verified) {
+            errors.push('PGP signature verification failed');
+        } else {
+            // Check if the signed message matches the expected format
+            const expectedMessage = `${registrationData.ethereumAddress} ${registrationData.nonce}`;
+            if (verificationResult.message.trim() !== expectedMessage) {
+                errors.push('Signed message does not match expected format');
+            }
+        }
+        
+        // Validate Ethereum address format
+        if (!/^0x[a-fA-F0-9]{40}$/.test(registrationData.ethereumAddress)) {
+            errors.push('Invalid Ethereum address format');
+        }
+        
+        return {
+            valid: errors.length === 0,
+            errors
+        };
+        
+    } catch (error) {
+        errors.push(`Validation error: ${error}`);
+        return {
+            valid: false,
+            errors
+        };
+    }
 }
