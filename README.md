@@ -2,7 +2,7 @@
 
 A sophisticated git-based escrow system for code challenges, bounties, and trustless development workflows. This system bridges Git commits with blockchain verification, enabling secure code-for-payment exchanges with cryptographic commit verification.
 
-## 🚀 Core Features
+## Core Features
 
 - **Cryptographic Commit Verification**: Verify Git commits using SSH, PGP, or X.509 signatures
 - **Blockchain Integration**: Smart contract-based escrow system on Ethereum
@@ -11,14 +11,14 @@ A sophisticated git-based escrow system for code challenges, bounties, and trust
 - **Oracle Integration**: Automated test execution and verification
 - **Comprehensive CLI**: Full-featured command-line interface for all operations
 
-## 📋 Prerequisites
+## Prerequisites
 
 - **Bun** >= 1.2.20
 - **Node.js** >= 18.x (for contract compilation)
 - **Forge** (Foundry) for smart contract builds
 - **Git** with configured SSH/PGP keys
 
-## 🛠 Quick Start
+## Quick Start
 
 ### Installation
 
@@ -58,7 +58,7 @@ Create a `.env` file or use the CLI to generate one:
 ./bin/git-escrows check-key --verbose
 ```
 
-## 🔧 CLI Commands
+## CLI Commands
 
 ### Core Operations
 
@@ -122,7 +122,7 @@ Start the verification oracle server:
 ./bin/git-escrows server --port 3000 --config config.json
 ```
 
-## 📋 Usage Scenarios
+## Usage Scenarios
 
 ### Scenario 1: Submit a Demand (Challenge Creator)
 
@@ -377,7 +377,446 @@ sudo systemctl enable git-escrows-oracle
 sudo systemctl start git-escrows-oracle
 ```
 
-## 🏗 Project Structure
+## Repository Structure Requirements
+
+### Test Repository Structure (Challenge/Demand)
+
+The test repository should contain comprehensive test cases that define the challenge requirements. This repository will be cloned and executed by the oracle to verify solutions.
+
+#### Required Structure
+```
+test-repo/
+├── README.md                 # Challenge description and requirements
+├── package.json             # Dependencies and scripts (for Node.js/Bun)
+├── bun.lockb               # Lock file for reproducible builds
+├── tests/                  # Test directory
+│   ├── unit/              # Unit tests
+│   ├── integration/       # Integration tests
+│   └── acceptance/        # Acceptance criteria tests
+├── fixtures/              # Test data and fixtures
+│   ├── input/            # Sample input data
+│   └── expected/         # Expected output data
+├── docs/                 # Additional documentation
+│   ├── API.md           # API specification (if applicable)
+│   └── examples.md      # Usage examples
+└── .gitignore           # Git ignore rules
+```
+
+#### Example Test Repository (JavaScript/TypeScript)
+```json
+// package.json
+{
+  "name": "fibonacci-challenge-tests",
+  "version": "1.0.0",
+  "description": "Test suite for Fibonacci sequence challenge",
+  "scripts": {
+    "test": "bun test",
+    "test:unit": "bun test tests/unit",
+    "test:integration": "bun test tests/integration"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "bun": "^1.2.0"
+  }
+}
+```
+
+```typescript
+// tests/unit/fibonacci.test.ts
+import { test, expect } from 'bun:test';
+
+test('fibonacci sequence basic cases', () => {
+  // Tests will import from the solution repo
+  const { fibonacci } = require('../../../solution/src/fibonacci');
+  
+  expect(fibonacci(0)).toBe(0);
+  expect(fibonacci(1)).toBe(1);
+  expect(fibonacci(2)).toBe(1);
+  expect(fibonacci(10)).toBe(55);
+});
+
+test('fibonacci performance test', () => {
+  const { fibonacci } = require('../../../solution/src/fibonacci');
+  
+  const start = performance.now();
+  const result = fibonacci(40);
+  const duration = performance.now() - start;
+  
+  expect(result).toBe(102334155);
+  expect(duration).toBeLessThan(1000); // Must complete within 1 second
+});
+```
+
+#### Example Test Repository (Rust)
+```toml
+# Cargo.toml
+[package]
+name = "sorting-challenge-tests"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Add solution crate as dependency
+solution = { path = "../solution" }
+
+[dev-dependencies]
+criterion = "0.5"
+```
+
+```rust
+// tests/integration_test.rs
+use solution::sort_algorithm;
+
+#[test]
+fn test_empty_array() {
+    let mut arr: Vec<i32> = vec![];
+    sort_algorithm(&mut arr);
+    assert_eq!(arr, vec![]);
+}
+
+#[test]
+fn test_performance_large_array() {
+    let mut arr: Vec<i32> = (0..100000).rev().collect();
+    let start = std::time::Instant::now();
+    sort_algorithm(&mut arr);
+    let duration = start.elapsed();
+    
+    assert!(arr.windows(2).all(|w| w[0] <= w[1])); // Verify sorted
+    assert!(duration.as_millis() < 5000); // Must complete within 5 seconds
+}
+```
+
+### Solution Repository Structure (Fulfillment)
+
+The solution repository contains the implementation that attempts to satisfy the test requirements.
+
+#### Required Structure
+```
+solution-repo/
+├── README.md               # Solution description and approach
+├── package.json           # Dependencies and build scripts
+├── bun.lockb              # Lock file
+├── src/                   # Source code
+│   ├── main.ts           # Main entry point
+│   ├── lib/              # Library modules
+│   └── utils/            # Utility functions
+├── docs/                 # Documentation
+│   ├── approach.md       # Technical approach
+│   └── complexity.md     # Time/space complexity analysis
+├── examples/             # Usage examples
+└── .gitignore           # Git ignore rules
+```
+
+#### Example Solution Repository (JavaScript/TypeScript)
+```json
+// package.json
+{
+  "name": "fibonacci-solution",
+  "version": "1.0.0",
+  "description": "Optimized Fibonacci sequence implementation", 
+  "main": "src/fibonacci.ts",
+  "scripts": {
+    "build": "bun build src/fibonacci.ts --outdir dist",
+    "test": "bun test",
+    "start": "bun run src/main.ts"
+  },
+  "exports": {
+    ".": "./src/fibonacci.ts"
+  }
+}
+```
+
+```typescript
+// src/fibonacci.ts
+const memo = new Map<number, number>();
+
+export function fibonacci(n: number): number {
+  if (n <= 1) return n;
+  
+  if (memo.has(n)) {
+    return memo.get(n)!;
+  }
+  
+  const result = fibonacci(n - 1) + fibonacci(n - 2);
+  memo.set(n, result);
+  return result;
+}
+
+// src/main.ts
+import { fibonacci } from './fibonacci';
+
+console.log('Fibonacci(10):', fibonacci(10));
+```
+
+#### Example Solution Repository (Rust)
+```toml
+# Cargo.toml
+[package]
+name = "solution"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "solution"
+path = "src/lib.rs"
+
+[[bin]]
+name = "main"
+path = "src/main.rs"
+```
+
+```rust
+// src/lib.rs
+pub fn sort_algorithm(arr: &mut [i32]) {
+    // Optimized quicksort implementation
+    if arr.len() <= 1 {
+        return;
+    }
+    quicksort(arr, 0, arr.len() - 1);
+}
+
+fn quicksort(arr: &mut [i32], low: usize, high: usize) {
+    if low < high {
+        let pi = partition(arr, low, high);
+        if pi > 0 {
+            quicksort(arr, low, pi - 1);
+        }
+        quicksort(arr, pi + 1, high);
+    }
+}
+```
+
+### Repository Integration Requirements
+
+1. **Test Discovery**: Tests must be able to import/link with solution code
+2. **Build Dependencies**: Solution must build successfully before tests run
+3. **Output Format**: Tests should produce clear pass/fail results
+4. **Performance Benchmarks**: Include performance requirements in tests
+5. **Edge Cases**: Comprehensive test coverage including edge cases
+
+## Command Output Examples
+
+### List Command Output
+
+```bash
+./bin/git-escrows list
+```
+
+**Example Output:**
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                               AVAILABLE ESCROWS                                │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ ID: 1                                                                           │
+│ Status: PENDING_FULFILLMENT                                                  │
+│ Demander: 0xa1b2c3d4e5f6...                                                    │
+│ Reward: 1.5 ETH                                                                │
+│ Token: ETH (Native)                                                             │
+│ Tests: https://github.com/challenges/fibonacci-optimization                     │
+│ Commit: a1b2c3d4e5f6789...                                                      │
+│ Test Command: bun test                                                          │
+│ Arbiter: 0x1234567890ab...                                                     │
+│ Created: 2025-09-28 14:30:25 UTC                                               │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ ID: 2                                                                           │
+│ Status: UNDER_REVIEW                                                         │
+│ Demander: 0xf1e2d3c4b5a6...                                                    │
+│ Reward: 500 USDC                                                               │
+│ Token: 0xa0b86991c431...                                                       │
+│ Tests: https://github.com/challenges/sorting-algorithms                         │
+│ Commit: f1e2d3c4b5a6...                                                        │
+│ Test Command: cargo test                                                        │
+│ Arbiter: 0xabcdef123456...                                                     │
+│ Fulfillment: 0x9876543210fe... (pending verification)                          │
+│ Created: 2025-09-29 09:15:42 UTC                                               │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ ID: 3                                                                           │
+│ Status: COMPLETED                                                            │
+│ Demander: 0x1111222233334444...                                                │
+│ Fulfiller: 0x5555666677778888...                                               │
+│ Reward: 0.8 ETH                                                                │
+│ Token: ETH (Native)                                                             │
+│ Tests: https://github.com/challenges/web3-integration                           │
+│ Solution: https://github.com/solutions/web3-solution                            │
+│ Completed: 2025-09-27 18:45:12 UTC                                             │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+Summary: 3 total escrows (1 available, 1 under review, 1 completed)
+Total Value Locked: 2.3 ETH + 500 USDC
+```
+
+### Check Key Command Output
+
+```bash
+./bin/git-escrows check-key --verbose
+```
+
+**Example Output:**
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                          GIT KEY REGISTRATION STATUS                           │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ Ethereum Address: 0xa1b2c3d4e5f6789abcdef1234567890abcdef12                     │
+│ Network: Sepolia Testnet                                                        │
+│ Registry Contract: 0x1234567890abcdef...                                       │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ SSH Ed25519 Key                                                              │
+│ Status: REGISTERED                                                            │
+│ Public Key: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGq...                         │
+│ Fingerprint: SHA256:k4h9l2j3n4m5o6p7q8r9s0t1u2v3w4x5y6z7                       │
+│ Registration TX: 0xabcdef1234567890...                                          │
+│ Block: 4,521,337 (2025-09-28 14:25:31 UTC)                                     │
+│ Git Config: user.signingkey matches registered key                           │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ PGP Key                                                                      │
+│ Status: NOT REGISTERED                                                        │
+│ Local Key: Found (4096-bit RSA, expires 2026-09-28)                            │
+│ Suggestion: Run `./bin/git-escrows register-key --pgp-key-file ~/.gnupg/...`   │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ X.509 Certificate                                                            │
+│ Status: NOT REGISTERED                                                        │
+│ Local Cert: Not found                                                           │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+Verification Capability: SSH signatures (YES), PGP signatures (NO), X.509 signatures (NO)
+Ready to submit solutions with SSH-signed commits
+```
+
+### Submit Command Output
+
+```bash
+./bin/git-escrows submit --tests-repo https://github.com/challenges/fibonacci --tests-commit a1b2c3d4 --reward 1500000000000000000
+```
+
+**Example Output:**
+```
+Creating new escrow demand...
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                             ESCROW SUBMISSION                                  │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ Tests Repository: https://github.com/challenges/fibonacci                       │
+│ Tests Commit: a1b2c3d4e5f6789abcdef1234567890abcdef12                          │
+│ Reward Amount: 1.5 ETH                                                         │
+│ Token: ETH (Native)                                                             │
+│ Test Command: bun test                                                          │
+│ Commit Algorithm: SHA256                                                        │
+│ Arbiter: 0x1234567890abcdef... (default)                                       │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ Validating repository access...                                              │
+│ Repository accessible                                                         │
+│ Commit exists and is signed                                                   │
+│ Test command executable                                                       │
+│ Sufficient balance for reward + gas                                          │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ Broadcasting transaction...                                                  │
+│ Transaction Hash: 0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef12     │
+│ Gas Used: 342,156                                                              │
+│ Gas Price: 20 gwei                                                             │
+│ Total Cost: 0.006843 ETH                                                       │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ Waiting for confirmation...                                                   │
+│ Transaction confirmed in block 4,521,445                                     │
+│ Escrow created successfully!                                                 │
+│                                                                                 │
+│ Escrow ID: 42                                                               │
+│ Explorer: https://sepolia.etherscan.io/tx/0xabcdef...                       │
+│ Monitor: ./bin/git-escrows list --address 0xa1b2c3d4e5f6...                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Fulfill Command Output
+
+```bash
+./bin/git-escrows fulfill --escrow-id 42 --solution-repo https://github.com/dev/fibonacci-solution --solution-commit def456
+```
+
+**Example Output:**
+```
+Submitting solution for escrow #42...
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                            SOLUTION SUBMISSION                                 │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ Escrow ID: 42                                                                   │
+│ Solution Repository: https://github.com/dev/fibonacci-solution                  │
+│ Solution Commit: def456abc789def456abc789def456abc789def456                     │
+│ Submitter: 0x9876543210fedcba...                                               │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ Pre-submission validation...                                                 │
+│ Escrow exists and is accepting solutions                                     │
+│ Solution repository accessible                                               │
+│ Commit exists and is properly signed                                         │
+│ Commit signature matches registered key                                      │
+│ No previous submission from this address                                     │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ Submitting to blockchain...                                                  │
+│ Transaction Hash: 0xfedcba0987654321fedcba0987654321fedcba0987654321fedcba09     │
+│ Gas Used: 198,234                                                              │
+│ Total Cost: 0.003965 ETH                                                       │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ Waiting for oracle verification...                                           │
+│ Oracle processing started                                                    │
+│ Cloning repositories...                                                      │
+│ Building solution...                                                        │
+│ Running tests...                                                             │
+│ All tests passed! (32/32)                                                    │
+│ Performance benchmarks met                                                   │
+│ Solution verified successfully!                                              │
+│                                                                                 │
+│ Reward pending arbiter approval                                              │
+│ Monitor: ./bin/git-escrows list --address 0x9876543210fe...                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Server Status Output
+
+```bash
+./bin/git-escrows server --status
+```
+
+**Example Output:**
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                            ORACLE SERVER STATUS                                │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ Status: RUNNING                                                              │
+│ Uptime: 2d 14h 32m 18s                                                         │
+│ Port: 3000                                                                      │
+│ Config: config/oracle-config.json                                              │
+│ Process ID: 15432                                                               │
+│ Memory Usage: 248 MB / 1024 MB                                                 │
+│ CPU Usage: 12.3%                                                               │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ VERIFICATION STATISTICS                                                         │
+│ Total Verifications: 127                                                       │
+│ Successful: 89 (70.1%)                                                         │
+│ Failed: 31 (24.4%)                                                             │
+│ Error/Timeout: 7 (5.5%)                                                        │
+│ Average Processing Time: 43.2 seconds                                          │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ CURRENT QUEUE                                                                   │
+│ Active Jobs: 2/3                                                               │
+│ Pending: 1                                                                     │
+│                                                                                 │
+│ Job #1: Escrow 45 - fibonacci-challenge (2m 15s)                              │
+│ Job #2: Escrow 47 - sorting-algorithms (45s)                                  │
+│ Job #3: Escrow 48 - web3-integration (queued)                                 │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ NETWORK STATUS                                                                  │
+│ Blockchain: Sepolia Testnet                                                    │
+│ RPC Status: Connected                                                        │
+│ Block Height: 4,521,789                                                        │
+│ Gas Price: 15.2 gwei                                                           │
+│ Oracle Address: 0x1111222233334444...                                          │
+│ Balance: 0.245 ETH                                                             │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+Health Check: All systems operational
+Performance: Normal (avg response time: 120ms)
+```
+
+## Project Structure
 
 ```
 src/
@@ -401,7 +840,7 @@ tests/                    # Comprehensive test suites
 bin/                      # Compiled binaries
 ```
 
-## 🧪 Testing
+## Testing
 
 ### Run Test Suite
 
@@ -425,7 +864,7 @@ bun test ./tests/commitObligation.test.ts
 - **Security Tests**: Cryptographic verification testing
 - **Multi-language Tests**: Cross-platform execution testing
 
-## 📦 Build & Distribution
+## Build & Distribution
 
 ### Local Development
 ```bash
@@ -447,7 +886,7 @@ bun run build:all              # All platforms
 bun run build                  # ESM/CJS library builds
 ```
 
-## ⚙️ Configuration
+## Configuration
 
 ### Environment Variables (.env)
 
@@ -479,7 +918,7 @@ GAS_LIMIT=500000
 GAS_PRICE=20000000000
 ```
 
-**⚠️ Security Note**: Never commit `.env` files to version control. Add `.env` to your `.gitignore`.
+**Security Note**: Never commit `.env` files to version control. Add `.env` to your `.gitignore`.
 
 ### Config File (config.json)
 
@@ -539,7 +978,7 @@ The `config.json` file defines **test execution and repository handling settings
 ./bin/git-escrows new-client --privateKey 0x... --network sepolia
 ```
 
-## 🔐 Security Features
+## Security Features
 
 - **Cryptographic Commit Verification**: Multi-algorithm support (SHA-1, SHA-256, MD5)
 - **Key Type Detection**: Automatic SSH/PGP/X.509 key format detection
@@ -547,13 +986,13 @@ The `config.json` file defines **test execution and repository handling settings
 - **Blockchain Verification**: Smart contract-enforced escrow rules
 - **Multi-signature Support**: Arbiter and oracle verification patterns
 
-## 🌐 Network Support
+## Network Support
 
 - **Local Development**: Anvil, Localhost
 - **Testnets**: Sepolia, Goerli
 - **Mainnet**: Ethereum mainnet
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create feature branch (`git checkout -b feature/amazing-feature`)
@@ -568,11 +1007,11 @@ The `config.json` file defines **test execution and repository handling settings
 - Follow TypeScript best practices
 - Update documentation for API changes
 
-## 📝 License
+## License
 
 MIT License - see [LICENSE](LICENSE) for details.
 
-## 🆘 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -595,4 +1034,4 @@ For more help, check the test files in `tests/` directory for usage examples.
 
 ---
 
-**Built with ❤️ using Bun, TypeScript, and Ethereum smart contracts.**
+**Built with care using Bun, TypeScript, and Ethereum smart contracts.**
