@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'fs';
 import { privateKeyToAccount } from 'viem/accounts';
-import { createWalletClient, http, nonceManager } from 'viem';
-import { foundry, sepolia, mainnet } from 'viem/chains';
+import { createWalletClient, http } from 'viem';
+import { foundry, sepolia, mainnet, baseSepolia } from 'viem/chains';
 import { makeClient } from 'alkahest-ts';
 import { makeCommitObligationClient, type CommitObligationAddresses } from '../../clients/commitObligation.js';
 import { makeGitIdentityRegistryClient, type GitIdentityRegistryAddresses } from '../../clients/gitIdentityRegistry.js';
@@ -92,9 +92,7 @@ export async function createClientFromEnv(envPath: string = '.env') {
   console.log(chalk.gray(`  Network: ${network}`));
 
   // Create account from private key
-  const account = privateKeyToAccount(config.privateKey as `0x${string}`, {
-    nonceManager,
-  });
+  const account = privateKeyToAccount(config.privateKey as `0x${string}`);
 
   // Verify that the private key matches the address
   if (account.address.toLowerCase() !== config.address.toLowerCase()) {
@@ -125,6 +123,17 @@ export async function createClientFromEnv(envPath: string = '.env') {
         transport: http(rpcUrl),
       });
       break;
+    case 'basesepolia':
+    case 'base-sepolia':
+      if (!rpcUrl) {
+        throw new Error('RPC_URL is required for base-sepolia network in .env file');
+      }
+      walletClient = createWalletClient({
+        account,
+        chain: baseSepolia,
+        transport: http(rpcUrl),
+      });
+      break;
     case 'mainnet':
       if (!rpcUrl) {
         throw new Error('RPC_URL is required for mainnet network in .env file');
@@ -136,7 +145,7 @@ export async function createClientFromEnv(envPath: string = '.env') {
       });
       break;
     default:
-      throw new Error(`Unsupported network: ${network}. Supported: anvil, localhost, sepolia, mainnet`);
+      throw new Error(`Unsupported network: ${network}. Supported: anvil, localhost, sepolia, base-sepolia, mainnet`);
   }
 
   console.log(chalk.gray(`  RPC URL: ${rpcUrl}`));
@@ -207,7 +216,7 @@ export function requireEnvFile(envPath: string = '.env'): void {
     console.error(chalk.yellow('\nPlease create a .env file with the following format:'));
     console.error(chalk.gray('PRIVATE_KEY=0x1234567890abcdef...'));
     console.error(chalk.gray('ADDRESS=0xYourEthereumAddress'));
-    console.error(chalk.gray('NETWORK=anvil  # optional: anvil, localhost, sepolia, mainnet'));
+    console.error(chalk.gray('NETWORK=anvil  # optional: anvil, localhost, sepolia, base-sepolia, mainnet'));
     console.error(chalk.gray('RPC_URL=http://127.0.0.1:8545  # optional for anvil/localhost'));
     console.error(chalk.gray('COMMIT_OBLIGATION_ADDRESS=0x...  # optional'));
     console.error(chalk.gray('GIT_IDENTITY_REGISTRY_ADDRESS=0x...  # optional'));

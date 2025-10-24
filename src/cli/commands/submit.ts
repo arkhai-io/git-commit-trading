@@ -90,14 +90,65 @@ export async function submitCommand(options: SubmitOptions) {
 
     // Create the escrow by depositing tokens
     const rewardAmount = BigInt(options.reward);
-    const { attested: escrow } = await client.erc20.permitAndBuyWithErc20(
-      {
-        address: tokenAddress,
-        value: rewardAmount,
-      },
-      { arbiter: arbiterAddress, demand },
-      0n,
-    );
+    let escrow;
+
+    try {
+      // Try with permit first (EIP-2612)
+      console.log(chalk.gray('Attempting to use EIP-2612 permit...'));
+      const result = await client.erc20.permitAndBuyWithErc20(
+        {
+          address: tokenAddress,
+          value: rewardAmount,
+        },
+        { arbiter: arbiterAddress, demand },
+        0n,
+      );
+      escrow = result.attested;
+      console.log(chalk.green('✓ Used EIP-2612 permit'));
+    } catch (permitError: any) {
+      // If permit fails, fallback to approve + transfer
+      console.log(chalk.yellow('⚠ EIP-2612 permit not supported, falling back to approve + transfer'));
+      console.log(chalk.gray('Approving token spend...'));
+
+      // First approve the tokens
+      const approveHash = await client.erc20.approve(
+        {
+          address: tokenAddress,
+          value: rewardAmount,
+        },
+        'escrow'
+      );
+
+      console.log(chalk.gray(`Approval tx: ${approveHash}`));
+      console.log(chalk.gray('Waiting for approval to be mined (this may take a while on Base Sepolia)...'));
+
+      try {
+        // Wait for the approval transaction to be confirmed with longer timeout for Base Sepolia
+        await client.viemClient.waitForTransactionReceipt({
+          hash: approveHash,
+          timeout: 180_000  // 3 minutes timeout for Base Sepolia
+        });
+        console.log(chalk.green('✓ Approval confirmed'));
+      } catch (error) {
+        console.log(chalk.yellow('⚠ Approval confirmation timed out, but transaction was submitted'));
+        console.log(chalk.gray('Waiting 30 seconds for network propagation before proceeding...'));
+        await new Promise(resolve => setTimeout(resolve, 30000));
+        console.log(chalk.gray('Proceeding with escrow creation...'));
+      }
+
+      // Now create the escrow
+      console.log(chalk.gray('Creating escrow...'));
+      const result = await client.erc20.buyWithErc20(
+        {
+          address: tokenAddress,
+          value: rewardAmount,
+        },
+        { arbiter: arbiterAddress, demand },
+        0n,
+      );
+      escrow = result.attested;
+      console.log(chalk.green('✓ Used approve + transfer'));
+    }
 
     console.log(chalk.green('Escrow created successfully!'));
     console.log(chalk.white('Escrow Details:'));
