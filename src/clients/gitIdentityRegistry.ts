@@ -1,5 +1,5 @@
 import { abi as gitIdentityRegistryAbi } from "../contracts/GitIdentityRegistry";
-import type { ViemClient } from "alkahest-ts/src/utils";
+import type { ViemClient } from "alkahest-ts";
 
 // Enum for KeyType from the contract
 export enum KeyType {
