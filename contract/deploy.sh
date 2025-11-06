@@ -6,16 +6,16 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo -e "${GREEN}Git Deal Contract Deployment Script${NC}"
-echo "========================================"
+echo -e "${GREEN}Git Deal Contract Deployment Script - Base Sepolia${NC}"
+echo "========================================================="
 
 # Check if .env file exists
 if [ ! -f .env ]; then
     echo -e "${RED}Error: .env file not found${NC}"
     echo "Please create a .env file with the following variables:"
     echo "PRIVATE_KEY=your_private_key_here"
-    echo "SEPOLIA_RPC_URL=https://sepolia.infura.io/v3/your_project_id"
-    echo "ETHERSCAN_API_KEY=your_etherscan_api_key"
+    echo "BASE_SEPOLIA_RPC_URL=https://sepolia.base.org"
+    echo "BASESCAN_API_KEY=your_basescan_api_key"
     exit 1
 fi
 
@@ -28,8 +28,8 @@ if [ -z "$PRIVATE_KEY" ]; then
     exit 1
 fi
 
-if [ -z "$SEPOLIA_RPC_URL" ]; then
-    echo -e "${RED}Error: SEPOLIA_RPC_URL not set in .env file${NC}"
+if [ -z "$BASE_SEPOLIA_RPC_URL" ]; then
+    echo -e "${RED}Error: BASE_SEPOLIA_RPC_URL not set in .env file${NC}"
     exit 1
 fi
 
@@ -52,7 +52,7 @@ fi
 echo "Deployer address: $DEPLOYER_ADDRESS"
 
 # Check balance
-BALANCE=$(cast balance $DEPLOYER_ADDRESS --rpc-url $SEPOLIA_RPC_URL)
+BALANCE=$(cast balance $DEPLOYER_ADDRESS --rpc-url $BASE_SEPOLIA_RPC_URL)
 BALANCE_ETH=$(cast to-unit $BALANCE ether)
 echo "Deployer balance: $BALANCE_ETH ETH"
 
@@ -82,12 +82,10 @@ fi
 echo -e "${GREEN}Compilation successful${NC}"
 
 # Run deployment
-echo -e "${YELLOW}Deploying to Sepolia...${NC}"
-DEPLOY_OUTPUT=$(forge script script/DeploySepolia.s.sol:DeploySepoliaScript \
-    --rpc-url $SEPOLIA_RPC_URL \
+echo -e "${YELLOW}Deploying to Base Sepolia...${NC}"
+DEPLOY_OUTPUT=$(forge script script/DeploySepolia.s.sol:DeployBaseSepoliaScript \
+    --rpc-url $BASE_SEPOLIA_RPC_URL \
     --broadcast \
-    --verify \
-    --etherscan-api-key $ETHERSCAN_API_KEY \
     -vvvv 2>&1)
 
 DEPLOY_EXIT_CODE=$?
@@ -109,20 +107,20 @@ if [ $DEPLOY_EXIT_CODE -eq 0 ] || echo "$DEPLOY_OUTPUT" | grep -q "GitIdentityRe
     # Only create deployment file if we successfully extracted addresses
     if [ ! -z "$GIT_REGISTRY" ] && [ ! -z "$COMMIT_OBLIGATION" ]; then
         # Create deployment info file
-        cat > deployments/sepolia.json << EOF
+        cat > deployments/base-sepolia.json << EOF
 {
   "gitIdentityRegistry": "$GIT_REGISTRY",
   "commitObligation": "$COMMIT_OBLIGATION",
   "deployer": "$DEPLOYER",
   "blockNumber": $BLOCK_NUMBER,
   "timestamp": $(date +%s),
-  "easRegistry": "0xC2679fBD37d54388Ce493F1DB75320D236e1815e",
-  "schemaRegistry": "0x0a7E2Ff54e76B8E6659aedc9103FB21c038050D0",
-  "network": "sepolia",
-  "chainId": 11155111
+  "easRegistry": "0x4200000000000000000000000000000000000021",
+  "schemaRegistry": "0x4200000000000000000000000000000000000020",
+  "network": "base-sepolia",
+  "chainId": 84532
 }
 EOF
-        echo -e "${GREEN}Deployment details saved to deployments/sepolia.json${NC}"
+        echo -e "${GREEN}Deployment details saved to deployments/base-sepolia.json${NC}"
     else
         echo -e "${YELLOW}Warning: Could not extract all contract addresses from output${NC}"
         echo "Please check the deployment output above for contract addresses"
@@ -132,16 +130,16 @@ EOF
     echo -e "${GREEN}Deployment completed successfully!${NC}"
     echo "  - broadcast/DeploySepolia.s.sol/ (Foundry broadcast logs)"
     echo
-    echo -e "${GREEN}Contract verification will be processed by Etherscan${NC}"
-    echo "You can check the status at: https://sepolia.etherscan.io/"
+    echo -e "${GREEN}Contract verification will be processed by BaseScan${NC}"
+    echo "You can check the status at: https://sepolia.basescan.org/"
     echo
     if [ ! -z "$GIT_REGISTRY" ] && [ ! -z "$COMMIT_OBLIGATION" ]; then
         echo -e "${GREEN}Deployed Contract Addresses:${NC}"
         echo "  GitIdentityRegistry: $GIT_REGISTRY"
         echo "  CommitObligation: $COMMIT_OBLIGATION"
-        echo "  View on Etherscan:"
-        echo "    - https://sepolia.etherscan.io/address/$GIT_REGISTRY"
-        echo "    - https://sepolia.etherscan.io/address/$COMMIT_OBLIGATION"
+        echo "  View on BaseScan:"
+        echo "    - https://sepolia.basescan.org/address/$GIT_REGISTRY"
+        echo "    - https://sepolia.basescan.org/address/$COMMIT_OBLIGATION"
     fi
 else
     echo -e "${RED}Deployment failed${NC}"

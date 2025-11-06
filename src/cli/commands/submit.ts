@@ -107,8 +107,39 @@ export async function submitCommand(options: SubmitOptions) {
       console.log(chalk.green('✓ Used EIP-2612 permit'));
     } catch (permitError: any) {
       // If permit fails, fallback to approve + transfer
-      console.log(chalk.yellow('⚠ EIP-2612 permit not supported, falling back to approve + transfer'));
+      console.log(chalk.yellow('EIP-2612 permit not supported, falling back to approve + transfer'));
       console.log(chalk.gray('Approving token spend...'));
+
+      // Debug: Show nonce information before approve call
+      console.log(chalk.blue('\nNonce Debug Information:'));
+      try {
+        const userAddress = client.viemClient.account.address;
+        
+        // Get current nonce from network (confirmed transactions)
+        const confirmedNonce = await client.viemClient.getTransactionCount({
+          address: userAddress,
+          blockTag: 'latest'
+        });
+        
+        // Get pending nonce (including pending transactions)
+        const pendingNonce = await client.viemClient.getTransactionCount({
+          address: userAddress,
+          blockTag: 'pending'
+        });
+        
+        console.log(chalk.gray(`  Account: ${userAddress}`));
+        console.log(chalk.gray(`  Confirmed Nonce: ${confirmedNonce}`));
+        console.log(chalk.gray(`  Pending Nonce: ${pendingNonce}`));
+        console.log(chalk.gray(`  Nonce Manager: ${client.viemClient.account.nonceManager ? 'Enabled' : 'Disabled'}`));
+        
+        if (confirmedNonce !== pendingNonce) {
+          console.log(chalk.yellow(`  ${pendingNonce - confirmedNonce} transaction(s) pending`));
+        }
+        
+        console.log(chalk.gray(''));
+      } catch (nonceError) {
+        console.log(chalk.yellow(`  Could not fetch nonce: ${nonceError instanceof Error ? nonceError.message : String(nonceError)}`));
+      }
 
       // First approve the tokens
       const approveHash = await client.erc20.approve(
@@ -120,6 +151,15 @@ export async function submitCommand(options: SubmitOptions) {
       );
 
       console.log(chalk.gray(`Approval tx: ${approveHash}`));
+      
+      // Debug: Get transaction details to see what nonce was used
+      try {
+        const tx = await client.viemClient.getTransaction({ hash: approveHash });
+        console.log(chalk.blue(`Transaction nonce used: ${tx.nonce}`));
+      } catch (txError) {
+        console.log(chalk.yellow(`Could not fetch transaction details: ${txError instanceof Error ? txError.message : String(txError)}`));
+      }
+      
       console.log(chalk.gray('Waiting for approval to be mined (this may take a while on Base Sepolia)...'));
 
       try {

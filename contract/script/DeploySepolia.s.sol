@@ -7,10 +7,10 @@ import {CommitObligation} from "../src/obligations/CommitObligation.sol";
 import {IEAS} from "@eas/IEAS.sol";
 import {ISchemaRegistry} from "@eas/ISchemaRegistry.sol";
 
-contract DeploySepoliaScript is Script {
-    // Sepolia EAS contract addresses
-    address constant SEPOLIA_EAS = 0xC2679fBD37d54388Ce493F1DB75320D236e1815e;
-    address constant SEPOLIA_SCHEMA_REGISTRY = 0x0a7E2Ff54e76B8E6659aedc9103FB21c038050D0;
+contract DeployBaseSepoliaScript is Script {
+    // Base Sepolia EAS contract addresses
+    address constant BASE_SEPOLIA_EAS = 0x4200000000000000000000000000000000000021;
+    address constant BASE_SEPOLIA_SCHEMA_REGISTRY = 0x4200000000000000000000000000000000000020;
 
     function run() external {
         // Read private key as string first, then convert to uint256
@@ -31,7 +31,7 @@ contract DeploySepoliaScript is Script {
         
         address deployer = vm.addr(deployerPrivateKey);
         
-        console.log("Deploying contracts to Sepolia...");
+        console.log("Deploying contracts to Base Sepolia...");
         console.log("Deployer address:", deployer);
         console.log("Deployer balance:", deployer.balance);
 
@@ -45,8 +45,8 @@ contract DeploySepoliaScript is Script {
         // Deploy CommitObligation
         console.log("Deploying CommitObligation...");
         CommitObligation commitObligation = new CommitObligation(
-            IEAS(SEPOLIA_EAS),
-            ISchemaRegistry(SEPOLIA_SCHEMA_REGISTRY)
+            IEAS(BASE_SEPOLIA_EAS),
+            ISchemaRegistry(BASE_SEPOLIA_SCHEMA_REGISTRY)
         );
         console.log("CommitObligation deployed at:", address(commitObligation));
 
@@ -54,7 +54,7 @@ contract DeploySepoliaScript is Script {
 
         // Save deployment info
         string memory deploymentInfo = string.concat(
-            "Deployment completed on Sepolia:\n",
+            "Deployment completed on Base Sepolia:\n",
             "GitIdentityRegistry: ", vm.toString(address(gitRegistry)), "\n",
             "CommitObligation: ", vm.toString(address(commitObligation)), "\n",
             "Deployer: ", vm.toString(deployer), "\n",
@@ -66,7 +66,7 @@ contract DeploySepoliaScript is Script {
         // Write deployment addresses to file
         // Note: If this fails due to permissions, the deploy.sh script will handle it
         vm.writeFile(
-            "./deployments/sepolia.json",
+            "./deployments/base-sepolia.json",
             string.concat(
                 "{\n",
                 '  "gitIdentityRegistry": "', vm.toString(address(gitRegistry)), '",\n',
@@ -74,12 +74,14 @@ contract DeploySepoliaScript is Script {
                 '  "deployer": "', vm.toString(deployer), '",\n',
                 '  "blockNumber": ', vm.toString(block.number), ',\n',
                 '  "timestamp": ', vm.toString(block.timestamp), ',\n',
-                '  "easRegistry": "', vm.toString(SEPOLIA_EAS), '",\n',
-                '  "schemaRegistry": "', vm.toString(SEPOLIA_SCHEMA_REGISTRY), '"\n',
+                '  "easRegistry": "', vm.toString(BASE_SEPOLIA_EAS), '",\n',
+                '  "schemaRegistry": "', vm.toString(BASE_SEPOLIA_SCHEMA_REGISTRY), '",\n',
+                '  "network": "base-sepolia",\n',
+                '  "chainId": 84532\n',
                 "}"
             )
         );
         
-        console.log("Deployment info saved to ./deployments/sepolia.json");
+        console.log("Deployment info saved to ./deployments/base-sepolia.json");
     }
 }

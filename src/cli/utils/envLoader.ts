@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'fs';
-import { privateKeyToAccount } from 'viem/accounts';
-import { createWalletClient, http } from 'viem';
+import { privateKeyToAccount, nonceManager } from 'viem/accounts';
+import { createWalletClient, http, publicActions } from 'viem';
 import { foundry, sepolia, mainnet, baseSepolia } from 'viem/chains';
 import { makeClient } from 'alkahest-ts';
 import { makeCommitObligationClient, type CommitObligationAddresses } from '../../clients/commitObligation.js';
@@ -92,7 +92,9 @@ export async function createClientFromEnv(envPath: string = '.env') {
   console.log(chalk.gray(`  Network: ${network}`));
 
   // Create account from private key
-  const account = privateKeyToAccount(config.privateKey as `0x${string}`);
+  const account = privateKeyToAccount(config.privateKey as `0x${string}`, {
+    nonceManager, // automatic nonce management
+  });
 
   // Verify that the private key matches the address
   if (account.address.toLowerCase() !== config.address.toLowerCase()) {
@@ -132,7 +134,7 @@ export async function createClientFromEnv(envPath: string = '.env') {
         account,
         chain: baseSepolia,
         transport: http(rpcUrl),
-      });
+      }).extend(publicActions); // Extend with public actions for Base Sepolia
       break;
     case 'mainnet':
       if (!rpcUrl) {
