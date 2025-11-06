@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 import { createClientFromEnv, requireEnvFile } from '../utils/envLoader.js';
+import { CommitObligationAddresses } from '../../clients/commitObligation';
 
 interface ListOptions {
   status?: string;
@@ -32,7 +33,7 @@ export async function listCommand(options: ListOptions) {
     requireEnvFile();
     
     console.log(chalk.gray('Setting up blockchain client...'));
-    const { client, config } = await createClientFromEnv();
+    const { client, config, hasCommitObligation, hasGitIdentityRegistry } = await createClientFromEnv();
 
     console.log(chalk.gray('Querying blockchain for escrow events...'));
     
@@ -51,7 +52,7 @@ export async function listCommand(options: ListOptions) {
     const escrows: EscrowData[] = [];
 
     // Check if we have COMMIT_OBLIGATION_ADDRESS to query real data
-    if (client.hasCommitObligation) {
+    if (hasCommitObligation) {
       try {
         // Query for attestation events related to commit obligations
         // This is a simplified approach - in production you'd want specific escrow contract events

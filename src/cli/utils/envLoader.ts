@@ -148,7 +148,7 @@ export async function createClientFromEnv(envPath: string = '.env') {
       throw new Error(`Unsupported network: ${network}. Supported: anvil, localhost, sepolia, base-sepolia, mainnet`);
   }
 
-  console.log(chalk.gray(`  RPC URL: ${rpcUrl}`));
+  console.log(chalk.gray(`  RPC URL: ${rpcUrl?.substring(0, 40)}...`));
 
   // Create alkahest client
   const alkahestClient = makeClient(walletClient as any);

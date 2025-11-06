@@ -691,7 +691,7 @@ export async function initializeServerGitEnvironment(): Promise<boolean> {
         
         // Test SSH keygen availability
         try {
-            await execAsync('ssh-keygen -h', { timeout: 5000 });
+            await execAsync('ssh -V', { timeout: 5000 });
             console.log('✅ SSH tools are available');
         } catch (error) {
             console.warn('⚠️ SSH tools are not available, SSH signature verification may be limited');
@@ -739,7 +739,7 @@ export async function getServerGitCapabilities(): Promise<{ssh: boolean, gpg: bo
     
     // Test SSH
     try {
-        await execAsync('ssh-keygen -h', { timeout: 5000 });
+        await execAsync('ssh -V', { timeout: 5000 });
         capabilities.ssh = true;
     } catch (error) {
         console.warn('SSH tools are not available');
