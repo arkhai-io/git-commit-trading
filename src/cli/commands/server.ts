@@ -235,7 +235,7 @@ export async function serverCommand(options: ServerOptions) {
     if (options.past) {
       console.log(chalk.yellow('� Arbitrating past obligations...'));
 
-      const decisions = await client.oracle.arbitratePastForEscrow(arbitrationParams);
+      const decisions = await client.oracle.arbitratePast(arbitrationParams);
 
       console.log(chalk.green(`✓ Arbitration completed for ${decisions.decisions.length} past obligations`));
       console.log(chalk.gray(`  Escrows processed: ${decisions.escrows.length}`));
@@ -246,7 +246,7 @@ export async function serverCommand(options: ServerOptions) {
       console.log(chalk.yellow('Listening for new obligations and arbitrating...'));
       console.log(chalk.gray('Press Ctrl+C to stop the server'));
 
-      const { unwatch } = await client.oracle.listenAndArbitrateForEscrow(arbitrationParams);
+      const { unwatch } = await client.oracle.listenAndArbitrate(arbitrationParams);
 
       // Handle graceful shutdown
       process.on('SIGINT', () => {
