@@ -244,7 +244,8 @@ export async function registerKeyCommand(options: RegisterKeyOptions) {
     
     // Generate nonce and signing message
     const nonce = `register_key_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const nonceHash = Buffer.from(nonce).toString('hex').padStart(64, '0');
+    const { createHash } = await import('crypto');
+    const nonceHash = createHash('sha256').update(nonce).digest('hex');
     const signingMessage = generateSigningMessage(config.address as `0x${string}`, nonce);
     
     console.log(chalk.gray('Generating signature...'));
@@ -294,7 +295,7 @@ export async function registerKeyCommand(options: RegisterKeyOptions) {
     const result = await client.gitIdentityRegistry.claimKey(gitKeyClaim);
     
     console.log(chalk.green('✅ Cryptographic key registered successfully!'));
-    console.log(chalk.white('Registration Details:'));
+    console.log(chalk.blue('Registration Details:'));
     console.log(chalk.gray(`  Transaction Hash: ${result.hash}`));
     console.log(chalk.gray(`  Key Type: ${getKeyTypeName(keyType)}`));
     console.log(chalk.gray(`  Public Key: ${keyMaterial.substring(0, 32)}...`));

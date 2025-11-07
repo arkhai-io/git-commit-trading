@@ -52,7 +52,7 @@ export async function fulfillCommand(options: FulfillOptions) {
           console.log(chalk.yellow('   Register your Git SSH key first with: git-escrows register-key'));
           console.log(chalk.yellow('   Or use --no-verify-key to skip verification (not recommended)'));
         } else {
-          console.log(chalk.green('✓ Git key registration verified'));
+          console.log(chalk.green('✓ Git key registration verified with pubKey: ', keyClaim.publicKey));
         }
       } catch (error) {
         console.log(chalk.yellow('⚠️ Could not verify Git key registration:', error));

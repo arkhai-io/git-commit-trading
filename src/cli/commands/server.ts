@@ -65,7 +65,6 @@ export async function serverCommand(options: ServerOptions) {
     // Initialize Git verification service if enabled
     let gitVerificationService = null;
     if (!options.skipKeyVerification && hasGitIdentityRegistry && useGitVerifyCommit) {
-      console.log(chalk.blue('🔧 Initializing Git verification service...'));
       
       gitVerificationService = getGitVerificationService({
         timeoutMs: timeout,
@@ -74,7 +73,6 @@ export async function serverCommand(options: ServerOptions) {
       
       const initialized = await gitVerificationService.initialize();
       if (initialized) {
-        console.log(chalk.green('✅ Git verification service initialized'));
         
         // Log service capabilities
         const stats = gitVerificationService.getStats();
@@ -233,13 +231,15 @@ export async function serverCommand(options: ServerOptions) {
     };
 
     if (options.past) {
-      console.log(chalk.yellow('� Arbitrating past obligations...'));
+      console.log(chalk.yellow('Arbitrating past obligations...'));
 
       const decisions = await client.oracle.arbitratePast(arbitrationParams);
+      console.log("Arbitration Params: ", arbitrationParams);
+      console.log("Decisions: ", decisions);
 
-      console.log(chalk.green(`✓ Arbitration completed for ${decisions.decisions.length} past obligations`));
-      console.log(chalk.gray(`  Escrows processed: ${decisions.escrows.length}`));
-      console.log(chalk.gray(`  Decisions made: ${decisions.decisions.length}`));
+      console.log(chalk.green(`✓ Arbitration completed for ${decisions.length} past obligations`));
+      console.log(chalk.gray(`  Escrows processed: ${decisions.length}`));
+      console.log(chalk.gray(`  Decisions made: ${decisions.length}`));
 
       process.exit(0);
     } else {
