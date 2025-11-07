@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import { parseAbiParameters, decodeAbiParameters } from 'viem';
 import { CommitAlgo, type CommitObligationData } from '../../clients/commitObligation.js';
 import { createClientFromEnv, requireEnvFile } from '../utils/envLoader.js';
 
@@ -95,6 +96,30 @@ export async function fulfillCommand(options: FulfillOptions) {
     console.log(chalk.gray(`  Recipient: ${fulfillment.recipient}`));
     console.log(chalk.gray(`  Schema UID: ${fulfillment.schema}`));
     console.log(chalk.gray(`  Reference UID: ${options.escrowUid}`));
+
+    // Request arbitration from the oracle
+    console.log(chalk.gray('Requesting arbitration from oracle...'));
+    try {
+      // Get the escrow to find the oracle address
+      const escrowAttestation = await client.getEscrowAttestation({ refUID: options.escrowUid as `0x${string}` });
+      
+      // Parse the escrow demand to get oracle address
+      // The oracle address is encoded in the demand data as (address oracle, bytes data)
+      const demandAbi = parseAbiParameters("(address oracle, bytes data)");
+      const decodedDemand = decodeAbiParameters(demandAbi, escrowAttestation.data);
+      const oracleAddress = decodedDemand[0].oracle;
+      
+      console.log(chalk.gray(`  Oracle Address: ${oracleAddress}`));
+      
+      // Request arbitration
+      const arbitrationTx = await client.oracle.requestArbitration(fulfillment.uid, oracleAddress);
+      console.log(chalk.green('✅ Arbitration requested successfully!'));
+      console.log(chalk.gray(`  Arbitration Request Transaction: ${arbitrationTx}`));
+      
+    } catch (error) {
+      console.log(chalk.yellow('⚠️ Failed to request arbitration:'), error);
+      console.log(chalk.yellow('   The oracle may still detect the fulfillment, but arbitration request is recommended'));
+    }
 
     console.log(chalk.yellow('\nNext steps:'));
     console.log(chalk.yellow('  1. The arbiter server will automatically test your solution'));
