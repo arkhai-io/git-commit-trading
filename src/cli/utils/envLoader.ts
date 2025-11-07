@@ -92,9 +92,7 @@ export async function createClientFromEnv(envPath: string = '.env') {
   console.log(chalk.gray(`  Network: ${network}`));
 
   // Create account from private key
-  const account = privateKeyToAccount(config.privateKey as `0x${string}`, {
-    nonceManager, // automatic nonce management
-  });
+  const account = privateKeyToAccount(config.privateKey as `0x${string}`);
 
   // Verify that the private key matches the address
   if (account.address.toLowerCase() !== config.address.toLowerCase()) {
@@ -134,7 +132,7 @@ export async function createClientFromEnv(envPath: string = '.env') {
         account,
         chain: baseSepolia,
         transport: http(rpcUrl),
-      }).extend(publicActions); // Extend with public actions for Base Sepolia
+      });
       break;
     case 'mainnet':
       if (!rpcUrl) {

@@ -110,37 +110,6 @@ export async function submitCommand(options: SubmitOptions) {
       console.log(chalk.yellow('EIP-2612 permit not supported, falling back to approve + transfer'));
       console.log(chalk.gray('Approving token spend...'));
 
-      // Debug: Show nonce information before approve call
-      console.log(chalk.blue('\nNonce Debug Information:'));
-      try {
-        const userAddress = client.viemClient.account.address;
-        
-        // Get current nonce from network (confirmed transactions)
-        const confirmedNonce = await client.viemClient.getTransactionCount({
-          address: userAddress,
-          blockTag: 'latest'
-        });
-        
-        // Get pending nonce (including pending transactions)
-        const pendingNonce = await client.viemClient.getTransactionCount({
-          address: userAddress,
-          blockTag: 'pending'
-        });
-        
-        console.log(chalk.gray(`  Account: ${userAddress}`));
-        console.log(chalk.gray(`  Confirmed Nonce: ${confirmedNonce}`));
-        console.log(chalk.gray(`  Pending Nonce: ${pendingNonce}`));
-        console.log(chalk.gray(`  Nonce Manager: ${client.viemClient.account.nonceManager ? 'Enabled' : 'Disabled'}`));
-        
-        if (confirmedNonce !== pendingNonce) {
-          console.log(chalk.yellow(`  ${pendingNonce - confirmedNonce} transaction(s) pending`));
-        }
-        
-        console.log(chalk.gray(''));
-      } catch (nonceError) {
-        console.log(chalk.yellow(`  Could not fetch nonce: ${nonceError instanceof Error ? nonceError.message : String(nonceError)}`));
-      }
-
       // First approve the tokens
       const approveHash = await client.erc20.approve(
         {
