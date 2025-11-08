@@ -54,7 +54,7 @@ export class GitVerificationService {
       return true;
     }
 
-    console.log(chalk.blue('🔧 Initializing Git Verification Service...'));
+    console.log(chalk.blue('Initializing Git Verification Service...'));
 
     try {
       // Initialize server Git environment
@@ -66,9 +66,9 @@ export class GitVerificationService {
       // Check server capabilities
       const capabilities = await getServerGitCapabilities();
       console.log(chalk.gray('Server capabilities:'));
-      console.log(chalk.gray(`  Git: ${capabilities.git ? '✅' : '❌'}`));
-      console.log(chalk.gray(`  GPG: ${capabilities.gpg ? '✅' : '❌'}`));
-      console.log(chalk.gray(`  SSH: ${capabilities.ssh ? '✅' : '❌'}`));
+      console.log(chalk.gray(`  Git: ${capabilities.git ? 'OK' : 'NOT AVAILABLE'}`));
+      console.log(chalk.gray(`  GPG: ${capabilities.gpg ? 'OK' : 'NOT AVAILABLE'}`));
+      console.log(chalk.gray(`  SSH: ${capabilities.ssh ? 'OK' : 'NOT AVAILABLE'}`));
 
       if (!capabilities.git) {
         throw new Error('Git is required but not available on the server');
@@ -85,7 +85,7 @@ export class GitVerificationService {
       }
 
       this.initialized = true;
-      console.log(chalk.green('✅ Git Verification Service initialized'));
+      console.log(chalk.green('Git Verification Service initialized'));
       return true;
 
     } catch (error) {

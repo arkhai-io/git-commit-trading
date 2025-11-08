@@ -781,7 +781,7 @@ export async function initializeServerGitEnvironment(): Promise<boolean> {
         const { promisify } = await import('util');
         const execAsync = promisify(exec);
         
-        console.log('🔧 Initializing server Git environment...');
+        console.log('Initializing server Git environment...');
         
         // Create SSH directory with proper permissions
         const sshDir = path.join(process.env.HOME || '/tmp', '.ssh');
@@ -814,7 +814,7 @@ export async function initializeServerGitEnvironment(): Promise<boolean> {
         // Test GPG availability
         try {
             await execAsync('gpg --version', { timeout: 5000 });
-            console.log('✅ GPG is available');
+            console.log('GPG is available');
         } catch (error) {
             console.warn('⚠️ GPG is not available, GPG signature verification will be disabled');
         }
@@ -822,12 +822,12 @@ export async function initializeServerGitEnvironment(): Promise<boolean> {
         // Test SSH keygen availability
         try {
             await execAsync('ssh -V', { timeout: 5000 });
-            console.log('✅ SSH tools are available');
+            console.log('SSH tools are available');
         } catch (error) {
             console.warn('⚠️ SSH tools are not available, SSH signature verification may be limited');
         }
-        
-        console.log('✅ Server Git environment initialized');
+
+        console.log('Server Git environment initialized');
         return true;
         
     } catch (error) {

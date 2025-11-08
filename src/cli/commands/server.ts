@@ -52,8 +52,9 @@ export async function serverCommand(options: ServerOptions) {
     }
 
     console.log(chalk.green('Blockchain environment ready'));
-    console.log(chalk.gray(`  Oracle Address: ${config.address}`));
+    console.log(chalk.gray(`  Oracle Address (Your Wallet): ${config.address}`));
     console.log(chalk.gray(`  CommitObligation Contract: ${config.commitObligationAddress}`));
+    console.log(chalk.gray(`  TrustedOracleArbiter Contract: ${client.contractAddresses.trustedOracleArbiter}`));
 
     if (hasGitIdentityRegistry) {
       console.log(chalk.gray(`  GitIdentityRegistry Contract: ${config.gitIdentityRegistryAddress}`));
@@ -77,11 +78,11 @@ export async function serverCommand(options: ServerOptions) {
         // Log service capabilities
         const stats = gitVerificationService.getStats();
         console.log(chalk.gray('  Git verification capabilities:'));
-        console.log(chalk.gray(`    SSH: ${stats.config.enableSSH ? '✅' : '❌'}`));
-        console.log(chalk.gray(`    GPG: ${stats.config.enableGPG ? '✅' : '❌'}`));
-        console.log(chalk.gray(`    X509: ${stats.config.enableX509 ? '✅' : '❌'}`));
-        console.log(chalk.gray(`    Auto-import keys: ${stats.config.autoImportKeys ? '✅' : '❌'}`));
-        console.log(chalk.gray(`    Caching: ${stats.config.enableCaching ? '✅' : '❌'}`));
+        console.log(chalk.gray(`    SSH: ${stats.config.enableSSH ? 'OK' : 'NOT AVAILABLE'}`));
+        console.log(chalk.gray(`    GPG: ${stats.config.enableGPG ? 'OK' : 'NOT AVAILABLE'}`));
+        console.log(chalk.gray(`    X509: ${stats.config.enableX509 ? 'OK' : 'NOT AVAILABLE'}`));
+        console.log(chalk.gray(`    Auto-import keys: ${stats.config.autoImportKeys ? 'OK' : 'NOT AVAILABLE'}`));
+        console.log(chalk.gray(`    Caching: ${stats.config.enableCaching ? 'OK' : 'NOT AVAILABLE'}`));
       } else {
         console.log(chalk.yellow('⚠️ Git verification service initialization failed'));
         gitVerificationService = null;
@@ -89,11 +90,24 @@ export async function serverCommand(options: ServerOptions) {
     }
 
     // Define the arbitration logic with Git key verification
-    const arbitrate = async (obligation: any, demand: any) => {
-      console.log("Arbitrating obligation:", obligation, "against demand:", demand);
+    const arbitrate = async (attestation: any) => {
+      console.log("Arbitrating attestation:", attestation);
+
+      // Decode the obligation data from the attestation
+      const obligationData = client.extractObligationData(
+        parseAbiParameters("(string commitHash,uint8 commitAlgo,string[] hosts,address sender)"),
+        attestation
+      );
+      
+      // Get the escrow attestation and decode demand data
+      const escrowAttestation = await client.getEscrowAttestation(attestation);
+      const demandData = client.extractDemandData(
+        parseAbiParameters("(string testsCommitHash, string testsCommand, uint8 testsCommitAlgo, string[] hosts)"),
+        escrowAttestation
+      );
 
       // Extract sender address from the obligation
-      const senderAddress = obligation[0].sender;
+      const senderAddress = obligationData[3];
       console.log(`🔍 Fulfillment submitted by: ${senderAddress}`);
 
       // Step 1: Verify Git key registration and commit signature (if enabled)
@@ -134,8 +148,8 @@ export async function serverCommand(options: ServerOptions) {
             console.log('🔐 Verifying commit signature using git verify-commit...');
             
             const verificationResult = await gitVerificationService.verifyCommit(
-              obligation[0].hosts[0],
-              obligation[0].commitHash,
+              obligationData[2][0],
+              obligationData[0],
               registeredKeys
             );
             
@@ -174,12 +188,12 @@ export async function serverCommand(options: ServerOptions) {
         const testConfig = GitTestExecution.initConfig();
 
         // Configure repositories from obligation and demand
-        testConfig.repositories.testcase.url = demand[0].hosts[0];
-        testConfig.repositories.testcase.commitHash = demand[0].testsCommitHash;
-        testConfig.repositories.testcase.testCommand = demand[0].testsCommand;
+        testConfig.repositories.testcase.url = demandData[3][0];
+        testConfig.repositories.testcase.commitHash = demandData[0];
+        testConfig.repositories.testcase.testCommand = demandData[1];
 
-        testConfig.repositories.source.url = obligation[0].hosts[0];
-        testConfig.repositories.source.commitHash = obligation[0].commitHash;
+        testConfig.repositories.source.url = obligationData[2][0];
+        testConfig.repositories.source.commitHash = obligationData[0];
 
         // Note: install, build, and test commands will be auto-detected from package.json
         // unless explicitly configured above
@@ -210,43 +224,46 @@ export async function serverCommand(options: ServerOptions) {
       }
     };
 
-    // Set up arbitration parameters
-    const arbitrationParams = {
-      escrow: {
-        attester: client.contractAddresses.erc20EscrowObligation,
-        demandAbi: parseAbiParameters("(string testsCommitHash, string testsCommand, uint8 testsCommitAlgo, string[] hosts)"),
-      },
-      fulfillment: {
-        attester: config.commitObligationAddress as `0x${string}`,
-        obligationAbi: parseAbiParameters("(string commitHash,uint8 commitAlgo,string[] hosts,address sender)"),
-      },
-      arbitrate,
-      onAfterArbitrate: async (decision: any) => {
-        console.log(chalk.green(`✓ Arbitration completed: ${decision.decision ? 'PASSED' : 'FAILED'}`));
-        console.log(chalk.gray(`  Transaction Hash: ${decision.hash}`));
-        console.log(chalk.gray(`  Escrow UID: ${decision.escrowAttestation?.uid}`));
-        console.log(chalk.gray(`  Fulfillment UID: ${decision.attestation.uid}`));
-      },
-      pollingInterval,
-    };
-
     if (options.past) {
       console.log(chalk.yellow('Arbitrating past obligations...'));
 
-      const decisions = await client.oracle.arbitratePast(arbitrationParams);
-      console.log("Arbitration Params: ", arbitrationParams);
-      console.log("Decisions: ", decisions);
+      const decisions = await client.oracle.arbitratePast(arbitrate, {
+        skipAlreadyArbitrated: true,
+        onAfterArbitrate: async (decision: any) => {
+          console.log(chalk.green(`✓ Arbitration completed: ${decision.decision ? 'PASSED' : 'FAILED'}`));
+          console.log(chalk.gray(`  Transaction Hash: ${decision.hash}`));
+          console.log(chalk.gray(`  Attestation UID: ${decision.attestation.uid}`));
+        },
+      });
 
       console.log(chalk.green(`✓ Arbitration completed for ${decisions.length} past obligations`));
-      console.log(chalk.gray(`  Escrows processed: ${decisions.length}`));
       console.log(chalk.gray(`  Decisions made: ${decisions.length}`));
 
       process.exit(0);
     } else {
       console.log(chalk.yellow('Listening for new obligations and arbitrating...'));
-      console.log(chalk.gray('Press Ctrl+C to stop the server'));
+      console.log(chalk.gray('Server is watching for ArbitrationRequested events where:'));
+      console.log(chalk.gray(`  - Contract: ${client.contractAddresses.trustedOracleArbiter}`));
+      console.log(chalk.gray(`  - Oracle Address: ${config.address}`));
+      console.log(chalk.gray(`  - Polling Interval: ${pollingInterval}ms`));
+      console.log(chalk.gray('Press Ctrl+C to stop the server\n'));
 
-      const { unwatch } = await client.oracle.listenAndArbitrate(arbitrationParams);
+      const { unwatch, decisions } = await client.oracle.listenAndArbitrate(arbitrate, {
+        skipAlreadyArbitrated: true,
+        onAfterArbitrate: async (decision: any) => {
+          console.log(chalk.green(`✓ Arbitration completed: ${decision.decision ? 'PASSED' : 'FAILED'}`));
+          console.log(chalk.gray(`  Transaction Hash: ${decision.hash}`));
+          console.log(chalk.gray(`  Attestation UID: ${decision.attestation.uid}`));
+        },
+        pollingInterval,
+      });
+
+      // Log any past decisions that were processed
+      if (decisions.length > 0) {
+        console.log(chalk.green(`✓ Processed ${decisions.length} past arbitration requests`));
+      } else {
+        console.log(chalk.gray('No past arbitration requests found. Waiting for new requests...'));
+      }
 
       // Handle graceful shutdown
       process.on('SIGINT', () => {
