@@ -103,10 +103,14 @@ export async function fulfillCommand(options: FulfillOptions) {
       // Get the escrow to find the oracle address
       const escrowAttestation = await client.getEscrowAttestation({ refUID: options.escrowUid as `0x${string}` });
       
-      // Parse the escrow demand to get oracle address
-      // The oracle address is encoded in the demand data as (address oracle, bytes data)
+      // First decode the escrow obligation structure: (address arbiter, bytes demand, address token, uint256 amount)
+      const escrowAbi = parseAbiParameters("(address arbiter, bytes demand, address token, uint256 amount)");
+      const decodedEscrow = decodeAbiParameters(escrowAbi, escrowAttestation.data);
+      const demandBytes = decodedEscrow[0].demand;
+      
+      // Then decode the TrustedOracleDemand from the demand bytes: (address oracle, bytes data)
       const demandAbi = parseAbiParameters("(address oracle, bytes data)");
-      const decodedDemand = decodeAbiParameters(demandAbi, escrowAttestation.data);
+      const decodedDemand = decodeAbiParameters(demandAbi, demandBytes);
       const oracleAddress = decodedDemand[0].oracle;
       
       console.log(chalk.gray(`  Oracle Address: ${oracleAddress}`));
