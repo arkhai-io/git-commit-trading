@@ -107,7 +107,8 @@ export async function serverCommand(options: ServerOptions) {
       );
 
       // Extract sender address from the obligation
-      const senderAddress = obligationData[3];
+      const obligation = obligationData[0];
+      const senderAddress = obligation.sender;
       console.log(`🔍 Fulfillment submitted by: ${senderAddress}`);
 
       // Step 1: Verify Git key registration and commit signature (if enabled)
@@ -148,8 +149,8 @@ export async function serverCommand(options: ServerOptions) {
             console.log('🔐 Verifying commit signature using git verify-commit...');
             
             const verificationResult = await gitVerificationService.verifyCommit(
-              obligationData[2][0],
-              obligationData[0],
+              obligation.hosts[0],
+              obligation.commitHash,
               registeredKeys
             );
             
@@ -187,13 +188,16 @@ export async function serverCommand(options: ServerOptions) {
       try {
         const testConfig = GitTestExecution.initConfig();
 
+        // Extract demand data
+        const demand = demandData[0];
+        
         // Configure repositories from obligation and demand
-        testConfig.repositories.testcase.url = demandData[3][0];
-        testConfig.repositories.testcase.commitHash = demandData[0];
-        testConfig.repositories.testcase.testCommand = demandData[1];
+        testConfig.repositories.testcase.url = demand.hosts[0];
+        testConfig.repositories.testcase.commitHash = demand.testsCommitHash;
+        testConfig.repositories.testcase.testCommand = demand.testsCommand;
 
-        testConfig.repositories.source.url = obligationData[2][0];
-        testConfig.repositories.source.commitHash = obligationData[0];
+        testConfig.repositories.source.url = obligation.hosts[0];
+        testConfig.repositories.source.commitHash = obligation.commitHash;
 
         // Note: install, build, and test commands will be auto-detected from package.json
         // unless explicitly configured above
