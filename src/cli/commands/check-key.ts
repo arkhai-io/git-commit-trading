@@ -49,7 +49,7 @@ export async function checkKeyCommand(options: CheckKeyOptions) {
       }
 
       console.log(chalk.yellow('\nWhat this means:'));
-      console.log(chalk.yellow('  • Git commits signed with this SSH key are linked to your Ethereum address'));
+      console.log(chalk.yellow('  • Git commits signed with this SSH / PGP key are linked to your Ethereum address'));
       console.log(chalk.yellow('  • You can fulfill escrows and prove authorship of commits'));
       console.log(chalk.yellow('  • The oracle will verify your commit signatures against this registered key'));
 

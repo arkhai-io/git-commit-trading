@@ -134,20 +134,96 @@ export async function validatePGPKey(pgpKey: string): Promise<{
     try {
         const key = await openpgp.readKey({ armoredKey: pgpKey });
         
+        // Validate key structure
+        if (!key.isPrivate() && !key.toPublic()) {
+            throw new Error('Invalid PGP key structure');
+        }
+        
+        // Check for primary key
+        if (!key.keyPacket) {
+            throw new Error('PGP key missing primary key packet');
+        }
+        
+        // Validate user IDs
+        const userIds = key.getUserIDs();
+        if (!userIds || userIds.length === 0) {
+            throw new Error('PGP key must have at least one user ID');
+        }
+        
         const primaryUser = await key.getPrimaryUser();
+        if (!primaryUser || !primaryUser.user) {
+            throw new Error('PGP key must have a primary user');
+        }
+        
         const keyPacket = key.keyPacket;
         
+        // Validate key IDs
         const keyIds = key.getKeyIDs();
-        const firstKeyId = keyIds.length > 0 ? keyIds[0] : null;
+        if (!keyIds || keyIds.length === 0) {
+            throw new Error('PGP key must have at least one key ID');
+        }
+        
+        const firstKeyId = keyIds[0];
         const keyId = firstKeyId ? firstKeyId.toHex() : '';
+        if (!keyId) {
+            throw new Error('Failed to extract key ID from PGP key');
+        }
+        
+        // Validate fingerprint
+        const fingerprint = key.getFingerprint();
+        if (!fingerprint || fingerprint.length < 40) {
+            throw new Error('Invalid or missing PGP key fingerprint');
+        }
+        
         const expirationTime = await key.getExpirationTime();
         
+        // Extract key size with proper validation
+        let keySize = 0;
+        try {
+            if ((keyPacket as any).getBitSize) {
+                keySize = (keyPacket as any).getBitSize();
+            } else if ((keyPacket as any).publicParams) {
+                // For RSA keys, try to get key size from public parameters
+                const publicParams = (keyPacket as any).publicParams;
+                if (publicParams.n && publicParams.n.bitLength) {
+                    keySize = publicParams.n.bitLength();
+                }
+            }
+            
+            // If we got a valid key size, validate it
+            if (keySize > 0 && keySize < 1024) {
+                throw new Error(`Key size (${keySize} bits) is too small and insecure`);
+            }
+            
+            // Note: keySize of 0 means we couldn't determine it, which is acceptable
+            // for some key types (like ECC keys). The key structure validation above
+            // already confirmed the key is valid.
+        } catch (error) {
+            if (error instanceof Error && error.message.includes('Key size')) {
+                throw error; // Re-throw our validation errors
+            }
+            // If we can't extract key size, log but don't fail
+            // The key structure has already been validated above
+            keySize = 0;
+        }
+        
+        // Validate algorithm
+        const algorithm = String(keyPacket.algorithm);
+        if (!algorithm || algorithm === 'undefined') {
+            throw new Error('PGP key has invalid or missing algorithm');
+        }
+        
+        // Validate creation time
+        if (!keyPacket.created || !(keyPacket.created instanceof Date)) {
+            throw new Error('PGP key has invalid or missing creation time');
+        }
+
         return {
             keyId,
-            fingerprint: key.getFingerprint(),
-            userIds: key.getUserIDs(),
-            algorithm: String(keyPacket.algorithm) || 'unknown',
-            keySize: (keyPacket as any).getBitSize ? (keyPacket as any).getBitSize() : 0,
+            fingerprint,
+            userIds,
+            algorithm,
+            keySize,
             creationTime: keyPacket.created,
             expirationTime: expirationTime instanceof Date ? expirationTime : undefined
         };
@@ -304,18 +380,72 @@ export async function validateKeyForGitSigning(keyType: KeyType, keyMaterial: st
     try {
         switch (keyType) {
             case KeyType.PGPv4: {
-                const metadata = await validatePGPKey(keyMaterial);
-                
-                // Check expiration
-                if (metadata.expirationTime && metadata.expirationTime < new Date()) {
-                    errors.push('PGP key has expired');
-                } else if (metadata.expirationTime && metadata.expirationTime < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)) {
-                    warnings.push('PGP key will expire within 30 days');
+                // Validate PGP key structure and metadata
+                let metadata;
+                try {
+                    metadata = await validatePGPKey(keyMaterial);
+                } catch (validationError) {
+                    errors.push(`PGP key validation failed: ${validationError instanceof Error ? validationError.message : String(validationError)}`);
+                    break;
                 }
                 
-                // Check key size
-                if (metadata.keySize < 2048) {
-                    warnings.push(`PGP key size (${metadata.keySize} bits) is below recommended 2048 bits`);
+                // Check for required fields
+                if (!metadata.fingerprint) {
+                    errors.push('PGP key is missing fingerprint');
+                }
+                
+                if (!metadata.keyId) {
+                    errors.push('PGP key is missing key ID');
+                }
+                
+                if (!metadata.userIds || metadata.userIds.length === 0) {
+                    errors.push('PGP key must have at least one user ID');
+                }
+                
+                // Check creation time is not in the future
+                if (metadata.creationTime > new Date()) {
+                    errors.push('PGP key creation time is in the future');
+                }
+                
+                // Check expiration
+                if (metadata.expirationTime) {
+                    if (metadata.expirationTime < new Date()) {
+                        errors.push('PGP key has expired');
+                    } else if (metadata.expirationTime < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)) {
+                        warnings.push('PGP key will expire within 30 days');
+                    }
+                }
+                
+                // Check key size (if determinable)
+                if (metadata.keySize > 0) {
+                    if (metadata.keySize < 1024) {
+                        errors.push(`PGP key size (${metadata.keySize} bits) is dangerously small and insecure`);
+                    } else if (metadata.keySize < 2048) {
+                        warnings.push(`PGP key size (${metadata.keySize} bits) is below recommended 2048 bits`);
+                    }
+                } else {
+                    // Key size couldn't be determined (common with ECC keys)
+                    warnings.push('Could not determine PGP key size (this is normal for some key types like ECC)');
+                }
+                
+                // Check algorithm is supported
+                const supportedAlgorithms = ['1', '2', '3', '16', '17', '18', '19', '22']; // RSA, DSA, ElGamal, ECDH, ECDSA, EdDSA
+                if (!supportedAlgorithms.includes(metadata.algorithm)) {
+                    warnings.push(`PGP key algorithm (${metadata.algorithm}) may not be widely supported`);
+                }
+                
+                // Additional format validation
+                if (!keyMaterial.includes('-----BEGIN PGP PUBLIC KEY BLOCK-----')) {
+                    errors.push('PGP key must be in ASCII armored format');
+                }
+                
+                if (!keyMaterial.includes('-----END PGP PUBLIC KEY BLOCK-----')) {
+                    errors.push('PGP key is missing end marker');
+                }
+                
+                // Check for minimum key material length (rough estimate)
+                if (keyMaterial.length < 200) {
+                    errors.push('PGP key appears to be truncated or incomplete');
                 }
                 
                 break;

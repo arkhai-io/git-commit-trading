@@ -113,7 +113,7 @@ export async function fulfillCommand(options: FulfillOptions) {
       
       // Request arbitration
       const arbitrationTx = await client.oracle.requestArbitration(fulfillment.uid, oracleAddress);
-      console.log(chalk.green('✅ Arbitration requested successfully!'));
+      console.log(chalk.green('Arbitration requested successfully!'));
       console.log(chalk.gray(`  Arbitration Request Transaction: ${arbitrationTx}`));
       
     } catch (error) {

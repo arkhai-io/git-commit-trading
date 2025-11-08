@@ -10,6 +10,7 @@ import { listCommand } from './commands/list.js';
 import { newClientCommand } from './commands/new-client.js';
 import { registerKeyCommand } from './commands/register-key.js';
 import { checkKeyCommand } from './commands/check-key.js';
+import { clearCacheCommand } from './commands/clear-cache.js';
 
 const program = new Command();
 
@@ -34,6 +35,8 @@ program
   .option('--private-key-file <path>', 'Path to SSH private key file for signing (SSH keys only)')
   .option('--public-key-file <path>', 'Path to SSH public key file (alternative to --path for SSH keys)')
   .option('--pgp-key-file <path>', 'Path to PGP public key file (armored format)')
+  .option('--pgp-private-key-file <path>', 'Path to PGP private key file for signing (armored format)')
+  .option('--pgp-passphrase <passphrase>', 'Passphrase for encrypted PGP private key')
   .option('--x509-cert-file <path>', 'Path to X509 certificate file (PEM format)')
   .option('--key-type <type>', 'Key type (auto-detected from key content)', 'auto')
   .option('--skip-server-import', 'Skip importing key to server for local verification', false)
@@ -105,6 +108,16 @@ program
   .option('--skip-key-verification', 'Skip Git key verification (not recommended)', false)
   .option('--use-git-verify-commit', 'Use local git verify-commit for signature verification', true)
   .action(serverCommand);
+
+// Clear Cache command - Clear verification cache
+program
+  .command('clear-cache')
+  .description('Clear verification cache to force re-verification')
+  .option('--all', 'Clear all verification cache', false)
+  .option('--commit <hash>', 'Clear cache for specific commit')
+  .option('--repo <url>', 'Repository URL (required with --commit)')
+  .option('--keys', 'Clear key import cache', false)
+  .action(clearCacheCommand);
 
 // Global error handling
 program.on('command:*', () => {

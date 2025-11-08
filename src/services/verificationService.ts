@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import { createHash } from 'crypto';
 import type { GitKeyClaim } from '../clients/gitIdentityRegistry.js';
 import { GitCommitVerifier, type GitVerificationResult, type GitVerificationConfig } from '../utils/gitVerification.js';
 import { 
@@ -124,7 +125,9 @@ export class GitVerificationService {
 
     // Check cache first
     if (this.config.enableCaching) {
-      const cacheKey = `${repositoryUrl}:${commitHash}`;
+      // Include a hash of registered keys to invalidate cache when keys change
+      const keysHash = this.hashRegisteredKeys(registeredKeys);
+      const cacheKey = `${repositoryUrl}:${commitHash}:${keysHash}`;
       const cachedResult = this.getCachedResult(cacheKey);
       if (cachedResult) {
         console.log(chalk.gray('📋 Using cached verification result'));
@@ -149,7 +152,8 @@ export class GitVerificationService {
 
       // Cache the result
       if (this.config.enableCaching) {
-        const cacheKey = `${repositoryUrl}:${commitHash}`;
+        const keysHash = this.hashRegisteredKeys(registeredKeys);
+        const cacheKey = `${repositoryUrl}:${commitHash}:${keysHash}`;
         this.cacheResult(cacheKey, result);
       }
 
@@ -376,6 +380,37 @@ export class GitVerificationService {
     this.verificationCache.clear();
     this.keyImportCache.clear();
     console.log(chalk.gray('🗑️ Verification cache cleared'));
+  }
+
+  /**
+   * Clear cache for a specific commit verification
+   */
+  clearCommitCache(repositoryUrl: string, commitHash: string): void {
+    const cacheKey = `${repositoryUrl}:${commitHash}`;
+    if (this.verificationCache.delete(cacheKey)) {
+      console.log(chalk.gray(`🗑️ Cleared cache for commit ${commitHash.substring(0, 8)}`));
+    }
+  }
+
+  /**
+   * Clear cache for a specific address/key type combination
+   */
+  clearKeyImportCache(address: string, keyType: number): void {
+    const cacheKey = `import:${address}:${keyType}`;
+    if (this.keyImportCache.delete(cacheKey)) {
+      console.log(chalk.gray(`🗑️ Cleared key import cache for ${address}`));
+    }
+  }
+
+  /**
+   * Generate a hash of registered keys for cache invalidation
+   */
+  private hashRegisteredKeys(registeredKeys: Map<string, GitKeyClaim>): string {
+    const keyData = Array.from(registeredKeys.entries())
+      .sort(([a], [b]) => a.localeCompare(b)) // Sort for consistent hash
+      .map(([address, claim]) => `${address}:${claim.keyType}:${claim.publicKey}`)
+      .join('|');
+    return createHash('sha256').update(keyData).digest('hex').substring(0, 8);
   }
 
   /**

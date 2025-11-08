@@ -27,6 +27,7 @@ temp/
 .env.test.local
 .env.production.local
 .env.local
+*.asc
 
 # caches
 .eslintcache

@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, statSync } from 'fs';
 import { createClientFromEnv, requireEnvFile, validateGitKeyEnv } from '../utils/envLoader.js';
 import { extractSSHKeyMaterial } from '../../utils/gitUtils.js';
 import { KeyType, createGitKeyClaim } from '../../clients/gitIdentityRegistry.js';
@@ -173,13 +173,12 @@ function readPGPPrivateKey(options: RegisterKeyOptions): string {
 
     const commonPaths = [
       `${homeDir}/.gnupg/secring.gpg`,
-      `${homeDir}/.gnupg/private-keys-v1.d`,
       `${homeDir}/.ssh/id_pgp.asc`,
       `${homeDir}/private.asc`
     ];
 
-    // For ASCII armored keys, check for .asc files
-    privateKeyPath = commonPaths.find(path => existsSync(path)) || '';
+    // For ASCII armored keys, check for .asc files - filter out directories
+    privateKeyPath = commonPaths.find(path => existsSync(path) && !statSync(path).isDirectory()) || '';
     
     if (!privateKeyPath) {
       throw new Error('No PGP private key found for signing. Use --pgp-private-key-file to specify the private key location.');
