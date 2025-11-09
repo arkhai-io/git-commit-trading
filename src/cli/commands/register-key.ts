@@ -241,14 +241,21 @@ export async function registerKeyCommand(options: RegisterKeyOptions) {
     }
     console.log(chalk.gray(`Key material prepared for storage (${keyMaterial.length} characters)`));
     
-    // Generate nonce and signing message
-    const nonce = `register_key_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const { createHash } = await import('crypto');
-    const nonceHash = createHash('sha256').update(nonce).digest('hex');
-    const signingMessage = generateSigningMessage(config.address as `0x${string}`, nonce);
+    // Generate nonce that fits in bytes32 (32 bytes = 64 hex chars)
+    // Format: timestamp(8 bytes) + random(24 bytes) = 32 bytes total
+    // This allows us to verify signatures later since we can retrieve the exact nonce
+    const crypto = await import('crypto');
+    const timestamp = Date.now();
+    const randomPart = crypto.randomBytes(24).toString('hex'); // 24 bytes = 48 hex chars
+    const timestampHex = timestamp.toString(16).padStart(16, '0'); // 8 bytes = 16 hex chars
+    const nonceHex = timestampHex + randomPart; // 64 hex chars = 32 bytes
+    const nonceHash = '0x' + nonceHex; // Store as bytes32 on-chain
+    
+    // Use the hex nonce for signing
+    const signingMessage = generateSigningMessage(config.address as `0x${string}`, nonceHex);
     
     console.log(chalk.gray('Generating signature...'));
-    console.log(chalk.gray(`Nonce: ${nonce}`));
+    console.log(chalk.gray(`Nonce (bytes32): ${nonceHash}`));
     console.log(chalk.gray(`Signing message: ${signingMessage}`));
     
     // Generate signature based on key type
@@ -299,7 +306,7 @@ export async function registerKeyCommand(options: RegisterKeyOptions) {
     console.log(chalk.gray(`  Key Type: ${getKeyTypeName(keyType)}`));
     console.log(chalk.gray(`  Public Key: ${keyMaterial.substring(0, 32)}...`));
     console.log(chalk.gray(`  Ethereum Address: ${config.address}`));
-    console.log(chalk.gray(`  Nonce: ${nonce}`));
+    console.log(chalk.gray(`  Nonce (bytes32): ${nonceHash}`));
     
     // Import key to server for local verification (if not skipped)
     if (!options.skipServerImport) {

@@ -4,6 +4,7 @@ import { createClientFromEnv, requireEnvFile } from '../utils/envLoader.js';
 import { GitTestExecution } from '../../test-execution/index.js';
 import { verifyGitKeyClaimSignature } from '../../utils/sshSignatureUtils.js';
 import { getGitVerificationService } from '../../services/verificationService.js';
+import { ArbitrateOptions } from '../../../contract/lib/alkahest-mocks/alkahest-ts/src/oracle/oracle';
 
 interface ServerOptions {
   port?: string;
@@ -252,8 +253,13 @@ export async function serverCommand(options: ServerOptions) {
       console.log(chalk.gray(`  - Polling Interval: ${pollingInterval}ms`));
       console.log(chalk.gray('Press Ctrl+C to stop the server\n'));
 
+      // // TODO: Re-check this options
+      // const arbitrateOpts = {} as ArbitrateOptions;
+      // arbitrateOpts.onlyNew = true;
+
       const { unwatch, decisions } = await client.oracle.listenAndArbitrate(arbitrate, {
         skipAlreadyArbitrated: true,
+        // arbitrateOpts,
         onAfterArbitrate: async (decision: any) => {
           console.log(chalk.green(`✓ Arbitration completed: ${decision.decision ? 'PASSED' : 'FAILED'}`));
           console.log(chalk.gray(`  Transaction Hash: ${decision.hash}`));

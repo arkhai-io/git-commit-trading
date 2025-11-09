@@ -286,16 +286,21 @@ export class GitVerificationService {
 
         case 1: // SSHEd25519
         case 2: // SSHSecp256k1
+          console.log(`   Checking SSH key for ${address}...`);
+          
           if (!this.config.enableSSH) {
+            console.log(`   ⏭️  SSH import disabled in config`);
             return 'skipped';
           }
 
           alreadyImported = await isSSHKeyImported(address);
           if (alreadyImported) {
+            console.log(`   ℹ️  SSH key already imported for ${address}`);
             this.keyImportCache.set(cacheKey, true);
             return 'skipped';
           }
 
+          console.log(`   ⬇️  Importing SSH key for ${address}...`);
           importSuccess = await importSSHKeyToServer(keyClaim.publicKey, address);
           break;
 

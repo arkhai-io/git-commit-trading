@@ -129,7 +129,6 @@ export async function fulfillCommand(options: FulfillOptions) {
     console.log(chalk.yellow('  1. The arbiter server will automatically test your solution'));
     console.log(chalk.yellow('  2. If tests pass, you can collect the reward with:'));
     console.log(chalk.yellow(`     git-escrows collect --escrow-uid ${options.escrowUid} --fulfillment-uid ${fulfillment.uid}`));
-    console.log(chalk.yellow('  3. Monitor the arbiter server logs for test results'));
 
     // Exit successfully
     process.exit(0);

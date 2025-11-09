@@ -172,8 +172,7 @@ export async function submitCommand(options: SubmitOptions) {
     
     console.log(chalk.yellow('\nNext steps:'));
     console.log(chalk.yellow('  1. Share the Escrow UID with developers'));
-    console.log(chalk.yellow('  2. Developers can fulfill using: git-escrows fulfill --escrow-uid ' + escrow.uid));
-    console.log(chalk.yellow('  3. Run the arbiter server: git-escrows server'));
+    console.log(chalk.yellow('  2. Developers can fulfill using: git-escrows fulfill --escrow-uid ' + escrow.uid + ' --solution-repo "https://git.repo" --solution-algo "sha1" --solution-commit "developer-commit-hash"'));
 
     // Exit successfully
     process.exit(0);

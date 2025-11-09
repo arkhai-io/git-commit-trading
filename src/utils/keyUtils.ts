@@ -511,18 +511,42 @@ export async function importSSHKeyToServer(publicKey: string, identity: string):
     try {
         const fs = await import('fs/promises');
         const path = await import('path');
+        const { exec } = await import('child_process');
+        const { promisify } = await import('util');
+        const execAsync = promisify(exec);
         
-        // Ensure SSH directory exists
-        const sshDir = path.join(process.env.HOME || '/tmp', '.ssh');
-        await fs.mkdir(sshDir, { recursive: true, mode: 0o700 });
+        // Try to get the allowed signers file from Git config first
+        let allowedSignersFile: string;
         
-        const allowedSignersFile = path.join(sshDir, 'allowed_signers');
+        try {
+            const { stdout: configOutput } = await execAsync(
+                'git config --get gpg.ssh.allowedSignersFile',
+                { timeout: 5000 }
+            );
+            allowedSignersFile = configOutput.trim();
+            console.log(`🔑 Using Git-configured allowed signers file: ${allowedSignersFile}`);
+        } catch (error) {
+            // No config found, use default
+            const sshDir = path.join(process.env.HOME || '/tmp', '.ssh');
+            await fs.mkdir(sshDir, { recursive: true, mode: 0o700 });
+            allowedSignersFile = path.join(sshDir, 'allowed_signers');
+            console.log(`🔑 No Git config found, using default: ${allowedSignersFile}`);
+        }
+        
+        // Ensure parent directory exists
+        const fileDir = path.dirname(allowedSignersFile);
+        await fs.mkdir(fileDir, { recursive: true, mode: 0o700 });
+        
+        console.log(`🔑 Importing SSH key to: ${allowedSignersFile}`);
+        console.log(`   Identity: ${identity}`);
+        console.log(`   Public Key: ${publicKey.substring(0, 50)}...`);
         
         // Normalize SSH key format
         let formattedKey = publicKey.trim();
         if (!formattedKey.startsWith('ssh-')) {
             // Assume it's just the key material and prepend ssh-ed25519
             formattedKey = `ssh-ed25519 ${formattedKey}`;
+            console.log(`   Formatted to: ssh-ed25519 ${publicKey.substring(0, 30)}...`);
         }
         
         // Format: identity key_type key_material
@@ -532,11 +556,12 @@ export async function importSSHKeyToServer(publicKey: string, identity: string):
         try {
             const existingContent = await fs.readFile(allowedSignersFile, 'utf-8');
             if (existingContent.includes(signerEntry.trim())) {
-                console.log(`SSH key for ${identity} already exists in allowed_signers`);
+                console.log(`   ℹ️  SSH key for ${identity} already exists in allowed_signers`);
                 return true;
             }
+            console.log(`   📝 Appending to existing allowed_signers file (${existingContent.split('\n').length} existing entries)`);
         } catch (error) {
-            // File doesn't exist yet, which is fine
+            console.log(`   📝 Creating new allowed_signers file`);
         }
         
         // Append to allowed signers file
@@ -545,7 +570,11 @@ export async function importSSHKeyToServer(publicKey: string, identity: string):
         // Set proper permissions
         await fs.chmod(allowedSignersFile, 0o600);
         
+        // Verify the file was written
+        const finalContent = await fs.readFile(allowedSignersFile, 'utf-8');
         console.log(`✅ SSH key imported to allowed_signers for identity: ${identity}`);
+        console.log(`   File now has ${finalContent.split('\n').filter(l => l.trim()).length} entries`);
+        
         return true;
         
     } catch (error) {
@@ -726,15 +755,56 @@ export async function isSSHKeyImported(identity: string): Promise<boolean> {
     try {
         const fs = await import('fs/promises');
         const path = await import('path');
+        const { exec } = await import('child_process');
+        const { promisify } = await import('util');
+        const execAsync = promisify(exec);
         
-        const sshDir = path.join(process.env.HOME || '/tmp', '.ssh');
-        const allowedSignersFile = path.join(sshDir, 'allowed_signers');
+        // Try to get the allowed signers file from Git config first
+        let allowedSignersFile: string;
+        
+        try {
+            const { stdout: configOutput } = await execAsync(
+                'git config --get gpg.ssh.allowedSignersFile',
+                { timeout: 5000 }
+            );
+            allowedSignersFile = configOutput.trim();
+        } catch (error) {
+            // No config found, use default
+            const sshDir = path.join(process.env.HOME || '/tmp', '.ssh');
+            allowedSignersFile = path.join(sshDir, 'allowed_signers');
+        }
+        
+        console.log(`   🔍 Checking if SSH key exists for ${identity}`);
+        console.log(`      File: ${allowedSignersFile}`);
         
         try {
             const content = await fs.readFile(allowedSignersFile, 'utf-8');
-            return content.includes(`${identity} `);
+            const lines = content.split('\n');
+            
+            // Check for valid entry (not just a comment)
+            const hasValidEntry = lines.some(line => {
+                const trimmed = line.trim();
+                // Skip empty lines and comments
+                if (!trimmed || trimmed.startsWith('#')) {
+                    return false;
+                }
+                // Check if line starts with the identity
+                return trimmed.startsWith(`${identity} `);
+            });
+            
+            console.log(`      File exists: true`);
+            console.log(`      Total lines: ${lines.length}`);
+            console.log(`      Valid entry found: ${hasValidEntry}`);
+            
+            if (hasValidEntry) {
+                const matchingLine = lines.find(line => line.trim().startsWith(`${identity} `));
+                console.log(`      Entry: ${matchingLine?.substring(0, 80)}...`);
+            }
+            
+            return hasValidEntry;
         } catch (error) {
             if ((error as any).code === 'ENOENT') {
+                console.log(`      File exists: false`);
                 return false;
             }
             throw error;

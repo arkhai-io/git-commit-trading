@@ -301,11 +301,38 @@ export class GitCommitVerifier {
     stderr: string;
   }> {
     try {
+      // Get the currently configured allowed signers file from Git config
+      let allowedSignersFile: string | undefined;
+      
+      try {
+        const { stdout: configOutput } = await execAsync(
+          'git config --get gpg.ssh.allowedSignersFile',
+          { cwd: workDir, timeout: 5000 }
+        );
+        allowedSignersFile = configOutput.trim();
+        console.log(`   Using Git-configured allowed signers file: ${allowedSignersFile}`);
+      } catch (error) {
+        // No config found, use default
+        const path = await import('path');
+        const sshDir = path.join(process.env.HOME || '/tmp', '.ssh');
+        allowedSignersFile = path.join(sshDir, 'allowed_signers');
+        console.log(`   No Git config found, using default: ${allowedSignersFile}`);
+      }
+      
+      // Use GIT_CONFIG_GLOBAL to override config (more reliable than -c flag)
+      const env = {
+        ...process.env,
+        GIT_CONFIG_COUNT: '1',
+        GIT_CONFIG_KEY_0: 'gpg.ssh.allowedSignersFile',
+        GIT_CONFIG_VALUE_0: allowedSignersFile,
+      };
+      
       const { stdout, stderr } = await execAsync(
         `git verify-commit --raw ${commitHash}`,
         {
           cwd: workDir,
           timeout: this.config.timeoutMs,
+          env,
         }
       );
       

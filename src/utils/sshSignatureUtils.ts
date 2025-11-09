@@ -533,23 +533,20 @@ export function verifyGitKeyClaimSignature(
         console.log("  Address:", ethAddress);
         console.log("  Key Type:", getKeyTypeName(gitKeyClaim.keyType));
 
-        // Extract nonce from the nonceHash (since we're storing it as hex, not keccak256)
-        const nonceHash = gitKeyClaim.nonceHash.replace('0x', '');
-        let nonce: string;
-
-        try {
-            // Try to decode the nonce from hex
-            const nonceBuffer = Buffer.from(nonceHash, 'hex');
-            // Remove null bytes that might be present due to padding
-            const trimmedBuffer = Buffer.from(nonceBuffer.filter(byte => byte !== 0));
-            nonce = trimmedBuffer.toString('utf8');
-            console.log("  Extracted nonce:", nonce);
-        } catch (error) {
-            console.log("  ❌ Could not extract nonce from nonceHash");
+        // Extract nonce directly from nonceHash (it's stored as plaintext bytes32, not hashed)
+        // Format: 64 hex chars = 32 bytes (timestamp 8 bytes + random 24 bytes)
+        const nonceHex = gitKeyClaim.nonceHash.replace('0x', '');
+        
+        // Validate the nonce format
+        if (nonceHex.length !== 64) {
+            console.log(`  ❌ Invalid nonce format: expected 64 hex chars, got ${nonceHex.length}`);
             return false;
         }
+        
+        console.log("  Nonce (hex):", nonceHex);
 
-        const expectedMessage = generateSigningMessage(ethAddress, nonce);
+        // Reconstruct the signed message using the hex nonce directly
+        const expectedMessage = generateSigningMessage(ethAddress, nonceHex);
         console.log("  Expected signed message:", expectedMessage);
 
         // Verify the actual signature using SSH cryptographic verification
