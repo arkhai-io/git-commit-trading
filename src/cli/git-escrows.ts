@@ -101,6 +101,7 @@ program
   .description('Run the arbiter server to listen and arbitrate escrows')
   .option('--past', 'Arbitrate past obligations and exit')
   .option('--listen', 'Listen for new obligations and arbitrate continuously')
+  .option('--transport <type>', 'Transport type: http or websocket (default: http)', 'http')
   .option('--port <port>', 'Server port (deprecated)', '3000')
   .option('--polling-interval <ms>', 'Polling interval for new escrows (ms)', '1000')
   .option('--timeout <ms>', 'Test execution timeout (ms)', '300000')

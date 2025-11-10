@@ -4,7 +4,6 @@ import { createClientFromEnv, requireEnvFile } from '../utils/envLoader.js';
 import { GitTestExecution } from '../../test-execution/index.js';
 import { verifyGitKeyClaimSignature } from '../../utils/sshSignatureUtils.js';
 import { getGitVerificationService } from '../../services/verificationService.js';
-import { ArbitrateOptions } from '../../../contract/lib/alkahest-mocks/alkahest-ts/src/oracle/oracle';
 
 interface ServerOptions {
   port?: string;
@@ -15,6 +14,7 @@ interface ServerOptions {
   listen?: boolean;
   skipKeyVerification?: boolean;
   useGitVerifyCommit?: boolean;
+  transport?: 'http' | 'websocket';
 }
 
 export async function serverCommand(options: ServerOptions) {
@@ -34,9 +34,11 @@ export async function serverCommand(options: ServerOptions) {
     const timeout = parseInt(options.timeout || '300000');
     const cleanup = options.cleanup !== false;
     const useGitVerifyCommit = options.useGitVerifyCommit ?? true;
+    const transport = options.transport || 'http';
 
     console.log(chalk.gray('Server configuration:'));
     console.log(chalk.gray(`  Mode: ${options.past ? 'Arbitrate Past' : 'Listen and Arbitrate'}`));
+    console.log(chalk.gray(`  Transport: ${transport.toUpperCase()}`));
     console.log(chalk.gray(`  Polling Interval: ${pollingInterval}ms`));
     console.log(chalk.gray(`  Test Timeout: ${timeout}ms`));
     console.log(chalk.gray(`  Cleanup: ${cleanup}`));
@@ -46,7 +48,7 @@ export async function serverCommand(options: ServerOptions) {
     requireEnvFile();
 
     console.log(chalk.gray('Setting up blockchain client...'));
-    const { client, config, hasCommitObligation, hasGitIdentityRegistry } = await createClientFromEnv();
+    const { client, config, hasCommitObligation, hasGitIdentityRegistry } = await createClientFromEnv('.env', transport);
 
     if (!hasCommitObligation) {
       throw new Error('COMMIT_OBLIGATION_ADDRESS is required in .env file for the server command');
