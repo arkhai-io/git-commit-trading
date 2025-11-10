@@ -403,7 +403,9 @@ export function generateSSHSignature(privateKeyDataOrPath: string, message: stri
 
         // Create signer with appropriate hash
         const signer = privateKey.createSign(hashAlgo);
-        signer.update(message);
+        // IMPORTANT: Convert message to Buffer explicitly to match verification
+        const messageBuffer = Buffer.from(message, 'utf8');
+        signer.update(messageBuffer);
         const signature = signer.sign();
 
         // Convert signature to hex
