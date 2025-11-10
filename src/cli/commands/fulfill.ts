@@ -116,6 +116,7 @@ export async function fulfillCommand(options: FulfillOptions) {
       console.log(chalk.gray(`  Oracle Address: ${oracleAddress}`));
       
       // Request arbitration
+      await new Promise(resolve => setTimeout(resolve, 2000));
       const arbitrationTx = await client.oracle.requestArbitration(fulfillment.uid, oracleAddress);
       console.log(chalk.green('Arbitration requested successfully!'));
       console.log(chalk.gray(`  Arbitration Request Transaction: ${arbitrationTx}`));

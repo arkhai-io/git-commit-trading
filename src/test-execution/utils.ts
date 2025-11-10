@@ -44,20 +44,92 @@ export async function executeCommand(
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   return new Promise((resolve, reject) => {
     const { timeout = 30000, ...spawnOptions } = options;
+    
+    // Ensure node_modules/.bin is in PATH for npm scripts to work properly
+    const cwd = spawnOptions.cwd || process.cwd();
+    const nodeModulesBin = path.join(cwd.toString(), 'node_modules', '.bin');
+    const currentPath = process.env.PATH || '';
+    const debugMode = process.env.DEBUG === 'true';
+    
+    // Check if node_modules/.bin is already in PATH to avoid duplicates
+    const pathEntries = currentPath.split(path.delimiter);
+    const isAlreadyInPath = pathEntries.some(entry => entry === nodeModulesBin);
+    
+    const enhancedPath = isAlreadyInPath 
+      ? currentPath 
+      : `${nodeModulesBin}${path.delimiter}${currentPath}`;
+    
+    // Always log command execution details for debugging
+    if (debugMode) {
+      console.log(chalk.gray(`[EXEC] Running: ${command} ${args.join(' ')}`));
+      console.log(chalk.gray(`[EXEC] Working directory: ${cwd}`));
+      if (isAlreadyInPath) {
+        console.log(chalk.gray(`[EXEC] node_modules/.bin already in PATH: ${nodeModulesBin}`));
+      } else {
+        console.log(chalk.gray(`[EXEC] node_modules/.bin added to PATH: ${nodeModulesBin}`));
+      }
+    }
+    
+    // Try to find where the binary actually is
+    try {
+      const { execSync } = require('child_process');
+      const whichCommand = process.platform === 'win32' ? 'where' : 'which';
+      
+      // For npm/node commands, show where they're found
+      if (['npm', 'node', 'npx', 'tsc', 'yarn', 'pnpm', 'bun'].includes(command)) {
+        try {
+          const binaryPath = execSync(`${whichCommand} ${command}`, { 
+            encoding: 'utf8',
+            env: { ...process.env, PATH: enhancedPath }
+          }).trim();
+          if (debugMode) {
+            console.log(chalk.gray(`[EXEC] Binary found at: ${binaryPath}`));
+          }
+        } catch (e) {
+          console.log(chalk.yellow(`[EXEC] Warning: ${command} not found in PATH`));
+        }
+      }
+      
+      // For shell commands (sh, cmd), just note we're using shell
+      if (command === 'sh' || command === 'cmd') {
+        console.log(chalk.gray(`[EXEC] Using shell to execute compound command`));
+      }
+    } catch (e) {
+      // Ignore errors in binary detection
+    }
+    
+    // Debug: Additional verbose info
+    if (debugMode) {
+      console.log(chalk.gray(`[DEBUG] Full PATH: ${enhancedPath.substring(0, 200)}...`));
+    }
+    
     const child = spawn(command, args, {
       stdio: 'pipe',
       ...spawnOptions,
+      env: {
+        ...process.env,
+        ...spawnOptions.env,
+        PATH: enhancedPath,
+      },
     });
 
     let stdout = '';
     let stderr = '';
 
     child.stdout?.on('data', (data: any) => {
-      stdout += data.toString();
+      const text = data.toString();
+      stdout += text;
+      if (debugMode) {
+        process.stdout.write(chalk.gray('[STDOUT] ') + text);
+      }
     });
 
     child.stderr?.on('data', (data: any) => {
-      stderr += data.toString();
+      const text = data.toString();
+      stderr += text;
+      if (debugMode) {
+        process.stderr.write(chalk.yellow('[STDERR] ') + text);
+      }
     });
 
     const timeoutId = setTimeout(() => {

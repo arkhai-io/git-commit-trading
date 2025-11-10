@@ -211,6 +211,27 @@ export class TestExecutor {
   private async installDependencies(): Promise<void> {
     let installCommand: string;
     
+    // Log package.json being used
+    try {
+      const fs = await import('fs');
+      const packageJsonPath = path.join(this.mergedDir, 'package.json');
+      if (fs.existsSync(packageJsonPath)) {
+        const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+        Logger.step('package.json found:');
+        console.log(chalk.gray(`   Name: ${packageJson.name || 'N/A'}`));
+        console.log(chalk.gray(`   Dependencies: ${Object.keys(packageJson.dependencies || {}).length}`));
+        console.log(chalk.gray(`   DevDependencies: ${Object.keys(packageJson.devDependencies || {}).length}`));
+        
+        // Show TypeScript if present
+        const allDeps = { ...packageJson.dependencies, ...packageJson.devDependencies };
+        if (allDeps.typescript) {
+          console.log(chalk.gray(`   TypeScript version: ${allDeps.typescript}`));
+        }
+      }
+    } catch (error) {
+      Logger.warning(`Could not read package.json: ${error}`);
+    }
+    
     // First try to get install command from config (Alice's testcase repo)
     if (this.config.repositories.testcase.installCommand) {
       installCommand = this.config.repositories.testcase.installCommand;
@@ -258,6 +279,45 @@ export class TestExecutor {
     }
     
     Logger.success('Dependencies installed successfully');
+    
+    // Log installed packages for debugging
+    try {
+      const fs = await import('fs');
+      const nodeModulesPath = path.join(this.mergedDir, 'node_modules');
+      const nodeModulesBinPath = path.join(nodeModulesPath, '.bin');
+      
+      // Check if node_modules exists
+      if (fs.existsSync(nodeModulesPath)) {
+        Logger.step(`node_modules directory exists at: ${nodeModulesPath}`);
+        
+        // Check .bin directory
+        if (fs.existsSync(nodeModulesBinPath)) {
+          const binFiles = fs.readdirSync(nodeModulesBinPath);
+          Logger.step(`Found ${binFiles.length} binaries in node_modules/.bin/`);
+          
+          // Log key binaries
+          const keyBinaries = ['tsc', 'typescript', 'ts-node', 'jest', 'mocha'];
+          const foundBinaries = binFiles.filter(f => keyBinaries.includes(f));
+          if (foundBinaries.length > 0) {
+            Logger.step(`Key binaries found: ${foundBinaries.join(', ')}`);
+          }
+        } else {
+          Logger.warning(`node_modules/.bin directory not found at: ${nodeModulesBinPath}`);
+        }
+        
+        // Check for TypeScript specifically
+        const typescriptPath = path.join(nodeModulesPath, 'typescript');
+        if (fs.existsSync(typescriptPath)) {
+          Logger.step('TypeScript package is installed');
+        } else {
+          Logger.warning('TypeScript package not found in node_modules');
+        }
+      } else {
+        Logger.warning(`node_modules directory not found at: ${nodeModulesPath}`);
+      }
+    } catch (error) {
+      Logger.warning(`Could not verify node_modules: ${error}`);
+    }
   }
 
   private async buildSource(): Promise<void> {
@@ -354,10 +414,13 @@ export class TestExecutor {
 
       const duration = Date.now() - startTime;
 
+      // Combine stdout and stderr for complete output
+      const combinedOutput = result.stdout + (result.stderr ? '\n' + result.stderr : '');
+
       return {
         success: result.exitCode === 0,
-        output: result.stdout,
-        error: result.exitCode !== 0 ? result.stderr : undefined,
+        output: combinedOutput,
+        error: result.exitCode !== 0 ? (result.stderr || `Command exited with code ${result.exitCode}`) : undefined,
         duration,
         timestamp: new Date(),
       };

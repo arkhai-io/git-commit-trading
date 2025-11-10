@@ -39,7 +39,7 @@ export class GitVerificationService {
       enableX509: config.enableX509 ?? true,
       cleanupAfterVerification: config.cleanupAfterVerification ?? true,
       autoImportKeys: config.autoImportKeys ?? true,
-      enableCaching: config.enableCaching ?? false,
+      enableCaching: config.enableCaching ?? true,
       cacheExpiryMs: config.cacheExpiryMs || 3600000, // 1 hour
     };
 

@@ -220,8 +220,41 @@ export async function serverCommand(options: ServerOptions) {
         });
 
         console.log(`\n🎯 Test execution result: ${result.testResult.success ? 'PASSED ✅' : 'FAILED ❌'}`);
-        if (!result.testResult.success && result.testResult.error) {
-          console.log('   Error details:', result.testResult.error);
+        console.log(`   Duration: ${result.testResult.duration}ms`);
+        
+        if (!result.testResult.success) {
+          console.log('\n❌ Test Failure Details:');
+          
+          if (result.testResult.error) {
+            console.log('   Error:', result.testResult.error);
+          }
+          
+          if (result.testResult.output && result.testResult.output.trim()) {
+            console.log('\n   Test Output:');
+            console.log('   ' + '─'.repeat(70));
+            // Print last 100 lines of output to avoid overwhelming logs
+            const outputLines = result.testResult.output.split('\n');
+            const linesToShow = outputLines.slice(-100);
+            if (outputLines.length > 100) {
+              console.log(`   ... (showing last 100 of ${outputLines.length} lines)`);
+            }
+            linesToShow.forEach(line => console.log('   ' + line));
+            console.log('   ' + '─'.repeat(70));
+          } else {
+            console.log('   (No output captured from test execution)');
+          }
+          
+          // Log execution status for debugging
+          console.log('\n   Execution Status:');
+          console.log(`   - Source cloned: ${result.sourceCloned ? '✓' : '✗'}`);
+          console.log(`   - Testcase cloned: ${result.testcaseCloned ? '✓' : '✗'}`);
+          console.log(`   - Dependencies installed: ${result.dependenciesInstalled ? '✓' : '✗'}`);
+          console.log(`   - Tests executed: ${result.testsExecuted ? '✓' : '✗'}`);
+          
+          // If working directory still exists, suggest manual inspection
+          if (result.workingDirectory) {
+            console.log(`\n   💡 For debugging, inspect: ${result.workingDirectory}`);
+          }
         }
 
         return result.testResult.success;
