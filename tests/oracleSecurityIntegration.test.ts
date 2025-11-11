@@ -179,7 +179,7 @@ describe("Oracle CommitObligation Integration Tests", () => {
                         // For testing purposes, we'll mock this validation since we're using dummy signatures
                         // In production, this would do real cryptographic verification
                         const isTestSignature = senderKeyClaim.sig === "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
-                        const isValidClaim = isTestSignature ? true : verifyGitKeyClaimSignature(senderKeyClaim, senderAddress);
+                        const isValidClaim = isTestSignature ? true : await verifyGitKeyClaimSignature(senderKeyClaim, senderAddress);
 
                         if (!isValidClaim) {
                             console.log("❌ SECURITY VIOLATION: GitKeyClaim signature is invalid");

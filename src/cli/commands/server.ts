@@ -140,7 +140,7 @@ export async function serverCommand(options: ServerOptions) {
 
           // Verify the GitKeyClaim signature itself
           console.log('🔐 Verifying GitKeyClaim signature...');
-          const isValidClaim = verifyGitKeyClaimSignature(senderKeyClaim, senderAddress);
+          const isValidClaim = await verifyGitKeyClaimSignature(senderKeyClaim, senderAddress);
           if (!isValidClaim) {
             console.log('❌ GitKeyClaim signature is invalid');
             return false;

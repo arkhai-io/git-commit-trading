@@ -3,7 +3,7 @@ import { readFileSync, existsSync, statSync } from 'fs';
 import { createClientFromEnv, requireEnvFile, validateGitKeyEnv } from '../utils/envLoader.js';
 import { extractSSHKeyMaterial } from '../../utils/gitUtils.js';
 import { KeyType, createGitKeyClaim } from '../../clients/gitIdentityRegistry.js';
-import { generateSigningMessage, generateSSHSignature } from '../../utils/sshSignatureUtils.js';
+import { generateSigningMessage, generateSSHSignature, generatePGPSignature } from '../../utils/sshSignatureUtils.js';
 import { 
     detectKeyTypeFromContent, 
     formatKeyForStorage, 
@@ -13,7 +13,6 @@ import {
     importGPGKeyToServer,
     isSSHKeyImported,
     isGPGKeyImported,
-    generatePGPSignature,
     preparePGPKeyForRegistration,
     extractPGPKeyMaterial
 } from '../../utils/keyUtils.js';
@@ -271,10 +270,9 @@ export async function registerKeyCommand(options: RegisterKeyOptions) {
       
       console.log(chalk.gray('Generating PGP signature...'));
       try {
-        const pgpSignature = await generatePGPSignature(signingMessage, privateKeyContent, passphrase);
-        
-        // Convert PGP signature to hex format for blockchain storage
-        signature = '0x' + Buffer.from(pgpSignature).toString('hex');
+        // generatePGPSignature already returns hex-encoded cleartext signature
+        const pgpSignatureHex = await generatePGPSignature(privateKeyContent, signingMessage, passphrase);
+        signature = '0x' + pgpSignatureHex;
       } catch (error) {
         throw new Error(`Failed to generate PGP signature: ${error}`);
       }

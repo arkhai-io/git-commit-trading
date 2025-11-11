@@ -4,7 +4,8 @@ import * as openpgp from 'openpgp';
 import { X509Certificate } from '@peculiar/x509';
 
 // Import the GitKeyClaim type and KeyType enum
-import type { GitKeyClaim, KeyType } from '../clients/gitIdentityRegistry';
+import type { GitKeyClaim } from '../clients/gitIdentityRegistry';
+import { KeyType } from '../clients/gitIdentityRegistry';
 
 /**
  * @deprecated This function was designed for GitHub API verification which has been removed.
@@ -526,10 +527,10 @@ export function generateSigningMessage(ethAddress: string, nonce: string): strin
  * @param ethAddress - Ethereum address that should have been signed
  * @returns True if the signature is valid
  */
-export function verifyGitKeyClaimSignature(
+export async function verifyGitKeyClaimSignature(
     gitKeyClaim: GitKeyClaim,
     ethAddress: string
-): boolean {
+): Promise<boolean> {
     try {
         console.log("🔍 Verifying GitKeyClaim signature:");
         console.log("  Address:", ethAddress);
@@ -551,26 +552,32 @@ export function verifyGitKeyClaimSignature(
         const expectedMessage = generateSigningMessage(ethAddress, nonceHex);
         console.log("  Expected signed message:", expectedMessage);
 
-        // Verify the actual signature using SSH cryptographic verification
         const signature = gitKeyClaim.sig.replace('0x', '');
         console.log(`  Signature from contract: ${signature.slice(0, 20)}... (length: ${signature.length})`);
 
-        const keyTypeForVerification = getKeyTypeName(gitKeyClaim.keyType).toLowerCase().replace('ssh ', '');
-        console.log(`  Key type for verification: "${keyTypeForVerification}"`);
-
-        const isSignatureValid = verifySSHSignature(
-            gitKeyClaim.publicKey,
-            expectedMessage,
-            signature,
-            keyTypeForVerification
-        );
-
-        if (isSignatureValid) {
-            console.log("  ✅ Cryptographic signature verification passed!");
-            return true;
+        // Route to appropriate verifier based on key type
+        if (gitKeyClaim.keyType === KeyType.PGPv4) {
+            console.log("  Using PGP signature verification");
+            return await verifyPGPKeyClaimSignature(gitKeyClaim, expectedMessage);
         } else {
-            console.log("  ❌ Cryptographic signature verification failed!");
-            return false;
+            // SSH signature verification
+            const keyTypeForVerification = getKeyTypeName(gitKeyClaim.keyType).toLowerCase().replace('ssh ', '');
+            console.log(`  Key type for verification: "${keyTypeForVerification}"`);
+
+            const isSignatureValid = verifySSHSignature(
+                gitKeyClaim.publicKey,
+                expectedMessage,
+                signature,
+                keyTypeForVerification
+            );
+
+            if (isSignatureValid) {
+                console.log("  ✅ Cryptographic signature verification passed!");
+                return true;
+            } else {
+                console.log("  ❌ Cryptographic signature verification failed!");
+                return false;
+            }
         }
     } catch (error) {
         console.error("❌ Error verifying GitKeyClaim signature:", error);
@@ -579,11 +586,127 @@ export function verifyGitKeyClaimSignature(
 }
 
 /**
- * Generate a PGP signature for the GitKeyClaim
+ * Verify PGP signature for GitKeyClaim registration
+ * 
+ * This function verifies that:
+ * 1. The signature was created with the private key corresponding to the public key
+ * 2. The signed message matches the expected format: "[eth_address] [nonce]"
+ * 
+ * Process:
+ * 1. Decode hex signature back to cleartext armored format
+ * 2. Parse cleartext message (extracts both message text and signature)
+ * 3. Verify signature cryptographically using public key
+ * 4. Verify message content matches expected message
+ * 
+ * @param gitKeyClaim - The Git key claim with PGP signature (signature is hex-encoded cleartext)
+ * @param expectedMessage - The message that should have been signed (format: "[eth_address] [nonce]")
+ * @returns Promise<boolean> - True if signature is valid and message matches
+ */
+async function verifyPGPKeyClaimSignature(
+    gitKeyClaim: GitKeyClaim,
+    expectedMessage: string
+): Promise<boolean> {
+    try {
+        console.log("  🔐 PGP key claim signature verification");
+        
+        // Decode the hex signature back to armored format
+        const signatureHex = gitKeyClaim.sig.replace('0x', '');
+        const signatureBuffer = Buffer.from(signatureHex, 'hex');
+        const armoredSignature = signatureBuffer.toString('utf8');
+        
+        console.log(`    Signature length: ${signatureHex.length} hex chars`);
+        console.log(`    Decoded signature starts with: ${armoredSignature.substring(0, 50)}...`);
+        
+        // Parse the PGP public key
+        let publicKey: openpgp.Key;
+        try {
+            if (gitKeyClaim.publicKey.includes("-----BEGIN PGP PUBLIC KEY BLOCK-----")) {
+                publicKey = await openpgp.readKey({ armoredKey: gitKeyClaim.publicKey });
+            } else {
+                // Key material only - construct armored format
+                const armoredKey = `-----BEGIN PGP PUBLIC KEY BLOCK-----\n\n${gitKeyClaim.publicKey}\n-----END PGP PUBLIC KEY BLOCK-----`;
+                publicKey = await openpgp.readKey({ armoredKey });
+            }
+            console.log("    ✅ PGP public key parsed successfully");
+        } catch (error) {
+            console.log("    ❌ Failed to parse PGP public key:", error);
+            return false;
+        }
+        
+        // Parse the signature
+        if (!armoredSignature.includes("-----BEGIN PGP SIGNATURE-----")) {
+            console.log("    ❌ Invalid PGP signature format - missing signature header");
+            return false;
+        }
+        
+        try {
+            // For cleartext signatures, we need to read the whole message
+            const cleartextMessage = await openpgp.readCleartextMessage({ 
+                cleartextMessage: armoredSignature 
+            });
+            
+            // Verify the signature
+            const verificationResult = await openpgp.verify({
+                message: cleartextMessage,
+                verificationKeys: publicKey
+            });
+            
+            // Check verification results
+            if (verificationResult.signatures && verificationResult.signatures.length > 0) {
+                const firstSignature = verificationResult.signatures[0];
+                if (firstSignature) {
+                    const verified = await firstSignature.verified;
+                    
+                    // Also verify the message content matches
+                    const signedMessage = cleartextMessage.getText();
+                    const messageMatches = signedMessage.trim() === expectedMessage.trim();
+                    
+                    console.log(`    Message match: ${messageMatches}`);
+                    console.log(`    Expected: "${expectedMessage}"`);
+                    console.log(`    Got: "${signedMessage}"`);
+                    
+                    if (verified && messageMatches) {
+                        console.log("    ✅ PGP signature verification passed");
+                        return true;
+                    } else {
+                        console.log(`    ❌ PGP signature verification failed (verified=${verified}, messageMatches=${messageMatches})`);
+                        return false;
+                    }
+                }
+            }
+            
+            console.log("    ❌ No valid signatures found");
+            return false;
+            
+        } catch (error) {
+            console.log("    ❌ Error during PGP signature verification:", error);
+            return false;
+        }
+    } catch (error) {
+        console.error("  ❌ Unexpected error in PGP key claim verification:", error);
+        return false;
+    }
+}
+
+/**
+ * Generate a PGP signature for GitKeyClaim registration
+ * 
+ * This function creates a cleartext PGP signature that includes both the message
+ * and the signature in one armored block. This is required for proper verification.
+ * 
+ * Flow:
+ * 1. Creates cleartext message from input
+ * 2. Signs with PGP private key
+ * 3. Returns full cleartext signature (message + signature) as hex string
+ * 4. Hex string is stored on blockchain with 0x prefix
+ * 5. During verification, hex is decoded back to cleartext format
+ * 6. Cleartext message is parsed to extract both message and signature
+ * 7. Message content is verified to match expected signing message
+ * 
  * @param privateKeyArmored - PGP private key in armored format
+ * @param message - Message to sign (format: "[eth_address] [nonce]")
  * @param passphrase - Passphrase for the private key (optional)
- * @param message - Message to sign
- * @returns Signature as hex string
+ * @returns Hex-encoded cleartext signature (includes both message and signature)
  */
 export async function generatePGPSignature(
     privateKeyArmored: string, 
@@ -615,23 +738,18 @@ export async function generatePGPSignature(
         const clearMessage = await openpgp.createCleartextMessage({ text: message });
 
         // Sign the message
-        const signature = await openpgp.sign({
+        const cleartextSignature = await openpgp.sign({
             message: clearMessage,
             signingKeys: decryptedPrivateKey,
             format: 'armored'
         });
 
-        // Extract just the signature part (remove the message part from cleartext signature)
-        const signatureMatch = signature.match(/-----BEGIN PGP SIGNATURE-----[\s\S]*?-----END PGP SIGNATURE-----/);
-        if (signatureMatch) {
-            const signatureOnly = signatureMatch[0];
-            // Convert to hex format for contract storage
-            const signatureBytes = Buffer.from(signatureOnly, 'utf8');
-            const signatureHex = signatureBytes.toString('hex');
-            return signatureHex;
-        } else {
-            throw new Error("Failed to extract PGP signature from signed message");
-        }
+        // Return the FULL cleartext signature (includes both message and signature)
+        // This is needed for verification to work properly
+        // The verifier will extract and verify both parts
+        const signatureBytes = Buffer.from(cleartextSignature as string, 'utf8');
+        const signatureHex = signatureBytes.toString('hex');
+        return signatureHex;
     } catch (error) {
         console.error("❌ Error generating PGP signature:", error);
         console.log("⚠️  Falling back to mock signature for testing");

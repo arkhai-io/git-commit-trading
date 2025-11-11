@@ -622,7 +622,7 @@ describe("Oracle CommitObligation Tests", () => {
                     // First verify the GitKeyClaim signature itself
                     console.log("\n🔐 Verifying GitKeyClaim signature...");
                     // Extract and verify nonce from the claim itself
-                    const isValidClaim = verifyGitKeyClaimSignature(
+                    const isValidClaim = await verifyGitKeyClaimSignature(
                         senderKeyClaim,
                         senderAddress
                     );
