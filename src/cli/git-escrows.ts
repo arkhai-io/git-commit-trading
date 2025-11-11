@@ -10,7 +10,6 @@ import { listCommand } from './commands/list.js';
 import { newClientCommand } from './commands/new-client.js';
 import { registerKeyCommand } from './commands/register-key.js';
 import { checkKeyCommand } from './commands/check-key.js';
-import { clearCacheCommand } from './commands/clear-cache.js';
 
 const program = new Command();
 
@@ -109,16 +108,6 @@ program
   .option('--skip-key-verification', 'Skip Git key verification (not recommended)', false)
   .option('--use-git-verify-commit', 'Use local git verify-commit for signature verification', true)
   .action(serverCommand);
-
-// Clear Cache command - Clear verification cache
-program
-  .command('clear-cache')
-  .description('Clear verification cache to force re-verification')
-  .option('--all', 'Clear all verification cache', false)
-  .option('--commit <hash>', 'Clear cache for specific commit')
-  .option('--repo <url>', 'Repository URL (required with --commit)')
-  .option('--keys', 'Clear key import cache', false)
-  .action(clearCacheCommand);
 
 // Global error handling
 program.on('command:*', () => {

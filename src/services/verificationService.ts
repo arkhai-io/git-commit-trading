@@ -220,9 +220,13 @@ export class GitVerificationService {
    */
   async importSingleKey(address: string, keyClaim: GitKeyClaim): Promise<'imported' | 'skipped' | 'failed'> {
     try {
+      console.log(chalk.gray(`   🔑 Processing key import for address: ${address}`));
+      console.log(chalk.gray(`      Key type: ${keyClaim.keyType}, Public key: ${keyClaim.publicKey.substring(0, 30)}...`));
+      
       // Check cache first
       const cacheKey = `import:${address}:${keyClaim.keyType}`;
       if (this.keyImportCache.has(cacheKey)) {
+        console.log(chalk.gray(`      ⏭️  Skipped (in cache)`));
         return 'skipped';
       }
 
@@ -375,35 +379,6 @@ export class GitVerificationService {
       if (now > cached.expiresAt) {
         this.verificationCache.delete(key);
       }
-    }
-  }
-
-  /**
-   * Clear all caches
-   */
-  clearCache(): void {
-    this.verificationCache.clear();
-    this.keyImportCache.clear();
-    console.log(chalk.gray('🗑️ Verification cache cleared'));
-  }
-
-  /**
-   * Clear cache for a specific commit verification
-   */
-  clearCommitCache(repositoryUrl: string, commitHash: string): void {
-    const cacheKey = `${repositoryUrl}:${commitHash}`;
-    if (this.verificationCache.delete(cacheKey)) {
-      console.log(chalk.gray(`🗑️ Cleared cache for commit ${commitHash.substring(0, 8)}`));
-    }
-  }
-
-  /**
-   * Clear cache for a specific address/key type combination
-   */
-  clearKeyImportCache(address: string, keyType: number): void {
-    const cacheKey = `import:${address}:${keyType}`;
-    if (this.keyImportCache.delete(cacheKey)) {
-      console.log(chalk.gray(`🗑️ Cleared key import cache for ${address}`));
     }
   }
 
