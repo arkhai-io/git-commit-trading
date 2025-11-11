@@ -629,11 +629,15 @@ async function verifyPGPKeyClaimSignature(
                     const verified = await firstSignature.verified;
                     
                     // Also verify the message content matches
-                    const signedMessage = cleartextMessage.getText();
-                    const messageMatches = signedMessage.trim() === expectedMessage.trim();
+                    const signedMessage = cleartextMessage.getText().trim();
+                    const expectedMessageTrimmed = expectedMessage.trim();
+                    
+                    // Case-insensitive comparison for the address part
+                    // This handles keys registered before address normalization was added
+                    const messageMatches = signedMessage.toLowerCase() === expectedMessageTrimmed.toLowerCase();
                     
                     console.log(`    Message match: ${messageMatches}`);
-                    console.log(`    Expected: "${expectedMessage}"`);
+                    console.log(`    Expected: "${expectedMessageTrimmed}"`);
                     console.log(`    Got: "${signedMessage}"`);
                     
                     if (verified && messageMatches) {

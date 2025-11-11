@@ -134,4 +134,46 @@ describe("PGP Key Claim Signature", () => {
         expect(isValid).toBe(false);
         console.log("  ✅ Signature from wrong key correctly rejected!");
     }, 30000);
+    
+    test("should verify PGP signature with mixed-case address (backward compatibility)", async () => {
+        console.log("🧪 Testing PGP signature with mixed-case address");
+        console.log("  This tests backward compatibility for keys registered before address normalization");
+        
+        // Generate a test PGP key pair
+        const { privateKey: privateKeyArmored, publicKey: publicKeyArmored } = await openpgp.generateKey({
+            type: 'rsa',
+            rsaBits: 2048,
+            userIDs: [{ name: 'Test User', email: 'test@example.com' }],
+            passphrase: 'test-passphrase',
+            format: 'armored'
+        });
+        
+        // Use a mixed-case address (as it was before normalization)
+        const mixedCaseAddress = "0x84Fa6d4087B267e2D1B158Ffa277338Da725746b";
+        const nonceHex = "0000019a71c719f4b67c110f0938cb771204117b7120a7a3bf2c54f426f45550";
+        
+        // Manually create the signing message with mixed-case (simulating old behavior)
+        const oldStyleMessage = `${mixedCaseAddress} ${nonceHex}`;
+        console.log(`  Old-style signing message: ${oldStyleMessage}`);
+        
+        // Generate signature with the mixed-case message
+        const signatureHex = await generatePGPSignature(privateKeyArmored, oldStyleMessage, 'test-passphrase');
+        console.log(`  ✅ Signature generated with mixed-case address`);
+        
+        // Create a mock GitKeyClaim
+        const gitKeyClaim = {
+            keyType: KeyType.PGPv4,
+            nonceHash: ('0x' + nonceHex) as `0x${string}`,
+            sig: ('0x' + signatureHex) as `0x${string}`,
+            publicKey: publicKeyArmored
+        };
+        
+        // Verify with lowercase address (current behavior)
+        const lowercaseAddress = mixedCaseAddress.toLowerCase();
+        console.log(`  Verifying with lowercase address: ${lowercaseAddress}`);
+        const isValid = await verifyGitKeyClaimSignature(gitKeyClaim, lowercaseAddress);
+        
+        expect(isValid).toBe(true);
+        console.log("  ✅ Mixed-case signature verified with lowercase address (backward compatible)!");
+    }, 30000);
 });
