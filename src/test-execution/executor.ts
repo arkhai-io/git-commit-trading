@@ -275,7 +275,26 @@ export class TestExecutor {
     );
 
     if (result.exitCode !== 0) {
-      throw new Error(`Dependency installation failed: ${result.stderr}`);
+      // Provide helpful error message for common issues
+      let errorMsg = `Dependency installation failed: ${result.stderr || result.stdout}`;
+      
+      // Check for specific error patterns and provide guidance
+      if (result.stderr.includes('source: not found') || result.stderr.includes('source: command not found')) {
+        errorMsg += '\n\n⚠️  Shell compatibility issue detected. This may be because:';
+        errorMsg += '\n  - Your system uses "sh" instead of "bash"';
+        errorMsg += '\n  - Python virtual environment commands need bash';
+        errorMsg += '\n\nTrying to fix: The system will attempt to use bash for Python commands.';
+      }
+      
+      if (result.stderr.includes('python3: not found') || result.stderr.includes('python: not found')) {
+        errorMsg += '\n\n⚠️  Python not found. Please ensure Python 3 is installed on your system.';
+      }
+      
+      if (result.stderr.includes('cargo: not found')) {
+        errorMsg += '\n\n⚠️  Cargo not found. Please ensure Rust and Cargo are installed on your system.';
+      }
+      
+      throw new Error(errorMsg);
     }
     
     Logger.success('Dependencies installed successfully');

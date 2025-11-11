@@ -37,6 +37,24 @@ export class Logger {
   }
 }
 
+/**
+ * Check if bash is available on the system
+ */
+let bashAvailableCache: boolean | null = null;
+export async function isBashAvailable(): Promise<boolean> {
+  if (bashAvailableCache !== null) {
+    return bashAvailableCache;
+  }
+  
+  return new Promise((resolve) => {
+    const { exec } = require('child_process');
+    exec('bash --version', (error: any) => {
+      bashAvailableCache = !error;
+      resolve(bashAvailableCache);
+    });
+  });
+}
+
 export async function executeCommand(
   command: string,
   args: string[],
@@ -45,29 +63,45 @@ export async function executeCommand(
   return new Promise((resolve, reject) => {
     const { timeout = 30000, ...spawnOptions } = options;
     
-    // Ensure node_modules/.bin is in PATH for npm scripts to work properly
     const cwd = spawnOptions.cwd || process.cwd();
-    const nodeModulesBin = path.join(cwd.toString(), 'node_modules', '.bin');
     const currentPath = process.env.PATH || '';
     const debugMode = process.env.DEBUG === 'true';
     
-    // Check if node_modules/.bin is already in PATH to avoid duplicates
-    const pathEntries = currentPath.split(path.delimiter);
-    const isAlreadyInPath = pathEntries.some(entry => entry === nodeModulesBin);
+    // Only add node_modules/.bin to PATH for Node.js/npm/yarn/pnpm/bun commands
+    // Don't pollute PATH for Python, Rust, or other language commands
+    const isNodeCommand = ['npm', 'node', 'npx', 'yarn', 'pnpm', 'bun', 'tsc', 'jest', 'mocha', 'vitest'].includes(command);
+    const isShellWithNodeCommand = (command === 'sh' || command === 'bash') && 
+                                   args.some(arg => arg.includes('npm') || arg.includes('yarn') || 
+                                                   arg.includes('pnpm') || arg.includes('bun') ||
+                                                   arg.includes('node_modules'));
     
-    const enhancedPath = isAlreadyInPath 
-      ? currentPath 
-      : `${nodeModulesBin}${path.delimiter}${currentPath}`;
+    let enhancedPath = currentPath;
+    
+    if (isNodeCommand || isShellWithNodeCommand) {
+      // Add node_modules/.bin for Node.js commands
+      const nodeModulesBin = path.join(cwd.toString(), 'node_modules', '.bin');
+      const pathEntries = currentPath.split(path.delimiter);
+      const isAlreadyInPath = pathEntries.some(entry => entry === nodeModulesBin);
+      
+      enhancedPath = isAlreadyInPath 
+        ? currentPath 
+        : `${nodeModulesBin}${path.delimiter}${currentPath}`;
+      
+      if (debugMode) {
+        if (isAlreadyInPath) {
+          console.log(chalk.gray(`[EXEC] node_modules/.bin already in PATH: ${nodeModulesBin}`));
+        } else {
+          console.log(chalk.gray(`[EXEC] node_modules/.bin added to PATH: ${nodeModulesBin}`));
+        }
+      }
+    } else if (debugMode) {
+      console.log(chalk.gray(`[EXEC] Skipping node_modules/.bin (not a Node.js command)`));
+    }
     
     // Always log command execution details for debugging
     if (debugMode) {
       console.log(chalk.gray(`[EXEC] Running: ${command} ${args.join(' ')}`));
       console.log(chalk.gray(`[EXEC] Working directory: ${cwd}`));
-      if (isAlreadyInPath) {
-        console.log(chalk.gray(`[EXEC] node_modules/.bin already in PATH: ${nodeModulesBin}`));
-      } else {
-        console.log(chalk.gray(`[EXEC] node_modules/.bin added to PATH: ${nodeModulesBin}`));
-      }
     }
     
     // Try to find where the binary actually is
@@ -230,7 +264,6 @@ export function parseCommand(fullCommand: string): { command: string; args: stri
   
   if (hasShellOperators) {
     // For compound commands, we need to run them in a shell
-    // Use 'sh' on Unix-like systems, 'cmd' on Windows
     const isWindows = process.platform === 'win32';
     
     if (isWindows) {
@@ -239,10 +272,26 @@ export function parseCommand(fullCommand: string): { command: string; args: stri
         args: ['/c', trimmedCommand]
       };
     } else {
-      return {
-        command: 'sh',
-        args: ['-c', trimmedCommand]
-      };
+      // Check if command contains Python venv or other bash-specific features
+      // Use bash for better compatibility with Python virtual environments
+      const needsBash = trimmedCommand.includes('venv/bin/') || 
+                       trimmedCommand.includes('source ') ||
+                       trimmedCommand.includes('pipenv ') ||
+                       trimmedCommand.includes('python3 -m venv');
+      
+      if (needsBash) {
+        // Use bash for Python commands (venv paths work fine in both sh and bash)
+        // But bash has better compatibility overall
+        return {
+          command: 'bash',
+          args: ['-c', trimmedCommand]
+        };
+      } else {
+        return {
+          command: 'sh',
+          args: ['-c', trimmedCommand]
+        };
+      }
     }
   }
   

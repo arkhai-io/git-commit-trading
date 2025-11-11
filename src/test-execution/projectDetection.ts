@@ -385,35 +385,78 @@ async function detectPythonProject(projectPath: string): Promise<PythonDetection
     const requirementsPath = path.join(projectPath, 'requirements.txt');
     const setupPyPath = path.join(projectPath, 'setup.py');
     const pipfilePath = path.join(projectPath, 'Pipfile');
+    const poetryLockPath = path.join(projectPath, 'poetry.lock');
+    const uvLockPath = path.join(projectPath, 'uv.lock');
+    const pdmLockPath = path.join(projectPath, 'pdm.lock');
     
     let hasConfigFile = false;
     let configType = '';
+    let toolType: 'poetry' | 'uv' | 'pdm' | 'pipenv' | 'pip' | 'unknown' = 'unknown';
     
-    // Check for pyproject.toml (modern Python projects)
+    // Check for lock files first (highest priority - they indicate the actual tool being used)
     try {
-      await fs.access(pyprojectPath);
+      await fs.access(poetryLockPath);
       hasConfigFile = true;
-      configType = 'pyproject.toml';
+      configType = 'poetry.lock';
+      toolType = 'poetry';
     } catch {
-      // Check for requirements.txt
       try {
-        await fs.access(requirementsPath);
+        await fs.access(uvLockPath);
         hasConfigFile = true;
-        configType = 'requirements.txt';
+        configType = 'uv.lock';
+        toolType = 'uv';
       } catch {
-        // Check for setup.py
         try {
-          await fs.access(setupPyPath);
+          await fs.access(pdmLockPath);
           hasConfigFile = true;
-          configType = 'setup.py';
+          configType = 'pdm.lock';
+          toolType = 'pdm';
         } catch {
-          // Check for Pipfile
+          // Check for pyproject.toml and parse it to determine tool
           try {
-            await fs.access(pipfilePath);
+            await fs.access(pyprojectPath);
             hasConfigFile = true;
-            configType = 'Pipfile';
+            configType = 'pyproject.toml';
+            
+            // Read pyproject.toml to detect tool
+            const pyprojectContent = await fs.readFile(pyprojectPath, 'utf-8');
+            
+            if (pyprojectContent.includes('[tool.poetry]')) {
+              toolType = 'poetry';
+            } else if (pyprojectContent.includes('[tool.uv]')) {
+              toolType = 'uv';
+            } else if (pyprojectContent.includes('[tool.pdm]')) {
+              toolType = 'pdm';
+            } else if (pyprojectContent.includes('[build-system]')) {
+              // Generic pyproject.toml, use pip
+              toolType = 'pip';
+            }
           } catch {
-            // No config file found
+            // Check for Pipfile
+            try {
+              await fs.access(pipfilePath);
+              hasConfigFile = true;
+              configType = 'Pipfile';
+              toolType = 'pipenv';
+            } catch {
+              // Check for requirements.txt
+              try {
+                await fs.access(requirementsPath);
+                hasConfigFile = true;
+                configType = 'requirements.txt';
+                toolType = 'pip';
+              } catch {
+                // Check for setup.py
+                try {
+                  await fs.access(setupPyPath);
+                  hasConfigFile = true;
+                  configType = 'setup.py';
+                  toolType = 'pip';
+                } catch {
+                  // No config file found
+                }
+              }
+            }
           }
         }
       }
@@ -434,42 +477,74 @@ async function detectPythonProject(projectPath: string): Promise<PythonDetection
       };
     }
 
-    // Generate Python commands based on detected config type
+    // Generate Python commands based on detected tool
     let commands: PythonCommands;
     
-    switch (configType) {
-      case 'pyproject.toml':
+    switch (toolType) {
+      case 'poetry':
         commands = {
-          installCommand: 'python3 -m venv venv && source venv/bin/activate && pip install pytest && pip install -e .',
-          buildCommand: 'source venv/bin/activate && python -m build',
-          testCommand: 'source venv/bin/activate && python -m pytest'
+          installCommand: 'poetry install',
+          buildCommand: 'poetry build',
+          testCommand: 'poetry run pytest'
         };
         break;
-      case 'requirements.txt':
+      
+      case 'uv':
         commands = {
-          installCommand: 'python3 -m venv venv && source venv/bin/activate && pip install pytest && pip install -r requirements.txt',
-          buildCommand: 'echo "No build command needed for Python"',
-          testCommand: 'source venv/bin/activate && python -m pytest'
+          installCommand: 'uv sync',
+          buildCommand: 'uv build',
+          testCommand: 'uv run pytest'
         };
         break;
-      case 'setup.py':
+      
+      case 'pdm':
         commands = {
-          installCommand: 'python3 -m venv venv && source venv/bin/activate && pip install pytest && pip install -e .',
-          buildCommand: 'source venv/bin/activate && python setup.py build',
-          testCommand: 'source venv/bin/activate && python -m pytest'
+          installCommand: 'pdm install',
+          buildCommand: 'pdm build',
+          testCommand: 'pdm run pytest'
         };
         break;
-      case 'Pipfile':
+      
+      case 'pipenv':
         commands = {
-          installCommand: 'pipenv install',
+          installCommand: 'pipenv install --dev',
           buildCommand: 'echo "No build command needed for Python"',
           testCommand: 'pipenv run pytest'
         };
         break;
+      
+      case 'pip':
+        if (configType === 'pyproject.toml') {
+          commands = {
+            installCommand: 'python3 -m venv venv && venv/bin/pip install --upgrade pip && venv/bin/pip install pytest && venv/bin/pip install -e .',
+            buildCommand: 'venv/bin/python -m build',
+            testCommand: 'venv/bin/python -m pytest'
+          };
+        } else if (configType === 'requirements.txt') {
+          commands = {
+            installCommand: 'python3 -m venv venv && venv/bin/pip install --upgrade pip && venv/bin/pip install pytest && venv/bin/pip install -r requirements.txt',
+            buildCommand: 'echo "No build command needed for Python"',
+            testCommand: 'venv/bin/python -m pytest'
+          };
+        } else if (configType === 'setup.py') {
+          commands = {
+            installCommand: 'python3 -m venv venv && venv/bin/pip install --upgrade pip && venv/bin/pip install pytest && venv/bin/pip install -e .',
+            buildCommand: 'venv/bin/python setup.py build',
+            testCommand: 'venv/bin/python -m pytest'
+          };
+        } else {
+          commands = {
+            installCommand: 'pip3 install --user pytest',
+            buildCommand: 'echo "No build command needed for Python"',
+            testCommand: 'python3 -m pytest'
+          };
+        }
+        break;
+      
       default:
         // Fallback for when we have Python files but no specific config
         commands = {
-          installCommand: 'echo "No dependencies to install"',
+          installCommand: 'pip3 install --user pytest',
           buildCommand: 'echo "No build command needed for Python"',
           testCommand: 'python3 -m pytest'
         };
@@ -543,49 +618,52 @@ async function checkIsTypeScriptProject(projectPath: string, packageJson: any): 
 
 /**
  * Extracts install, build, and test commands from package.json scripts for TypeScript projects
+ * Returns script names (not full commands) - the package manager will be prepended later
  */
 function extractTypeScriptCommands(scripts: Record<string, string>): PackageJsonCommands | null {
-  // Determine install command - keep as default since it's not typically in scripts
-  let installCommand = 'npm install'; // Default fallback
+  // Determine install command - this will be replaced by package manager detection
+  let installCommand = 'npm install'; // Placeholder, will be updated
 
-  // Determine build command - use exact script value
-  let buildCommand: string | null = null;
+  // Determine build script name
+  let buildScriptName: string | null = null;
   const buildCandidates = ['build', 'compile', 'tsc', 'webpack'];
   for (const candidate of buildCandidates) {
     if (scripts[candidate]) {
-      buildCommand = scripts[candidate]; // Use exact script value
+      buildScriptName = candidate;
       break;
     }
   }
 
   // If no build script found, try common TypeScript build patterns
-  if (!buildCommand) {
+  if (!buildScriptName) {
     if (scripts.prepare && scripts.prepare.includes('tsc')) {
-      buildCommand = scripts.prepare; // Use exact script value
+      buildScriptName = 'prepare';
     } else if (scripts.prepublish && scripts.prepublish.includes('tsc')) {
-      buildCommand = scripts.prepublish; // Use exact script value
+      buildScriptName = 'prepublish';
     }
   }
 
-  // Determine test command - use exact script value
-  let testCommand: string | null = null;
+  // Determine test script name
+  let testScriptName: string | null = null;
   const testCandidates = ['test', 'test:unit', 'test:all', 'jest', 'mocha', 'vitest'];
   for (const candidate of testCandidates) {
     if (scripts[candidate]) {
-      testCommand = scripts[candidate]; // Use exact script value
+      testScriptName = candidate;
       break;
     }
   }
 
-  // Check if we found all required commands
-  if (!buildCommand || !testCommand) {
+  // Check if we found required scripts
+  if (!testScriptName) {
     return null;
   }
 
+  // Return script names that will be used with package manager
+  // buildCommand is optional for some projects
   return {
     installCommand,
-    buildCommand,
-    testCommand
+    buildCommand: buildScriptName || 'echo "No build script"',
+    testCommand: testScriptName
   };
 }
 
@@ -620,21 +698,61 @@ export async function detectPackageManager(projectPath: string): Promise<'npm' |
 
 /**
  * Updates commands to use the detected package manager
+ * Converts script names to full commands with the appropriate package manager
  */
 export function updateCommandsForPackageManager(
   commands: PackageJsonCommands, 
   packageManager: 'npm' | 'yarn' | 'pnpm' | 'bun'
 ): PackageJsonCommands {
+  // Install command is straightforward
   const installCommand = packageManager === 'npm' ? 'npm install' :
                         packageManager === 'yarn' ? 'yarn install' :
                         packageManager === 'pnpm' ? 'pnpm install' :
                         'bun install';
 
-  // Keep build and test commands exactly as they are from package.json scripts
-  // since they now contain the raw command values
+  // Build command: prepend package manager's run command
+  // Exception: if buildCommand starts with 'echo', leave it as-is (no build needed)
+  let buildCommand = commands.buildCommand;
+  if (buildCommand && !buildCommand.startsWith('echo ')) {
+    // Different package managers have different syntax
+    if (packageManager === 'npm' || packageManager === 'pnpm') {
+      buildCommand = `${packageManager} run ${buildCommand}`;
+    } else if (packageManager === 'yarn') {
+      buildCommand = `yarn ${buildCommand}`; // yarn doesn't need 'run'
+    } else if (packageManager === 'bun') {
+      buildCommand = `bun run ${buildCommand}`;
+    }
+  }
+
+  // Test command: prepend package manager's test/run command
+  let testCommand = commands.testCommand;
+  if (testCommand) {
+    // Special handling for 'test' script - most package managers have a shortcut
+    if (testCommand === 'test') {
+      if (packageManager === 'npm') {
+        testCommand = 'npm test';
+      } else if (packageManager === 'yarn') {
+        testCommand = 'yarn test';
+      } else if (packageManager === 'pnpm') {
+        testCommand = 'pnpm test';
+      } else if (packageManager === 'bun') {
+        testCommand = 'bun test';
+      }
+    } else {
+      // For other test scripts like 'test:unit', use run command
+      if (packageManager === 'npm' || packageManager === 'pnpm') {
+        testCommand = `${packageManager} run ${testCommand}`;
+      } else if (packageManager === 'yarn') {
+        testCommand = `yarn ${testCommand}`;
+      } else if (packageManager === 'bun') {
+        testCommand = `bun run ${testCommand}`;
+      }
+    }
+  }
+
   return {
     installCommand,
-    buildCommand: commands.buildCommand,
-    testCommand: commands.testCommand
+    buildCommand,
+    testCommand
   };
 }
