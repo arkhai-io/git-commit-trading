@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import { createClientFromEnv, requireEnvFile } from '../utils/envLoader.js';
-import { CommitObligationAddresses } from '../../clients/commitObligation';
+import type { CommitObligationAddresses } from '../../clients/commitObligation';
 
 interface ListOptions {
   status?: string;

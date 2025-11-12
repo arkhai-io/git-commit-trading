@@ -94,8 +94,9 @@ export async function serverCommand(options: ServerOptions) {
 
     // Define the arbitration logic with Git key verification
     const arbitrate = async (attestation: any) => {
+      console.log(chalk.green('=============== Received new fulfillment to be arbitrated ==============='));
       console.log("Arbitrating attestation:", attestation);
-
+      
       // Decode the obligation data from the attestation
       const obligationData = client.extractObligationData(
         parseAbiParameters("(string commitHash,uint8 commitAlgo,string[] hosts,address sender)"),
@@ -119,30 +120,29 @@ export async function serverCommand(options: ServerOptions) {
         console.log('\n🔐 Verifying Git key registration and commit signature...');
 
         try {
-          // Get all registered keys for verification
-          const registeredKeys = new Map();
-          
-          // Get the registered key claim for the sender
-          let senderKeyClaim: any;
+          // Get the latest registered key for the sender
+          let latestKeyClaim: any;
           try {
-            senderKeyClaim = await client.gitIdentityRegistry.getLatestKeyClaim(senderAddress);
-            if (!senderKeyClaim || !senderKeyClaim.publicKey || senderKeyClaim.publicKey.trim() === "") {
-              console.log('❌ No registered Git key found for sender address');
-              console.log('   Fulfillment rejected: sender must register their Git SSH key first');
+            latestKeyClaim = await client.gitIdentityRegistry.getLatestKeyClaim(senderAddress);
+            if (!latestKeyClaim || !latestKeyClaim.publicKey || latestKeyClaim.publicKey.trim() === "") {
+              console.log('❌ No valid registered Git key found for sender address');
+              console.log('   Fulfillment rejected: sender must register their Git SSH or PGP key first');
               return false;
             }
-            console.log('✅ Found registered Git key for sender');
-            registeredKeys.set(senderAddress, senderKeyClaim);
+            
+            console.log(`✅ Found latest registered Git key for sender`);
+            console.log(`   Key type: ${latestKeyClaim.keyType === 0 ? 'PGP' : latestKeyClaim.keyType === 1 ? 'SSH-Ed25519' : latestKeyClaim.keyType === 2 ? 'SSH-Secp256k1' : 'X509'}`);
           } catch (error) {
             console.log('❌ Failed to retrieve Git key registration:', error);
             return false;
           }
 
-          // Verify the GitKeyClaim signature itself
+          // Verify GitKeyClaim signature to ensure the key was properly registered
           console.log('🔐 Verifying GitKeyClaim signature...');
-          const isValidClaim = await verifyGitKeyClaimSignature(senderKeyClaim, senderAddress);
-          if (!isValidClaim) {
-            console.log('❌ GitKeyClaim signature is invalid');
+          const isValidKeyClaim = await verifyGitKeyClaimSignature(latestKeyClaim, senderAddress);
+          if (!isValidKeyClaim) {
+            console.log('❌ GitKeyClaim signature is invalid - key registration may be compromised');
+            console.log('   Fulfillment rejected: invalid key registration');
             return false;
           }
           console.log('✅ GitKeyClaim signature verified');
@@ -150,6 +150,10 @@ export async function serverCommand(options: ServerOptions) {
           // Use enhanced Git verification service if available
           if (gitVerificationService) {
             console.log('🔐 Verifying commit signature using git verify-commit...');
+            
+            // Create a map with only the latest key
+            const registeredKeys = new Map();
+            registeredKeys.set(senderAddress, latestKeyClaim);
             
             const verificationResult = await gitVerificationService.verifyCommit(
               obligation.hosts[0],
@@ -202,8 +206,14 @@ export async function serverCommand(options: ServerOptions) {
         testConfig.repositories.source.url = obligation.hosts[0];
         testConfig.repositories.source.commitHash = obligation.commitHash;
 
-        // Note: install, build, and test commands will be auto-detected from package.json
-        // unless explicitly configured above
+        // If test command doesn't include installation (no && or ;), auto-detect install command
+        // This allows users to submit just "poetry run pytest" and have "poetry install" run automatically
+        const hasInstallInCommand = /&&|;/.test(demand.testsCommand);
+        if (!hasInstallInCommand) {
+          console.log('🔍 Test command does not include install step, will auto-detect install command from testcase repo');
+          // Let the executor auto-detect install command from testcase repo files
+          // This will be done in the executor's installDependencies() method
+        }
 
         // Set execution parameters
         testConfig.execution.timeout = timeout;
@@ -288,13 +298,46 @@ export async function serverCommand(options: ServerOptions) {
       console.log(chalk.gray(`  - Polling Interval: ${pollingInterval}ms`));
       console.log(chalk.gray('Press Ctrl+C to stop the server\n'));
 
-      // // TODO: Re-check this options
-      // const arbitrateOpts = {} as ArbitrateOptions;
-      // arbitrateOpts.onlyNew = true;
+      // Setup graceful shutdown before starting
+      let unwatchFn: (() => void) | null = null;
+      
+      process.on('SIGINT', () => {
+        console.log(chalk.yellow('\nShutting down server...'));
+        if (unwatchFn) {
+          unwatchFn();
+        }
+        process.exit(0);
+      });
 
+      // Handle uncaught errors
+      process.on('uncaughtException', (error) => {
+        console.error(chalk.red('❌ Uncaught exception:'), error);
+        if (error.message?.includes('WebSocket') || error.message?.includes('connection')) {
+          console.log(chalk.yellow('⚠️ Connection error detected. The server will attempt to reconnect...'));
+        } else {
+          // For non-connection errors, exit
+          if (unwatchFn) unwatchFn();
+          process.exit(1);
+        }
+      });
+
+      process.on('unhandledRejection', (reason, promise) => {
+        console.error(chalk.red('❌ Unhandled rejection at:'), promise, 'reason:', reason);
+        if (reason && typeof reason === 'object' && 'message' in reason) {
+          const msg = (reason as any).message;
+          if (typeof msg === 'string' && (msg.includes('WebSocket') || msg.includes('connection'))) {
+            console.log(chalk.yellow('⚠️ Connection error detected. The server will attempt to reconnect...'));
+          } else {
+            // For non-connection errors, exit
+            if (unwatchFn) unwatchFn();
+            process.exit(1);
+          }
+        }
+      });
+
+      // Start listening and arbitrating
       const { unwatch, decisions } = await client.oracle.listenAndArbitrate(arbitrate, {
         skipAlreadyArbitrated: true,
-        // arbitrateOpts,
         onAfterArbitrate: async (decision: any) => {
           console.log(chalk.green(`✓ Arbitration completed: ${decision.decision ? 'PASSED' : 'FAILED'}`));
           console.log(chalk.gray(`  Transaction Hash: ${decision.hash}`));
@@ -303,6 +346,8 @@ export async function serverCommand(options: ServerOptions) {
         pollingInterval,
       });
 
+      unwatchFn = unwatch;
+
       // Log any past decisions that were processed
       if (decisions.length > 0) {
         console.log(chalk.green(`✓ Processed ${decisions.length} past arbitration requests`));
@@ -310,15 +355,13 @@ export async function serverCommand(options: ServerOptions) {
         console.log(chalk.gray('No past arbitration requests found. Waiting for new requests...'));
       }
 
-      // Handle graceful shutdown
-      process.on('SIGINT', () => {
-        console.log(chalk.yellow('\nShutting down server...'));
-        unwatch();
-        process.exit(0);
-      });
+      console.log(chalk.green('✓ Server is now actively listening for arbitration requests...'));
 
-      // Keep the process alive
-      await new Promise(() => { }); // This will run indefinitely until SIGINT
+      // Keep the process alive indefinitely
+      await new Promise<void>((resolve) => {
+        // This promise will only resolve when SIGINT is triggered
+        // which will call process.exit(0) before it can resolve
+      });
     }
 
   } catch (error) {

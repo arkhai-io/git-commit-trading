@@ -188,10 +188,10 @@ export class GitVerificationService {
 
   /**
    * Import all registered keys to the server
-   * @param registeredKeys - Map of registered keys by address
+   * @param registeredKeys - Map of registered keys by address (single key per address)
    */
   async importRegisteredKeys(registeredKeys: Map<string, GitKeyClaim>): Promise<void> {
-    console.log(chalk.blue(`🔑 Importing ${registeredKeys.size} registered keys...`));
+    console.log(chalk.blue(`🔑 Importing key for sender address...`));
 
     let imported = 0;
     let skipped = 0;
@@ -209,7 +209,13 @@ export class GitVerificationService {
       }
     }
 
-    console.log(chalk.gray(`Key import summary: ${imported} imported, ${skipped} skipped, ${failed} failed`));
+    if (imported > 0) {
+      console.log(chalk.gray(`✓ Key imported successfully`));
+    } else if (skipped > 0) {
+      console.log(chalk.gray(`✓ Key already imported`));
+    } else {
+      console.log(chalk.yellow(`⚠️ Key import failed`));
+    }
   }
 
   /**
@@ -220,7 +226,7 @@ export class GitVerificationService {
    */
   async importSingleKey(address: string, keyClaim: GitKeyClaim): Promise<'imported' | 'skipped' | 'failed'> {
     try {
-      console.log(chalk.gray(`   🔑 Processing key import for address: ${address}`));
+      console.log(chalk.gray(`   Processing key import for address: ${address}`));
       console.log(chalk.gray(`      Key type: ${keyClaim.keyType}, Public key: ${keyClaim.publicKey.substring(0, 30)}...`));
       
       // Check cache first

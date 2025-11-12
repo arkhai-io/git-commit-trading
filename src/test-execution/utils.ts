@@ -37,24 +37,6 @@ export class Logger {
   }
 }
 
-/**
- * Check if bash is available on the system
- */
-let bashAvailableCache: boolean | null = null;
-export async function isBashAvailable(): Promise<boolean> {
-  if (bashAvailableCache !== null) {
-    return bashAvailableCache;
-  }
-  
-  return new Promise((resolve) => {
-    const { exec } = require('child_process');
-    exec('bash --version', (error: any) => {
-      bashAvailableCache = !error;
-      resolve(bashAvailableCache);
-    });
-  });
-}
-
 export async function executeCommand(
   command: string,
   args: string[],
@@ -63,107 +45,50 @@ export async function executeCommand(
   return new Promise((resolve, reject) => {
     const { timeout = 30000, ...spawnOptions } = options;
     
-    const cwd = spawnOptions.cwd || process.cwd();
-    const currentPath = process.env.PATH || '';
-    const debugMode = process.env.DEBUG === 'true';
+    // Ensure PATH includes common global binary locations
+    // This is important for commands like "bun test", "npm test", etc.
+    const env = spawnOptions.env || { ...process.env };
+    const additionalPaths = [
+      '/usr/local/bin',
+      '/usr/bin',
+      '/bin',
+      '/opt/homebrew/bin', // macOS Homebrew on Apple Silicon
+      '/home/linuxbrew/.linuxbrew/bin', // Linux Homebrew
+      process.env.HOME ? `${process.env.HOME}/.bun/bin` : null, // Bun
+      process.env.HOME ? `${process.env.HOME}/.cargo/bin` : null, // Rust/Cargo
+      process.env.HOME ? `${process.env.HOME}/.local/bin` : null, // Python user installs
+    ].filter(Boolean) as string[];
     
-    // Only add node_modules/.bin to PATH for Node.js/npm/yarn/pnpm/bun commands
-    // Don't pollute PATH for Python, Rust, or other language commands
-    const isNodeCommand = ['npm', 'node', 'npx', 'yarn', 'pnpm', 'bun', 'tsc', 'jest', 'mocha', 'vitest'].includes(command);
-    const isShellWithNodeCommand = (command === 'sh' || command === 'bash') && 
-                                   args.some(arg => arg.includes('npm') || arg.includes('yarn') || 
-                                                   arg.includes('pnpm') || arg.includes('bun') ||
-                                                   arg.includes('node_modules'));
+    // Split current PATH into individual paths and deduplicate
+    const currentPath = env.PATH || '';
+    const existingPaths = currentPath.split(':').filter(Boolean);
     
-    let enhancedPath = currentPath;
+    // Add additional paths only if not already present (exact match)
+    const pathsToAdd = additionalPaths.filter(p => !existingPaths.includes(p));
     
-    if (isNodeCommand || isShellWithNodeCommand) {
-      // Add node_modules/.bin for Node.js commands
-      const nodeModulesBin = path.join(cwd.toString(), 'node_modules', '.bin');
-      const pathEntries = currentPath.split(path.delimiter);
-      const isAlreadyInPath = pathEntries.some(entry => entry === nodeModulesBin);
-      
-      enhancedPath = isAlreadyInPath 
-        ? currentPath 
-        : `${nodeModulesBin}${path.delimiter}${currentPath}`;
-      
-      if (debugMode) {
-        if (isAlreadyInPath) {
-          console.log(chalk.gray(`[EXEC] node_modules/.bin already in PATH: ${nodeModulesBin}`));
-        } else {
-          console.log(chalk.gray(`[EXEC] node_modules/.bin added to PATH: ${nodeModulesBin}`));
-        }
-      }
-    } else if (debugMode) {
-      console.log(chalk.gray(`[EXEC] Skipping node_modules/.bin (not a Node.js command)`));
-    }
-    
-    // Always log command execution details for debugging
-    if (debugMode) {
-      console.log(chalk.gray(`[EXEC] Running: ${command} ${args.join(' ')}`));
-      console.log(chalk.gray(`[EXEC] Working directory: ${cwd}`));
-    }
-    
-    // Try to find where the binary actually is
-    try {
-      const { execSync } = require('child_process');
-      const whichCommand = process.platform === 'win32' ? 'where' : 'which';
-      
-      // For npm/node commands, show where they're found
-      if (['npm', 'node', 'npx', 'tsc', 'yarn', 'pnpm', 'bun'].includes(command)) {
-        try {
-          const binaryPath = execSync(`${whichCommand} ${command}`, { 
-            encoding: 'utf8',
-            env: { ...process.env, PATH: enhancedPath }
-          }).trim();
-          if (debugMode) {
-            console.log(chalk.gray(`[EXEC] Binary found at: ${binaryPath}`));
-          }
-        } catch (e) {
-          console.log(chalk.yellow(`[EXEC] Warning: ${command} not found in PATH`));
-        }
-      }
-      
-      // For shell commands (sh, cmd), just note we're using shell
-      if (command === 'sh' || command === 'cmd') {
-        console.log(chalk.gray(`[EXEC] Using shell to execute compound command`));
-      }
-    } catch (e) {
-      // Ignore errors in binary detection
-    }
-    
-    // Debug: Additional verbose info
-    if (debugMode) {
-      console.log(chalk.gray(`[DEBUG] Full PATH: ${enhancedPath.substring(0, 200)}...`));
+    // Rebuild PATH with deduplication: additional paths first, then existing paths
+    if (pathsToAdd.length > 0) {
+      const allPaths = [...pathsToAdd, ...existingPaths];
+      // Final deduplication in case of any edge cases
+      const uniquePaths = Array.from(new Set(allPaths));
+      env.PATH = uniquePaths.join(':');
     }
     
     const child = spawn(command, args, {
       stdio: 'pipe',
+      env,
       ...spawnOptions,
-      env: {
-        ...process.env,
-        ...spawnOptions.env,
-        PATH: enhancedPath,
-      },
     });
 
     let stdout = '';
     let stderr = '';
 
     child.stdout?.on('data', (data: any) => {
-      const text = data.toString();
-      stdout += text;
-      if (debugMode) {
-        process.stdout.write(chalk.gray('[STDOUT] ') + text);
-      }
+      stdout += data.toString();
     });
 
     child.stderr?.on('data', (data: any) => {
-      const text = data.toString();
-      stderr += text;
-      if (debugMode) {
-        process.stderr.write(chalk.yellow('[STDERR] ') + text);
-      }
+      stderr += data.toString();
     });
 
     const timeoutId = setTimeout(() => {
@@ -264,6 +189,7 @@ export function parseCommand(fullCommand: string): { command: string; args: stri
   
   if (hasShellOperators) {
     // For compound commands, we need to run them in a shell
+    // Use 'sh' on Unix-like systems, 'cmd' on Windows
     const isWindows = process.platform === 'win32';
     
     if (isWindows) {
@@ -272,26 +198,10 @@ export function parseCommand(fullCommand: string): { command: string; args: stri
         args: ['/c', trimmedCommand]
       };
     } else {
-      // Check if command contains Python venv or other bash-specific features
-      // Use bash for better compatibility with Python virtual environments
-      const needsBash = trimmedCommand.includes('venv/bin/') || 
-                       trimmedCommand.includes('source ') ||
-                       trimmedCommand.includes('pipenv ') ||
-                       trimmedCommand.includes('python3 -m venv');
-      
-      if (needsBash) {
-        // Use bash for Python commands (venv paths work fine in both sh and bash)
-        // But bash has better compatibility overall
-        return {
-          command: 'bash',
-          args: ['-c', trimmedCommand]
-        };
-      } else {
-        return {
-          command: 'sh',
-          args: ['-c', trimmedCommand]
-        };
-      }
+      return {
+        command: 'sh',
+        args: ['-c', trimmedCommand]
+      };
     }
   }
   

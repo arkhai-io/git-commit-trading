@@ -4,8 +4,7 @@ import * as openpgp from 'openpgp';
 import { X509Certificate } from '@peculiar/x509';
 
 // Import the GitKeyClaim type and KeyType enum
-import type { GitKeyClaim } from '../clients/gitIdentityRegistry';
-import { KeyType } from '../clients/gitIdentityRegistry';
+import type { GitKeyClaim, KeyType } from '../clients/gitIdentityRegistry';
 
 /**
  * @deprecated This function was designed for GitHub API verification which has been removed.
@@ -395,29 +394,22 @@ export function generateSSHSignature(privateKeyDataOrPath: string, message: stri
         // Parse private key
         const privateKey = sshpk.parsePrivateKey(privateKeyData, 'openssh');
 
+        // Extract public key from private key and log it
+        const derivedPublicKey = privateKey.toPublic();
+        const sshPublicKeyString = derivedPublicKey.toString('ssh');
+
         // Determine hash algorithm based on key type
         const hashAlgo = privateKey.type === 'ed25519' ? 'sha512' : 'sha256';
 
         // Create signer with appropriate hash
         const signer = privateKey.createSign(hashAlgo);
-        const messageBuffer = Buffer.from(message, 'utf8');
-        signer.update(messageBuffer);
+        signer.update(message);
         const signature = signer.sign();
 
-        // For Ed25519, extract raw signature bytes for cross-platform compatibility
-        let signatureBuffer: Buffer;
-        if (privateKey.type === 'ed25519') {
-            const parts = (signature as any).parts;
-            if (parts && parts.sig && Buffer.isBuffer(parts.sig.data)) {
-                signatureBuffer = parts.sig.data;
-            } else {
-                signatureBuffer = signature.toBuffer();
-            }
-        } else {
-            signatureBuffer = signature.toBuffer();
-        }
+        // Convert signature to hex
+        const signatureHex = signature.toBuffer().toString('hex');
 
-        return signatureBuffer.toString('hex');
+        return signatureHex;
     } catch (error) {
         console.error("❌ Error generating SSH signature:", error);
         throw new Error(`Failed to generate SSH signature: ${error}`);
@@ -439,38 +431,112 @@ export function verifySSHSignature(
     keyType: string = 'ed25519'
 ): boolean {
     try {
+        // Check if DEBUG mode is enabled
+        const isDebugMode = process.env.DEBUG === 'true' || process.env.DEBUG === '1';
+        
+        // Create a completely unique trace ID for this verification attempt
+        const traceId = `verify_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+        // Convert message to buffer (needed for verification)
         const messageBuffer = Buffer.from(message, 'utf8');
+
+        if (isDebugMode) {
+            console.log(`🔍 [${traceId}] Verifying signature:
+  Public Key: ${publicKey}
+  Message: ${message}
+  Signature: ${signature}
+  Key Type: ${keyType}`);
+
+            // Add hex dump of the message to see exact bytes
+            console.log(`  [${traceId}] Message hex dump: ${messageBuffer.toString('hex')}`);
+            console.log(`  [${traceId}] Message byte analysis: ${JSON.stringify(message.split('').map(c => c + '(' + c.charCodeAt(0) + ')'))}`);
+        }
+
+        // Construct the full SSH public key string
         const sshPublicKeyString = `ssh-${keyType} ${publicKey}`;
+        
+        // Show shortened key for verification info
+        const shortKey = publicKey.length > 60 ? `${publicKey.substring(0, 30)}...${publicKey.substring(publicKey.length - 30)}` : publicKey;
+        console.log(`  SSH key (${keyType}): ${shortKey}`);
+
+        // Convert signature to buffer once
         const signatureBuffer = Buffer.from(signature, 'hex');
+        if (isDebugMode) {
+            console.log(`  [${traceId}] Signature buffer length: ${signatureBuffer.length} bytes`);
+        }
 
         if (keyType === 'ed25519' && signatureBuffer.length === 64) {
+            // For Ed25519, use a completely isolated verification approach
             try {
-                const key = sshpk.parseKey(sshPublicKeyString, 'ssh');
-                const verifier = key.createVerify('sha512');
-                verifier.update(messageBuffer);
-
-                // Parse signature as raw Ed25519 and set hash algorithm for cross-platform compatibility
-                const signatureObj = sshpk.parseSignature(signatureBuffer, 'ed25519', 'raw');
-                if (!signatureObj.hashAlgorithm) {
-                    (signatureObj as any).hashAlgorithm = 'sha512';
+                if (isDebugMode) {
+                    console.log(`  [${traceId}] Starting Ed25519 verification...`);
                 }
-                
-                return verifier.verify(signatureObj);
+
+                // Create fresh key object
+                const key = sshpk.parseKey(sshPublicKeyString, 'ssh');
+                if (isDebugMode) {
+                    console.log(`  [${traceId}] Parsed key type: ${key.type}, key size: ${key.size}`);
+                }
+
+                // Create fresh verifier
+                const verifier = key.createVerify('sha512');
+                if (isDebugMode) {
+                    console.log(`  [${traceId}] Created verifier with sha512`);
+                }
+
+                // Update verifier with message
+                verifier.update(messageBuffer);
+                if (isDebugMode) {
+                    console.log(`  [${traceId}] Updated verifier with message (${messageBuffer.length} bytes)`);
+                }
+
+                // Create fresh signature object from raw bytes
+                if (isDebugMode) {
+                    console.log(`  [${traceId}] Parsing signature as ed25519 raw format...`);
+                }
+                const signatureObj = sshpk.parseSignature(signatureBuffer, 'ed25519', 'raw');
+                if (isDebugMode) {
+                    console.log(`  [${traceId}] Parsed signature object: type=${signatureObj.type}, hashAlgorithm=${signatureObj.hashAlgorithm}`);
+                }
+
+                // Perform verification
+                if (isDebugMode) {
+                    console.log(`  [${traceId}] Calling verifier.verify()...`);
+                }
+                const result = verifier.verify(signatureObj);
+                if (isDebugMode) {
+                    console.log(`  [${traceId}] ✅ Signature verification result: ${result}`);
+                }
+
+                return result;
 
             } catch (ed25519Error) {
-                console.error("Ed25519 verification error:", ed25519Error);
+                if (isDebugMode) {
+                    console.log(`  [${traceId}] ❌ Ed25519 verification failed: ${ed25519Error}`);
+                }
                 return false;
             }
         }
 
         // Fallback for other key types
-        const key = sshpk.parseKey(sshPublicKeyString, 'ssh');
-        const hashAlgo = key.type === 'ed25519' ? 'sha512' : 'sha256';
-        const verifier = key.createVerify(hashAlgo);
-        verifier.update(messageBuffer);
+        try {
+            const key = sshpk.parseKey(sshPublicKeyString, 'ssh');
+            const hashAlgo = key.type === 'ed25519' ? 'sha512' : 'sha256';
+            const verifier = key.createVerify(hashAlgo);
+            verifier.update(Buffer.from(message, 'utf8'));
 
-        const signatureObj = sshpk.parseSignature(signatureBuffer, key.type as any, 'ssh');
-        return verifier.verify(signatureObj);
+            const signatureObj = sshpk.parseSignature(signatureBuffer, key.type as any, 'ssh');
+            const result = verifier.verify(signatureObj);
+            if (isDebugMode) {
+                console.log(`  [${traceId}] ✅ Signature verification result: ${result}`);
+            }
+            return result;
+        } catch (fallbackError) {
+            if (isDebugMode) {
+                console.log(`  [${traceId}] ❌ Fallback verification failed: ${fallbackError}`);
+            }
+            return false;
+        }
 
     } catch (error) {
         console.error("❌ Error verifying SSH signature:", error);
@@ -483,10 +549,100 @@ export function verifySSHSignature(
  * @returns Message string to be signed
  */
 export function generateSigningMessage(ethAddress: string, nonce: string): string {
-    // Normalize address to lowercase to ensure consistency between signing and verification
-    // Ethereum addresses are case-insensitive, but string operations are case-sensitive
-    const normalizedAddress = ethAddress.toLowerCase();
-    return `${normalizedAddress} ${nonce}`;
+    return `${ethAddress} ${nonce}`;
+}
+
+/**
+ * Verify PGP signature for GitKeyClaim
+ * @param publicKeyBase64 - PGP public key in base64 format
+ * @param message - Original message that was signed
+ * @param signatureHex - PGP signature in hex format (armored signature converted to hex)
+ * @returns True if signature is valid
+ */
+async function verifyPGPKeyClaimSignature(
+    publicKeyBase64: string,
+    message: string,
+    signatureHex: string
+): Promise<boolean> {
+    try {
+        const isDebugMode = process.env.DEBUG === 'true' || process.env.DEBUG === '1';
+        
+        // Convert hex signature back to armored format
+        const signatureArmored = Buffer.from(signatureHex, 'hex').toString('utf8');
+        
+        // Show shortened PGP key
+        const shortKey = publicKeyBase64.length > 80 
+            ? `${publicKeyBase64.substring(0, 40)}...${publicKeyBase64.substring(publicKeyBase64.length - 40)}`
+            : publicKeyBase64;
+        console.log(`  PGP key: ${shortKey}`);
+        
+        if (isDebugMode) {
+            console.log("  PGP signature (armored):", signatureArmored.substring(0, 100) + "...");
+        }
+
+        // Parse the public key from base64
+        // The key should be in armored format
+        let publicKey: openpgp.Key;
+        try {
+            if (publicKeyBase64.includes("-----BEGIN PGP PUBLIC KEY BLOCK-----")) {
+                publicKey = await openpgp.readKey({ armoredKey: publicKeyBase64 });
+            } else {
+                // Assume it's base64 armored key
+                const armoredKey = `-----BEGIN PGP PUBLIC KEY BLOCK-----\n\n${publicKeyBase64}\n-----END PGP PUBLIC KEY BLOCK-----`;
+                publicKey = await openpgp.readKey({ armoredKey });
+            }
+            if (isDebugMode) {
+                console.log("  ✅ PGP public key parsed successfully");
+            }
+        } catch (error) {
+            console.log("  ❌ Failed to parse PGP public key:", error);
+            return false;
+        }
+
+        // Parse the signature
+        let signature: openpgp.Signature;
+        try {
+            signature = await openpgp.readSignature({ armoredSignature: signatureArmored });
+            if (isDebugMode) {
+                console.log("  ✅ PGP signature parsed successfully");
+            }
+        } catch (error) {
+            console.log("  ❌ Failed to parse PGP signature:", error);
+            return false;
+        }
+
+        // Create message object
+        const messageObj = await openpgp.createMessage({ text: message });
+
+        // Verify the signature
+        const verificationResult = await openpgp.verify({
+            message: messageObj,
+            signature,
+            verificationKeys: publicKey
+        });
+
+        // Check verification results
+        if (verificationResult.signatures && verificationResult.signatures.length > 0) {
+            const firstSignature = verificationResult.signatures[0];
+            if (firstSignature) {
+                const verified = await firstSignature.verified;
+                if (verified) {
+                    console.log("  ✅ PGP signature verification passed");
+                    return true;
+                } else {
+                    console.log("  ❌ PGP signature verification failed");
+                    return false;
+                }
+            }
+        }
+        
+        console.log("  ❌ No valid signature found");
+        return false;
+
+    } catch (error) {
+        console.error("  ❌ Error during PGP verification:", error);
+        return false;
+    }
 }
 
 /**
@@ -500,55 +656,60 @@ export async function verifyGitKeyClaimSignature(
     ethAddress: string
 ): Promise<boolean> {
     try {
-        // Normalize address to lowercase for consistent message generation
-        const normalizedAddress = ethAddress.toLowerCase();
-        
         console.log("🔍 Verifying GitKeyClaim signature:");
-        console.log("  Address:", normalizedAddress);
+        console.log("  Address:", ethAddress);
         console.log("  Key Type:", getKeyTypeName(gitKeyClaim.keyType));
 
-        // Extract nonce directly from nonceHash (it's stored as plaintext bytes32, not hashed)
-        // Format: 64 hex chars = 32 bytes (timestamp 8 bytes + random 24 bytes)
+        // Extract nonce from the nonceHash
         const nonceHex = gitKeyClaim.nonceHash.replace('0x', '');
-        
-        // Validate the nonce format
-        if (nonceHex.length !== 64) {
-            console.log(`  ❌ Invalid nonce format: expected 64 hex chars, got ${nonceHex.length}`);
-            return false;
-        }
-        
-        console.log("  Nonce (hex):", nonceHex);
+        console.log("  Nonce (hex from contract):", nonceHex);
 
-        // Reconstruct the signed message using the hex nonce directly
-        const expectedMessage = generateSigningMessage(normalizedAddress, nonceHex);
+        const expectedMessage = generateSigningMessage(ethAddress, nonceHex);
         console.log("  Expected signed message:", expectedMessage);
 
         const signature = gitKeyClaim.sig.replace('0x', '');
         console.log(`  Signature from contract: ${signature.slice(0, 20)}... (length: ${signature.length})`);
 
-        // Route to appropriate verifier based on key type
-        if (gitKeyClaim.keyType === KeyType.PGPv4) {
-            console.log("  Using PGP signature verification");
-            return await verifyPGPKeyClaimSignature(gitKeyClaim, expectedMessage);
-        } else {
-            // SSH signature verification
-            const keyTypeForVerification = getKeyTypeName(gitKeyClaim.keyType).toLowerCase().replace('ssh ', '');
-            console.log(`  Key type for verification: "${keyTypeForVerification}"`);
+        let isSignatureValid = false;
 
-            const isSignatureValid = verifySSHSignature(
+        // Route to appropriate verification method based on key type
+        if (gitKeyClaim.keyType === 0) {
+            // PGP key - use OpenPGP verification
+            console.log("  Using PGP verification method...");
+            isSignatureValid = await verifyPGPKeyClaimSignature(
+                gitKeyClaim.publicKey,
+                expectedMessage,
+                signature
+            );
+        } else {
+            // SSH key - use SSH verification
+            const keyTypeMap: { [key: number]: string } = {
+                1: 'ed25519',      // SSHEd25519
+                2: 'secp256k1',    // SSHSecp256k1
+                3: 'x509'          // X509
+            };
+            
+            const keyTypeForVerification = keyTypeMap[gitKeyClaim.keyType];
+            if (!keyTypeForVerification) {
+                console.log(`  ❌ Unsupported key type: ${gitKeyClaim.keyType}`);
+                return false;
+            }
+
+            console.log(`  Using SSH verification method with key type: ${keyTypeForVerification}`);
+            isSignatureValid = verifySSHSignature(
                 gitKeyClaim.publicKey,
                 expectedMessage,
                 signature,
                 keyTypeForVerification
             );
+        }
 
-            if (isSignatureValid) {
-                console.log("  ✅ Cryptographic signature verification passed!");
-                return true;
-            } else {
-                console.log("  ❌ Cryptographic signature verification failed!");
-                return false;
-            }
+        if (isSignatureValid) {
+            console.log("  ✅ Cryptographic signature verification passed!");
+            return true;
+        } else {
+            console.log("  ❌ Cryptographic signature verification failed!");
+            return false;
         }
     } catch (error) {
         console.error("❌ Error verifying GitKeyClaim signature:", error);
@@ -557,131 +718,11 @@ export async function verifyGitKeyClaimSignature(
 }
 
 /**
- * Verify PGP signature for GitKeyClaim registration
- * 
- * This function verifies that:
- * 1. The signature was created with the private key corresponding to the public key
- * 2. The signed message matches the expected format: "[eth_address] [nonce]"
- * 
- * Process:
- * 1. Decode hex signature back to cleartext armored format
- * 2. Parse cleartext message (extracts both message text and signature)
- * 3. Verify signature cryptographically using public key
- * 4. Verify message content matches expected message
- * 
- * @param gitKeyClaim - The Git key claim with PGP signature (signature is hex-encoded cleartext)
- * @param expectedMessage - The message that should have been signed (format: "[eth_address] [nonce]")
- * @returns Promise<boolean> - True if signature is valid and message matches
- */
-async function verifyPGPKeyClaimSignature(
-    gitKeyClaim: GitKeyClaim,
-    expectedMessage: string
-): Promise<boolean> {
-    try {
-        console.log("  🔐 PGP key claim signature verification");
-        
-        // Decode the hex signature back to armored format
-        const signatureHex = gitKeyClaim.sig.replace('0x', '');
-        const signatureBuffer = Buffer.from(signatureHex, 'hex');
-        const armoredSignature = signatureBuffer.toString('utf8');
-        
-        console.log(`    Signature length: ${signatureHex.length} hex chars`);
-        console.log(`    Decoded signature starts with: ${armoredSignature.substring(0, 50)}...`);
-        
-        // Parse the PGP public key
-        let publicKey: openpgp.Key;
-        try {
-            if (gitKeyClaim.publicKey.includes("-----BEGIN PGP PUBLIC KEY BLOCK-----")) {
-                publicKey = await openpgp.readKey({ armoredKey: gitKeyClaim.publicKey });
-            } else {
-                // Key material only - construct armored format
-                const armoredKey = `-----BEGIN PGP PUBLIC KEY BLOCK-----\n\n${gitKeyClaim.publicKey}\n-----END PGP PUBLIC KEY BLOCK-----`;
-                publicKey = await openpgp.readKey({ armoredKey });
-            }
-            console.log("    ✅ PGP public key parsed successfully");
-        } catch (error) {
-            console.log("    ❌ Failed to parse PGP public key:", error);
-            return false;
-        }
-        
-        // Parse the signature
-        if (!armoredSignature.includes("-----BEGIN PGP SIGNATURE-----")) {
-            console.log("    ❌ Invalid PGP signature format - missing signature header");
-            return false;
-        }
-        
-        try {
-            // For cleartext signatures, we need to read the whole message
-            const cleartextMessage = await openpgp.readCleartextMessage({ 
-                cleartextMessage: armoredSignature 
-            });
-            
-            // Verify the signature
-            const verificationResult = await openpgp.verify({
-                message: cleartextMessage,
-                verificationKeys: publicKey
-            });
-            
-            // Check verification results
-            if (verificationResult.signatures && verificationResult.signatures.length > 0) {
-                const firstSignature = verificationResult.signatures[0];
-                if (firstSignature) {
-                    const verified = await firstSignature.verified;
-                    
-                    // Also verify the message content matches
-                    const signedMessage = cleartextMessage.getText().trim();
-                    const expectedMessageTrimmed = expectedMessage.trim();
-                    
-                    // Case-insensitive comparison for the address part
-                    // This handles keys registered before address normalization was added
-                    const messageMatches = signedMessage.toLowerCase() === expectedMessageTrimmed.toLowerCase();
-                    
-                    console.log(`    Message match: ${messageMatches}`);
-                    console.log(`    Expected: "${expectedMessageTrimmed}"`);
-                    console.log(`    Got: "${signedMessage}"`);
-                    
-                    if (verified && messageMatches) {
-                        console.log("    ✅ PGP signature verification passed");
-                        return true;
-                    } else {
-                        console.log(`    ❌ PGP signature verification failed (verified=${verified}, messageMatches=${messageMatches})`);
-                        return false;
-                    }
-                }
-            }
-            
-            console.log("    ❌ No valid signatures found");
-            return false;
-            
-        } catch (error) {
-            console.log("    ❌ Error during PGP signature verification:", error);
-            return false;
-        }
-    } catch (error) {
-        console.error("  ❌ Unexpected error in PGP key claim verification:", error);
-        return false;
-    }
-}
-
-/**
- * Generate a PGP signature for GitKeyClaim registration
- * 
- * This function creates a cleartext PGP signature that includes both the message
- * and the signature in one armored block. This is required for proper verification.
- * 
- * Flow:
- * 1. Creates cleartext message from input
- * 2. Signs with PGP private key
- * 3. Returns full cleartext signature (message + signature) as hex string
- * 4. Hex string is stored on blockchain with 0x prefix
- * 5. During verification, hex is decoded back to cleartext format
- * 6. Cleartext message is parsed to extract both message and signature
- * 7. Message content is verified to match expected signing message
- * 
+ * Generate a PGP signature for the GitKeyClaim
  * @param privateKeyArmored - PGP private key in armored format
- * @param message - Message to sign (format: "[eth_address] [nonce]")
  * @param passphrase - Passphrase for the private key (optional)
- * @returns Hex-encoded cleartext signature (includes both message and signature)
+ * @param message - Message to sign
+ * @returns Signature as hex string
  */
 export async function generatePGPSignature(
     privateKeyArmored: string, 
@@ -713,18 +754,23 @@ export async function generatePGPSignature(
         const clearMessage = await openpgp.createCleartextMessage({ text: message });
 
         // Sign the message
-        const cleartextSignature = await openpgp.sign({
+        const signature = await openpgp.sign({
             message: clearMessage,
             signingKeys: decryptedPrivateKey,
             format: 'armored'
         });
 
-        // Return the FULL cleartext signature (includes both message and signature)
-        // This is needed for verification to work properly
-        // The verifier will extract and verify both parts
-        const signatureBytes = Buffer.from(cleartextSignature as string, 'utf8');
-        const signatureHex = signatureBytes.toString('hex');
-        return signatureHex;
+        // Extract just the signature part (remove the message part from cleartext signature)
+        const signatureMatch = signature.match(/-----BEGIN PGP SIGNATURE-----[\s\S]*?-----END PGP SIGNATURE-----/);
+        if (signatureMatch) {
+            const signatureOnly = signatureMatch[0];
+            // Convert to hex format for contract storage
+            const signatureBytes = Buffer.from(signatureOnly, 'utf8');
+            const signatureHex = signatureBytes.toString('hex');
+            return signatureHex;
+        } else {
+            throw new Error("Failed to extract PGP signature from signed message");
+        }
     } catch (error) {
         console.error("❌ Error generating PGP signature:", error);
         console.log("⚠️  Falling back to mock signature for testing");

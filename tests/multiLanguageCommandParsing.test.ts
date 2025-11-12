@@ -1,16 +1,16 @@
 import { describe, test, expect } from "bun:test";
-import { parseCommand, isBashAvailable } from "../src/test-execution/utils";
+import { parseCommand } from "../src/test-execution/utils";
 
 describe("Multi-language Command Parsing", () => {
-    test("should use bash for Python venv commands", () => {
+    test("should use sh for Python venv commands with shell operators", () => {
         const pythonInstallCmd = "python3 -m venv venv && venv/bin/pip install --upgrade pip && venv/bin/pip install pytest";
         const { command, args } = parseCommand(pythonInstallCmd);
         
-        expect(command).toBe("bash");
+        expect(command).toBe("sh");
         expect(args).toEqual(["-c", pythonInstallCmd]);
     });
     
-    test("should use bash for Python venv test commands", () => {
+    test("should parse Python venv test commands directly when no shell operators", () => {
         const pythonTestCmd = "venv/bin/python -m pytest";
         const { command, args } = parseCommand(pythonTestCmd);
         
@@ -20,11 +20,11 @@ describe("Multi-language Command Parsing", () => {
         expect(args).toContain("pytest");
     });
     
-    test("should handle compound Python commands", () => {
+    test("should handle compound Python commands with shell operators", () => {
         const compoundCmd = "python3 -m venv venv && venv/bin/pip install -r requirements.txt";
         const { command, args } = parseCommand(compoundCmd);
         
-        expect(command).toBe("bash");
+        expect(command).toBe("sh");
         expect(args[0]).toBe("-c");
         expect(args[1]).toBe(compoundCmd);
     });
@@ -65,13 +65,7 @@ describe("Multi-language Command Parsing", () => {
         const pipenvCmd = "pipenv install && pipenv run pytest";
         const { command, args } = parseCommand(pipenvCmd);
         
-        expect(command).toBe("bash");
+        expect(command).toBe("sh");
         expect(args[0]).toBe("-c");
-    });
-    
-    test("bash availability check should work", async () => {
-        const bashAvailable = await isBashAvailable();
-        expect(typeof bashAvailable).toBe("boolean");
-        console.log(`  Bash available on this system: ${bashAvailable}`);
     });
 });

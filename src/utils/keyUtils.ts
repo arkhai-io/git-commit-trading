@@ -511,89 +511,32 @@ export async function importSSHKeyToServer(publicKey: string, identity: string):
     try {
         const fs = await import('fs/promises');
         const path = await import('path');
-        const { exec } = await import('child_process');
-        const { promisify } = await import('util');
-        const execAsync = promisify(exec);
         
-        // Normalize identity (Ethereum address) to lowercase for consistent comparison
-        const normalizedIdentity = identity.toLowerCase();
+        // Ensure SSH directory exists
+        const sshDir = path.join(process.env.HOME || '/tmp', '.ssh');
+        await fs.mkdir(sshDir, { recursive: true, mode: 0o700 });
         
-        // Try to get the allowed signers file from Git config
-        // Check global config first, then local config
-        let allowedSignersFile: string | undefined;
-        
-        // Try global config first
-        try {
-            const { stdout: configOutput } = await execAsync(
-                'git config --global --get gpg.ssh.allowedSignersFile',
-                { timeout: 5000 }
-            );
-            allowedSignersFile = configOutput.trim();
-            console.log(`🔑 Using global Git-configured allowed signers file: ${allowedSignersFile}`);
-        } catch (error) {
-            // Try local config (requires being in a git repo)
-            try {
-                const { stdout: configOutput } = await execAsync(
-                    'git config --get gpg.ssh.allowedSignersFile',
-                    { timeout: 5000 }
-                );
-                allowedSignersFile = configOutput.trim();
-                console.log(`🔑 Using local Git-configured allowed signers file: ${allowedSignersFile}`);
-            } catch (error) {
-                // No config found, use default
-                const sshDir = path.join(process.env.HOME || '/tmp', '.ssh');
-                await fs.mkdir(sshDir, { recursive: true, mode: 0o700 });
-                allowedSignersFile = path.join(sshDir, 'allowed_signers');
-                console.log(`🔑 No Git config found, using default: ${allowedSignersFile}`);
-            }
-        }
-        
-        // Ensure parent directory exists
-        const fileDir = path.dirname(allowedSignersFile);
-        await fs.mkdir(fileDir, { recursive: true, mode: 0o700 });
-        
-        console.log(`🔑 Importing SSH key to: ${allowedSignersFile}`);
-        console.log(`   Identity: ${normalizedIdentity}`);
-        console.log(`   Public Key: ${publicKey.substring(0, 50)}...`);
+        const allowedSignersFile = path.join(sshDir, 'allowed_signers');
         
         // Normalize SSH key format
         let formattedKey = publicKey.trim();
         if (!formattedKey.startsWith('ssh-')) {
             // Assume it's just the key material and prepend ssh-ed25519
             formattedKey = `ssh-ed25519 ${formattedKey}`;
-            console.log(`   Formatted to: ssh-ed25519 ${publicKey.substring(0, 30)}...`);
         }
         
-        // Format: identity key_type key_material (use normalized lowercase identity)
-        const signerEntry = `${normalizedIdentity} ${formattedKey}\n`;
+        // Format: identity key_type key_material
+        const signerEntry = `${identity} ${formattedKey}\n`;
         
-        // Check if entry already exists (case-insensitive check for identity)
+        // Check if entry already exists
         try {
             const existingContent = await fs.readFile(allowedSignersFile, 'utf-8');
-            const lines = existingContent.split('\n');
-            
-            // Check if any line contains this identity (case-insensitive) and key
-            const alreadyExists = lines.some(line => {
-                const trimmed = line.trim();
-                if (!trimmed || trimmed.startsWith('#')) return false;
-                
-                // Extract identity and key from line
-                const parts = trimmed.split(/\s+/);
-                if (parts.length < 2 || !parts[0]) return false;
-                
-                const lineIdentity = parts[0].toLowerCase();
-                const lineKey = parts.slice(1).join(' ');
-                
-                return lineIdentity === normalizedIdentity && lineKey === formattedKey;
-            });
-            
-            if (alreadyExists) {
-                console.log(`   ℹ️  SSH key for ${normalizedIdentity} already exists in allowed_signers`);
+            if (existingContent.includes(signerEntry.trim())) {
+                console.log(`SSH key for ${identity} already exists in allowed_signers`);
                 return true;
             }
-            console.log(`   📝 Appending to existing allowed_signers file (${lines.filter(l => l.trim()).length} existing entries)`);
         } catch (error) {
-            console.log(`   📝 Creating new allowed_signers file`);
+            // File doesn't exist yet, which is fine
         }
         
         // Append to allowed signers file
@@ -602,11 +545,7 @@ export async function importSSHKeyToServer(publicKey: string, identity: string):
         // Set proper permissions
         await fs.chmod(allowedSignersFile, 0o600);
         
-        // Verify the file was written
-        const finalContent = await fs.readFile(allowedSignersFile, 'utf-8');
-        console.log(`✅ SSH key imported to allowed_signers for identity: ${normalizedIdentity}`);
-        console.log(`   File now has ${finalContent.split('\n').filter(l => l.trim()).length} entries`);
-        
+        console.log(`✅ SSH key imported to allowed_signers for identity: ${identity}`);
         return true;
         
     } catch (error) {
@@ -787,76 +726,15 @@ export async function isSSHKeyImported(identity: string): Promise<boolean> {
     try {
         const fs = await import('fs/promises');
         const path = await import('path');
-        const { exec } = await import('child_process');
-        const { promisify } = await import('util');
-        const execAsync = promisify(exec);
         
-        // Normalize identity to lowercase for case-insensitive comparison
-        const normalizedIdentity = identity.toLowerCase();
-        
-        // Try to get the allowed signers file from Git config
-        let allowedSignersFile: string | undefined;
-        
-        // Try global config first
-        try {
-            const { stdout: configOutput } = await execAsync(
-                'git config --global --get gpg.ssh.allowedSignersFile',
-                { timeout: 5000 }
-            );
-            allowedSignersFile = configOutput.trim();
-        } catch (error) {
-            // Try local config
-            try {
-                const { stdout: configOutput } = await execAsync(
-                    'git config --get gpg.ssh.allowedSignersFile',
-                    { timeout: 5000 }
-                );
-                allowedSignersFile = configOutput.trim();
-            } catch (error) {
-                // No config found, use default
-                const sshDir = path.join(process.env.HOME || '/tmp', '.ssh');
-                allowedSignersFile = path.join(sshDir, 'allowed_signers');
-            }
-        }
-        
-        console.log(`   🔍 Checking if SSH key exists for ${normalizedIdentity}`);
-        console.log(`      File: ${allowedSignersFile}`);
+        const sshDir = path.join(process.env.HOME || '/tmp', '.ssh');
+        const allowedSignersFile = path.join(sshDir, 'allowed_signers');
         
         try {
             const content = await fs.readFile(allowedSignersFile, 'utf-8');
-            const lines = content.split('\n');
-            
-            // Check for valid entry (case-insensitive identity comparison)
-            const hasValidEntry = lines.some(line => {
-                const trimmed = line.trim();
-                // Skip empty lines and comments
-                if (!trimmed || trimmed.startsWith('#')) {
-                    return false;
-                }
-                // Extract the identity part and compare case-insensitively
-                const parts = trimmed.split(/\s+/);
-                if (parts.length < 1 || !parts[0]) return false;
-                
-                const lineIdentity = parts[0].toLowerCase();
-                return lineIdentity === normalizedIdentity;
-            });
-            
-            console.log(`      File exists: true`);
-            console.log(`      Total lines: ${lines.length}`);
-            console.log(`      Valid entry found: ${hasValidEntry}`);
-            
-            if (hasValidEntry) {
-                const matchingLine = lines.find(line => {
-                    const parts = line.trim().split(/\s+/);
-                    return parts[0] && parts[0].toLowerCase() === normalizedIdentity;
-                });
-                console.log(`      Entry: ${matchingLine?.substring(0, 80)}...`);
-            }
-            
-            return hasValidEntry;
+            return content.includes(`${identity} `);
         } catch (error) {
             if ((error as any).code === 'ENOENT') {
-                console.log(`      File exists: false`);
                 return false;
             }
             throw error;

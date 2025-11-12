@@ -209,56 +209,35 @@ export class TestExecutor {
   }
 
   private async installDependencies(): Promise<void> {
-    let installCommand: string;
+    let installCommand: string | undefined;
     
-    // Log package.json being used
-    try {
-      const fs = await import('fs');
-      const packageJsonPath = path.join(this.mergedDir, 'package.json');
-      if (fs.existsSync(packageJsonPath)) {
-        const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
-        Logger.step('package.json found:');
-        console.log(chalk.gray(`   Name: ${packageJson.name || 'N/A'}`));
-        console.log(chalk.gray(`   Dependencies: ${Object.keys(packageJson.dependencies || {}).length}`));
-        console.log(chalk.gray(`   DevDependencies: ${Object.keys(packageJson.devDependencies || {}).length}`));
-        
-        // Show TypeScript if present
-        const allDeps = { ...packageJson.dependencies, ...packageJson.devDependencies };
-        if (allDeps.typescript) {
-          console.log(chalk.gray(`   TypeScript version: ${allDeps.typescript}`));
-        }
-      }
-    } catch (error) {
-      Logger.warning(`Could not read package.json: ${error}`);
-    }
-    
-    // First try to get install command from config (Alice's testcase repo)
+    // Check if install command is explicitly configured
     if (this.config.repositories.testcase.installCommand) {
       installCommand = this.config.repositories.testcase.installCommand;
       Logger.step(`Using configured install command: ${installCommand}`);
     } else {
-      // Fallback to auto-detection
-      Logger.step('Auto-detecting install command from merged project...');
-      const detectedCommands = await detectProjectCommands(this.mergedDir);
-      if (!detectedCommands.isValidProject || !detectedCommands.commands) {
-        throw new Error(`Failed to detect project commands: ${detectedCommands.error || 'Not a valid project'}`);
+      // Check if test command includes installation (&&, ;)
+      const testCommand = this.config.repositories.testcase.testCommand;
+      const hasInstallInTestCommand = testCommand && /&&|;/.test(testCommand);
+      
+      if (hasInstallInTestCommand) {
+        Logger.warning('No separate install command - test command includes installation');
+        return;
       }
       
-      this.detectedLanguage = detectedCommands.language;
-      this.projectCommands = detectedCommands.commands;
+      // Auto-detect install command from testcase repo only (for convenience)
+      Logger.step('Auto-detecting install command from testcase repo...');
+      const detectedCommands = await detectProjectCommands(this.mergedDir);
+      
+      if (!detectedCommands.isValidProject || !detectedCommands.commands) {
+        Logger.warning('Could not detect project type, skipping dependency installation');
+        Logger.step('Note: Test command may need to handle its own environment setup');
+        return;
+      }
       
       installCommand = detectedCommands.commands.installCommand;
-      
-      // For TypeScript projects, update commands based on package manager
-      if (detectedCommands.language === 'typescript') {
-        const packageManager = await detectPackageManager(this.mergedDir);
-        const updatedCommands = updateCommandsForPackageManager(
-          detectedCommands.commands as any, 
-          packageManager
-        );
-        installCommand = updatedCommands.installCommand;
-        this.projectCommands = updatedCommands;
-      }
+      this.detectedLanguage = detectedCommands.language;
+      this.projectCommands = detectedCommands.commands;
       
       Logger.step(`Auto-detected ${detectedCommands.language} project with install command: ${installCommand}`);
     }
@@ -275,102 +254,22 @@ export class TestExecutor {
     );
 
     if (result.exitCode !== 0) {
-      // Provide helpful error message for common issues
-      let errorMsg = `Dependency installation failed: ${result.stderr || result.stdout}`;
-      
-      // Check for specific error patterns and provide guidance
-      if (result.stderr.includes('source: not found') || result.stderr.includes('source: command not found')) {
-        errorMsg += '\n\n⚠️  Shell compatibility issue detected. This may be because:';
-        errorMsg += '\n  - Your system uses "sh" instead of "bash"';
-        errorMsg += '\n  - Python virtual environment commands need bash';
-        errorMsg += '\n\nTrying to fix: The system will attempt to use bash for Python commands.';
-      }
-      
-      if (result.stderr.includes('python3: not found') || result.stderr.includes('python: not found')) {
-        errorMsg += '\n\n⚠️  Python not found. Please ensure Python 3 is installed on your system.';
-      }
-      
-      if (result.stderr.includes('cargo: not found')) {
-        errorMsg += '\n\n⚠️  Cargo not found. Please ensure Rust and Cargo are installed on your system.';
-      }
-      
-      throw new Error(errorMsg);
+      throw new Error(`Dependency installation failed: ${result.stderr}`);
     }
     
     Logger.success('Dependencies installed successfully');
-    
-    // Log installed packages for debugging
-    try {
-      const fs = await import('fs');
-      const nodeModulesPath = path.join(this.mergedDir, 'node_modules');
-      const nodeModulesBinPath = path.join(nodeModulesPath, '.bin');
-      
-      // Check if node_modules exists
-      if (fs.existsSync(nodeModulesPath)) {
-        Logger.step(`node_modules directory exists at: ${nodeModulesPath}`);
-        
-        // Check .bin directory
-        if (fs.existsSync(nodeModulesBinPath)) {
-          const binFiles = fs.readdirSync(nodeModulesBinPath);
-          Logger.step(`Found ${binFiles.length} binaries in node_modules/.bin/`);
-          
-          // Log key binaries
-          const keyBinaries = ['tsc', 'typescript', 'ts-node', 'jest', 'mocha'];
-          const foundBinaries = binFiles.filter(f => keyBinaries.includes(f));
-          if (foundBinaries.length > 0) {
-            Logger.step(`Key binaries found: ${foundBinaries.join(', ')}`);
-          }
-        } else {
-          Logger.warning(`node_modules/.bin directory not found at: ${nodeModulesBinPath}`);
-        }
-        
-        // Check for TypeScript specifically
-        const typescriptPath = path.join(nodeModulesPath, 'typescript');
-        if (fs.existsSync(typescriptPath)) {
-          Logger.step('TypeScript package is installed');
-        } else {
-          Logger.warning('TypeScript package not found in node_modules');
-        }
-      } else {
-        Logger.warning(`node_modules directory not found at: ${nodeModulesPath}`);
-      }
-    } catch (error) {
-      Logger.warning(`Could not verify node_modules: ${error}`);
-    }
   }
 
   private async buildSource(): Promise<void> {
-    let buildCommand: string | undefined;
-    
-    // Try Alice's build command first, then Bob's
-    buildCommand = this.config.repositories.testcase.buildCommand || this.config.repositories.source.buildCommand;
+    // Only build if explicitly configured - DO NOT auto-detect
+    const buildCommand = this.config.repositories.testcase.buildCommand || this.config.repositories.source.buildCommand;
     
     if (!buildCommand) {
-      // Use cached detection result if available
-      if (this.projectCommands) {
-        buildCommand = this.projectCommands.buildCommand;
-        Logger.step(`Using cached build command: ${buildCommand}`);
-      } else {
-        // Fallback to auto-detection
-        Logger.step('Auto-detecting build command from merged project...');
-        const detectedCommands = await detectProjectCommands(this.mergedDir);
-        if (!detectedCommands.isValidProject || !detectedCommands.commands) {
-          Logger.warning('No build command detected, skipping build step');
-          return;
-        }
-        buildCommand = detectedCommands.commands.buildCommand;
-        this.detectedLanguage = detectedCommands.language;
-        this.projectCommands = detectedCommands.commands;
-      }
-      
-      if (!buildCommand || buildCommand.includes('No build command')) {
-        Logger.warning('No build command available, skipping build step');
-        return;
-      }
-      Logger.step(`Auto-detected build command: ${buildCommand}`);
-    } else {
-      Logger.step(`Using configured build command: ${buildCommand}`);
+      Logger.warning('No build command configured, skipping build step');
+      return;
     }
+    
+    Logger.step(`Using configured build command: ${buildCommand}`);
 
     const { command, args } = parseCommand(buildCommand);
     
@@ -394,31 +293,14 @@ export class TestExecutor {
     const startTime = Date.now();
     
     try {
-      let testCommand: string | undefined;
-      
-      // Use Alice's test command first, then Bob's
-      testCommand = this.config.repositories.testcase.testCommand || this.config.repositories.source.testCommand;
+      // Use Alice's test command first, then Bob's - REQUIRED, no auto-detection
+      const testCommand = this.config.repositories.testcase.testCommand || this.config.repositories.source.testCommand;
       
       if (!testCommand) {
-        // Use cached detection result if available
-        if (this.projectCommands) {
-          testCommand = this.projectCommands.testCommand;
-          Logger.step(`Using previous founded test command: ${testCommand}`);
-        } else {
-          // Fallback to auto-detection
-          Logger.step('Auto-detecting test command from merged project...');
-          const detectedCommands = await detectProjectCommands(this.mergedDir);
-          if (!detectedCommands.isValidProject || !detectedCommands.commands) {
-            throw new Error(`Failed to detect project commands: ${detectedCommands.error || 'Not a valid project'}`);
-          }
-          testCommand = detectedCommands.commands.testCommand;
-          this.detectedLanguage = detectedCommands.language;
-          this.projectCommands = detectedCommands.commands;
-          Logger.step(`Auto-detected ${detectedCommands.language} project with test command: ${testCommand}`);
-        }
-      } else {
-        Logger.step(`Using configured test command: ${testCommand}`);
+        throw new Error('No test command configured. Test command must be explicitly provided in the escrow.');
       }
+      
+      Logger.step(`Using configured test command: ${testCommand}`);
 
       const { command, args } = parseCommand(testCommand);
 
@@ -433,13 +315,10 @@ export class TestExecutor {
 
       const duration = Date.now() - startTime;
 
-      // Combine stdout and stderr for complete output
-      const combinedOutput = result.stdout + (result.stderr ? '\n' + result.stderr : '');
-
       return {
         success: result.exitCode === 0,
-        output: combinedOutput,
-        error: result.exitCode !== 0 ? (result.stderr || `Command exited with code ${result.exitCode}`) : undefined,
+        output: result.stdout,
+        error: result.exitCode !== 0 ? result.stderr : undefined,
         duration,
         timestamp: new Date(),
       };

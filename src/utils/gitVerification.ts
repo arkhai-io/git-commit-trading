@@ -301,38 +301,11 @@ export class GitCommitVerifier {
     stderr: string;
   }> {
     try {
-      // Get the currently configured allowed signers file from Git config
-      let allowedSignersFile: string | undefined;
-      
-      try {
-        const { stdout: configOutput } = await execAsync(
-          'git config --get gpg.ssh.allowedSignersFile',
-          { cwd: workDir, timeout: 5000 }
-        );
-        allowedSignersFile = configOutput.trim();
-        console.log(`   Using Git-configured allowed signers file: ${allowedSignersFile}`);
-      } catch (error) {
-        // No config found, use default
-        const path = await import('path');
-        const sshDir = path.join(process.env.HOME || '/tmp', '.ssh');
-        allowedSignersFile = path.join(sshDir, 'allowed_signers');
-        console.log(`   No Git config found, using default: ${allowedSignersFile}`);
-      }
-      
-      // Use GIT_CONFIG_GLOBAL to override config (more reliable than -c flag)
-      const env = {
-        ...process.env,
-        GIT_CONFIG_COUNT: '1',
-        GIT_CONFIG_KEY_0: 'gpg.ssh.allowedSignersFile',
-        GIT_CONFIG_VALUE_0: allowedSignersFile,
-      };
-      
       const { stdout, stderr } = await execAsync(
         `git verify-commit --raw ${commitHash}`,
         {
           cwd: workDir,
           timeout: this.config.timeoutMs,
-          env,
         }
       );
       
@@ -401,16 +374,21 @@ export class GitCommitVerifier {
       keyFingerprint = signatureInfo.fingerprint; // SSH SHA256 fingerprint
     }
     
-    // Find matching registered key
+    // Find matching registered key (single key per address)
     let matchedAddress: string | undefined;
+    let matchedKeyClaim: GitKeyClaim | undefined;
+    
     for (const [address, keyClaim] of registeredKeys.entries()) {
       if (await this.isKeyMatch(keyClaim, keyFingerprint, keyId, signatureInfo.signatureType)) {
         matchedAddress = address;
+        matchedKeyClaim = keyClaim;
         break;
       }
     }
     
-    if (matchedAddress) {
+    if (matchedAddress && matchedKeyClaim) {
+      console.log(`✅ Commit signed by registered key for address: ${matchedAddress}`);
+      
       return {
         isValid: true,
         keyFingerprint,
@@ -424,7 +402,7 @@ export class GitCommitVerifier {
         keyFingerprint,
         signatureType: signatureInfo.signatureType || 'gpg',
         verificationDetails,
-        error: 'No registered key matches the commit signature',
+        error: 'Registered key does not match the commit signature',
       };
     }
   }

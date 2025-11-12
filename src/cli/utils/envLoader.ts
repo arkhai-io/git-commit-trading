@@ -15,9 +15,8 @@ export interface EnvConfig {
   wsRpcUrl?: string;
   commitObligationAddress?: string;
   gitIdentityRegistryAddress?: string;
+  // DEBUG=true enables verbose logging with trace IDs
 }
-
-export type TransportType = 'http' | 'websocket';
 
 /**
  * Load and parse .env file
@@ -83,7 +82,7 @@ function validateEnvConfig(envVars: Record<string, string>): EnvConfig {
 /**
  * Create a blockchain client from environment configuration
  */
-export async function createClientFromEnv(envPath: string = '.env', transportType: TransportType = 'http') {
+export async function createClientFromEnv(envPath: string = '.env', transportType: 'http' | 'websocket' = 'http') {
   console.log(chalk.gray('Loading environment configuration...'));
   
   const envVars = loadEnvFile(envPath);
@@ -94,9 +93,13 @@ export async function createClientFromEnv(envPath: string = '.env', transportTyp
 
   const network = config.network || 'anvil';
   console.log(chalk.gray(`  Network: ${network}`));
-  console.log(chalk.gray(`  Transport: ${transportType}`));
+  console.log(chalk.gray(`  Transport: ${transportType.toUpperCase()}`));
+  
+  if (transportType === 'websocket' && config.wsRpcUrl) {
+    console.log(chalk.gray(`  WebSocket URL: ${config.wsRpcUrl.substring(0, 40)}...`));
+  }
 
-  // Create account from private key with nonce manager
+  // Create account from private key
   const account = privateKeyToAccount(config.privateKey as `0x${string}`);
 
   // Verify that the private key matches the address
@@ -104,104 +107,80 @@ export async function createClientFromEnv(envPath: string = '.env', transportTyp
     throw new Error(`Private key does not match the provided address. Expected: ${config.address}, Got: ${account.address}`);
   }
 
+  // Helper to create transport based on type
+  const createTransport = (httpUrl: string) => {
+    if (transportType === 'websocket') {
+      // Use WS_RPC_URL if available, otherwise convert HTTP URL to WebSocket
+      let wsUrl = config.wsRpcUrl;
+      
+      if (!wsUrl) {
+        // Fallback: convert http/https URLs to ws/wss
+        wsUrl = httpUrl.replace(/^http/, 'ws');
+        console.log(chalk.yellow(`⚠️ WS_RPC_URL not found in .env, converting HTTP URL to WebSocket: ${wsUrl}`));
+      }
+      
+      return webSocket(wsUrl, {
+        keepAlive: true,
+        timeout: 60_000, // 60 seconds timeout
+        reconnect: {
+          attempts: 10,
+          delay: 3000, // 3 seconds between attempts
+        },
+      });
+    }
+    return http(httpUrl);
+  };
+
   // Create wallet client based on network
   let walletClient;
   let rpcUrl = config.rpcUrl;
-  let wsRpcUrl = config.wsRpcUrl;
-
-  // Validate transport type and URL availability
-  if (transportType === 'websocket') {
-    if (!wsRpcUrl && !rpcUrl) {
-      throw new Error('WS_RPC_URL or RPC_URL is required for WebSocket transport in .env file');
-    }
-    // If WS_RPC_URL is not provided, try to convert HTTP URL to WS URL
-    if (!wsRpcUrl && rpcUrl) {
-      wsRpcUrl = rpcUrl.replace(/^http/, 'ws');
-      console.log(chalk.yellow(`⚠️  WS_RPC_URL not found, using converted URL: ${wsRpcUrl}`));
-    }
-  }
 
   switch (network.toLowerCase()) {
     case 'anvil':
     case 'localhost':
       rpcUrl = rpcUrl || 'http://127.0.0.1:8545';
-      wsRpcUrl = wsRpcUrl || 'wss://127.0.0.1:8545';
       walletClient = createWalletClient({
         account,
         chain: foundry,
-        transport: transportType === 'websocket' ? webSocket(wsRpcUrl) : http(rpcUrl),
+        transport: createTransport(rpcUrl),
       });
       break;
     case 'sepolia':
-      if (transportType === 'websocket') {
-        if (!wsRpcUrl) {
-          throw new Error('WS_RPC_URL is required for sepolia network with WebSocket transport in .env file');
-        }
-        walletClient = createWalletClient({
-          account,
-          chain: sepolia,
-          transport: webSocket(wsRpcUrl),
-        });
-      } else {
-        if (!rpcUrl) {
-          throw new Error('RPC_URL is required for sepolia network in .env file');
-        }
-        walletClient = createWalletClient({
-          account,
-          chain: sepolia,
-          transport: http(rpcUrl),
-        });
+      if (!rpcUrl) {
+        throw new Error('RPC_URL is required for sepolia network in .env file');
       }
+      walletClient = createWalletClient({
+        account,
+        chain: sepolia,
+        transport: createTransport(rpcUrl),
+      });
       break;
     case 'basesepolia':
     case 'base-sepolia':
-      if (transportType === 'websocket') {
-        if (!wsRpcUrl) {
-          throw new Error('WS_RPC_URL is required for base-sepolia network with WebSocket transport in .env file');
-        }
-        walletClient = createWalletClient({
-          account,
-          chain: baseSepolia,
-          transport: webSocket(wsRpcUrl),
-        });
-      } else {
-        if (!rpcUrl) {
-          throw new Error('RPC_URL is required for base-sepolia network in .env file');
-        }
-        walletClient = createWalletClient({
-          account,
-          chain: baseSepolia,
-          transport: http(rpcUrl),
-        });
+      if (!rpcUrl) {
+        throw new Error('RPC_URL is required for base-sepolia network in .env file');
       }
+      walletClient = createWalletClient({
+        account,
+        chain: baseSepolia,
+        transport: createTransport(rpcUrl),
+      });
       break;
     case 'mainnet':
-      if (transportType === 'websocket') {
-        if (!wsRpcUrl) {
-          throw new Error('WS_RPC_URL is required for mainnet network with WebSocket transport in .env file');
-        }
-        walletClient = createWalletClient({
-          account,
-          chain: mainnet,
-          transport: webSocket(wsRpcUrl),
-        });
-      } else {
-        if (!rpcUrl) {
-          throw new Error('RPC_URL is required for mainnet network in .env file');
-        }
-        walletClient = createWalletClient({
-          account,
-          chain: mainnet,
-          transport: http(rpcUrl),
-        });
+      if (!rpcUrl) {
+        throw new Error('RPC_URL is required for mainnet network in .env file');
       }
+      walletClient = createWalletClient({
+        account,
+        chain: mainnet,
+        transport: createTransport(rpcUrl),
+      });
       break;
     default:
       throw new Error(`Unsupported network: ${network}. Supported: anvil, localhost, sepolia, base-sepolia, mainnet`);
   }
 
-  const displayUrl = transportType === 'websocket' ? wsRpcUrl : rpcUrl;
-  console.log(chalk.gray(`  RPC URL: ${displayUrl?.substring(0, 60)}${displayUrl && displayUrl.length > 60 ? '...' : ''}`));
+  console.log(chalk.gray(`  RPC URL: ${rpcUrl?.substring(0, 40)}...`));
 
   // Create alkahest client
   const alkahestClient = makeClient(walletClient as any);
@@ -261,7 +240,7 @@ export async function createClientFromEnv(envPath: string = '.env', transportTyp
 }
 
 /**
- * Check if .env file exists and show helpful error message if not
+ * Check if .env file exists, load it into process.env, and show helpful error message if not found
  */
 export function requireEnvFile(envPath: string = '.env'): void {
   if (!existsSync(envPath)) {
@@ -270,18 +249,27 @@ export function requireEnvFile(envPath: string = '.env'): void {
     console.error(chalk.gray('PRIVATE_KEY=0x1234567890abcdef...'));
     console.error(chalk.gray('ADDRESS=0xYourEthereumAddress'));
     console.error(chalk.gray('NETWORK=anvil  # optional: anvil, localhost, sepolia, base-sepolia, mainnet'));
-    console.error(chalk.gray('RPC_URL=http://127.0.0.1:8545  # optional for anvil/localhost (for HTTP transport)'));
-    console.error(chalk.gray('WS_RPC_URL=ws://127.0.0.1:8545  # optional (for WebSocket transport)'));
+    console.error(chalk.gray('RPC_URL=http://127.0.0.1:8545  # optional for anvil/localhost'));
     console.error(chalk.gray('COMMIT_OBLIGATION_ADDRESS=0x...  # optional'));
     console.error(chalk.gray('GIT_IDENTITY_REGISTRY_ADDRESS=0x...  # optional'));
+    console.error(chalk.gray('DEBUG=true  # optional: enable verbose logging'));
     console.error(chalk.yellow('\nExample .env file:'));
     console.error(chalk.cyan(`PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 ADDRESS=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
 NETWORK=anvil
 RPC_URL=http://127.0.0.1:8545
-WS_RPC_URL=ws://127.0.0.1:8545
-GIT_IDENTITY_REGISTRY_ADDRESS=0x...`));
+GIT_IDENTITY_REGISTRY_ADDRESS=0x...
+DEBUG=true`));
     process.exit(1);
+  }
+  
+  // Load environment variables into process.env for use throughout the application
+  const envVars = loadEnvFile(envPath);
+  for (const [key, value] of Object.entries(envVars)) {
+    // Don't override existing process.env variables (system env takes priority)
+    if (!process.env[key]) {
+      process.env[key] = value;
+    }
   }
 }
 

@@ -47,13 +47,14 @@ export async function fulfillCommand(options: FulfillOptions) {
     if (options.verifyKey !== false && hasGitIdentityRegistry) {
       console.log(chalk.gray('Verifying registered Git key...'));
       try {
-        const keyClaim = await client.gitIdentityRegistry.getLatestKeyClaim(config.address as `0x${string}`);
-        if (!keyClaim || !keyClaim.publicKey || keyClaim.publicKey.trim() === "") {
-          console.log(chalk.yellow('⚠️ No Git key registered for this address.'));
-          console.log(chalk.yellow('   Register your Git SSH key first with: git-escrows register-key'));
+        const latestKeyClaim = await client.gitIdentityRegistry.getLatestKeyClaim(config.address as `0x${string}`);
+        if (!latestKeyClaim || !latestKeyClaim.publicKey || latestKeyClaim.publicKey.trim() === "") {
+          console.log(chalk.yellow('⚠️ No Git keys registered for this address.'));
+          console.log(chalk.yellow('   Register your Git SSH or PGP key first with: git-escrows register-key'));
           console.log(chalk.yellow('   Or use --no-verify-key to skip verification (not recommended)'));
         } else {
-          console.log(chalk.green('✓ Git key registration verified with pubKey: ', keyClaim.publicKey));
+          console.log(chalk.green(`✓ Git key registration verified - latest key found`));
+          console.log(chalk.gray(`  Key type: ${latestKeyClaim.keyType === 0 ? 'PGP' : latestKeyClaim.keyType === 1 ? 'SSH-Ed25519' : 'SSH-Secp256k1'}`));
         }
       } catch (error) {
         console.log(chalk.yellow('⚠️ Could not verify Git key registration:', error));
