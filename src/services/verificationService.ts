@@ -229,11 +229,22 @@ export class GitVerificationService {
       console.log(chalk.gray(`   Processing key import for address: ${address}`));
       console.log(chalk.gray(`      Key type: ${keyClaim.keyType}, Public key: ${keyClaim.publicKey.substring(0, 30)}...`));
       
-      // Check cache first
-      const cacheKey = `import:${address}:${keyClaim.keyType}`;
+      // Check cache with public key hash to detect key changes
+      // Use a hash of the public key to ensure we re-import when the key changes
+      const keyHash = createHash('sha256').update(keyClaim.publicKey).digest('hex').substring(0, 16);
+      const cacheKey = `import:${address}:${keyClaim.keyType}:${keyHash}`;
+      
       if (this.keyImportCache.has(cacheKey)) {
         console.log(chalk.gray(`      ⏭️  Skipped (in cache)`));
         return 'skipped';
+      }
+      
+      // Clear old cache entries for this address/keyType (different key)
+      // This handles the case where user registers a new key of the same type
+      for (const cachedKey of this.keyImportCache.keys()) {
+        if (cachedKey.startsWith(`import:${address}:${keyClaim.keyType}:`)) {
+          this.keyImportCache.delete(cachedKey);
+        }
       }
 
       let alreadyImported = false;

@@ -73,6 +73,9 @@ export class GitCommitVerifier {
       console.log(`🔄 Checking out commit: ${commitHash}`);
       await this.checkoutCommit(workDir, commitHash);
       
+      // Configure Git based on registered key types
+      await this.configureGitForRegisteredKeys(workDir, registeredKeys);
+      
       // Get commit signature information
       console.log(`🔍 Extracting commit signature...`);
       const signatureInfo = await this.getCommitSignature(workDir, commitHash);
@@ -146,8 +149,48 @@ export class GitCommitVerifier {
         console.warn('Git clone warnings:', stderr);
       }
       
+      
     } catch (error) {
       throw new Error(`Failed to clone repository: ${error}`);
+    }
+  }
+
+  /**
+   * Configure Git based on registered key types
+   */
+  private async configureGitForRegisteredKeys(
+    workDir: string, 
+    registeredKeys: Map<string, GitKeyClaim>
+  ): Promise<void> {
+    const homeDir = process.env.HOME || process.env.USERPROFILE || '/root';
+    
+    // Check what types of keys are registered
+    const hasSSHKeys = Array.from(registeredKeys.values()).some(
+      key => key.keyType === KeyType.SSHEd25519 || key.keyType === KeyType.SSHSecp256k1
+    );
+    const hasGPGKeys = Array.from(registeredKeys.values()).some(
+      key => key.keyType === KeyType.PGPv4
+    );
+    
+    try {
+      if (hasSSHKeys) {
+        // Configure SSH allowed_signers file
+        const allowedSignersFile = path.join(homeDir, '.ssh', 'allowed_signers');
+        await execAsync(`git config --local gpg.ssh.allowedSignersFile "${allowedSignersFile}"`, {
+          cwd: workDir,
+          timeout: 5000,
+        });
+        console.log(`✅ Git configured for SSH signatures: ${allowedSignersFile}`);
+      }
+      
+      if (hasGPGKeys) {
+        // Ensure GPG is configured (it's the default, but be explicit)
+        // No need to set gpg.format as 'openpgp' is the default
+        console.log(`✅ Git configured for GPG signatures (default)`);
+      }
+      
+    } catch (error) {
+      console.warn('⚠️ Failed to configure Git for signature verification:', error);
     }
   }
 
