@@ -549,7 +549,9 @@ export function verifySSHSignature(
  * @returns Message string to be signed
  */
 export function generateSigningMessage(ethAddress: string, nonce: string): string {
-    return `${ethAddress} ${nonce}`;
+    // Always normalize address to lowercase to avoid checksum case mismatches
+    const normalizedAddress = ethAddress.toLowerCase();
+    return `${normalizedAddress} ${nonce}`;
 }
 
 /**
@@ -656,15 +658,18 @@ export async function verifyGitKeyClaimSignature(
     ethAddress: string
 ): Promise<boolean> {
     try {
+        // Normalize address to lowercase for consistent verification
+        const normalizedAddress = ethAddress.toLowerCase();
+        
         console.log("🔍 Verifying GitKeyClaim signature:");
-        console.log("  Address:", ethAddress);
+        console.log("  Address:", normalizedAddress);
         console.log("  Key Type:", getKeyTypeName(gitKeyClaim.keyType));
 
         // Extract nonce from the nonceHash
         const nonceHex = gitKeyClaim.nonceHash.replace('0x', '');
         console.log("  Nonce (hex from contract):", nonceHex);
 
-        const expectedMessage = generateSigningMessage(ethAddress, nonceHex);
+        const expectedMessage = generateSigningMessage(normalizedAddress, nonceHex);
         console.log("  Expected signed message:", expectedMessage);
 
         const signature = gitKeyClaim.sig.replace('0x', '');
