@@ -50,9 +50,10 @@ export async function submitCommand(options: SubmitOptions) {
       throw new Error('You must provide --arbiter, --oracle, and --token addresses when using environment configuration');
     }
     
-    const arbiterAddress = options.arbiter;
-    const oracleAddress = options.oracle; 
-    const tokenAddress = options.token;
+    // Normalize addresses to lowercase to avoid checksum case mismatches
+    const arbiterAddress = options.arbiter.toLowerCase();
+    const oracleAddress = options.oracle.toLowerCase(); 
+    const tokenAddress = options.token.toLowerCase();
 
     // Encode the demand data
     const encodeCommitTestsDemand = (demand: {

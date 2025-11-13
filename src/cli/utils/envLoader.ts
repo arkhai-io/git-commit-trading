@@ -68,8 +68,10 @@ function validateEnvConfig(envVars: Record<string, string>): EnvConfig {
     throw new Error('ADDRESS must be a valid Ethereum address starting with 0x and 40 characters long');
   }
 
-  // Normalize address to lowercase to avoid checksum case mismatches
+  // Normalize all addresses to lowercase to avoid checksum case mismatches
   const normalizedAddress = address.toLowerCase();
+  const normalizedCommitObligation = envVars.COMMIT_OBLIGATION_ADDRESS?.toLowerCase();
+  const normalizedGitIdentityRegistry = envVars.GIT_IDENTITY_REGISTRY_ADDRESS?.toLowerCase();
 
   return {
     privateKey,
@@ -77,8 +79,8 @@ function validateEnvConfig(envVars: Record<string, string>): EnvConfig {
     network: envVars.NETWORK || 'anvil',
     rpcUrl: envVars.RPC_URL,
     wsRpcUrl: envVars.WS_RPC_URL,
-    commitObligationAddress: envVars.COMMIT_OBLIGATION_ADDRESS,
-    gitIdentityRegistryAddress: envVars.GIT_IDENTITY_REGISTRY_ADDRESS,
+    commitObligationAddress: normalizedCommitObligation,
+    gitIdentityRegistryAddress: normalizedGitIdentityRegistry,
   };
 }
 
