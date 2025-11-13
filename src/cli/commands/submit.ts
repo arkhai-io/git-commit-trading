@@ -109,55 +109,110 @@ export async function submitCommand(options: SubmitOptions) {
     } catch (permitError: any) {
       // If permit fails, fallback to approve + transfer
       console.log(chalk.yellow('EIP-2612 permit not supported, falling back to approve + transfer'));
-      console.log(chalk.gray('Approving token spend...'));
-
-      // First approve the tokens
-      const approveHash = await client.erc20.approve(
-        {
-          address: tokenAddress,
-          value: rewardAmount,
-        },
-        'escrow'
-      );
-
-      console.log(chalk.gray(`Approval tx: ${approveHash}`));
       
-      // Debug: Get transaction details to see what nonce was used
-      try {
-        const tx = await client.viemClient.getTransaction({ hash: approveHash });
-        console.log(chalk.blue(`Transaction nonce used: ${tx.nonce}`));
-      } catch (txError) {
-        console.log(chalk.yellow(`Could not fetch transaction details: ${txError instanceof Error ? txError.message : String(txError)}`));
+      // Check current allowance to avoid unnecessary approval
+      console.log(chalk.gray('Checking current token allowance...'));
+      // The spender is the ERC20EscrowObligation contract, not the CommitObligation contract
+      const escrowAddress = client.contractAddresses.erc20EscrowObligation;
+      if (!escrowAddress) {
+        throw new Error('ERC20EscrowObligation address not found in client');
       }
       
-      console.log(chalk.gray('Waiting for approval to be mined (this may take a while on Base Sepolia)...'));
+      console.log(chalk.gray(`  Owner: ${config.address}`));
+      console.log(chalk.gray(`  Spender (ERC20EscrowObligation): ${escrowAddress}`));
+      
+      const currentAllowance = await client.viemClient.readContract({
+        address: tokenAddress as `0x${string}`,
+        abi: [{
+          name: 'allowance',
+          type: 'function',
+          stateMutability: 'view',
+          inputs: [
+            { name: 'owner', type: 'address' },
+            { name: 'spender', type: 'address' }
+          ],
+          outputs: [{ type: 'uint256' }]
+        }],
+        functionName: 'allowance',
+        args: [config.address as `0x${string}`, escrowAddress as `0x${string}`]
+      });
 
-      try {
-        // Wait for the approval transaction to be confirmed with longer timeout for Base Sepolia
-        await client.viemClient.waitForTransactionReceipt({
-          hash: approveHash,
-          timeout: 180_000  // 3 minutes timeout for Base Sepolia
-        });
-        console.log(chalk.green('✓ Approval confirmed'));
-      } catch (error) {
-        console.log(chalk.yellow('⚠ Approval confirmation timed out, but transaction was submitted'));
-        console.log(chalk.gray('Waiting 30 seconds for network propagation before proceeding...'));
-        await new Promise(resolve => setTimeout(resolve, 30000));
-        console.log(chalk.gray('Proceeding with escrow creation...'));
+      let approveHash;
+      if (currentAllowance >= rewardAmount) {
+        console.log(chalk.green(`✓ Sufficient allowance already exists (${currentAllowance} >= ${rewardAmount})`));
+        console.log(chalk.gray('Skipping approval step...'));
+      } else {
+        console.log(chalk.gray(`Current allowance: ${currentAllowance}, approving ${rewardAmount}...`));
+        
+        // First approve the tokens
+        approveHash = await client.erc20.approve(
+          {
+            address: tokenAddress,
+            value: rewardAmount,
+          },
+          'escrow'
+        );
+
+        console.log(chalk.gray(`Approval tx: ${approveHash}`));
+      
+        // Debug: Get transaction details to see what nonce was used
+        try {
+          const tx = await client.viemClient.getTransaction({ hash: approveHash });
+          console.log(chalk.yellow(`Transaction nonce used: ${tx.nonce}`));
+        } catch (txError) {
+          console.log(chalk.yellow(`Could not fetch transaction details: ${txError instanceof Error ? txError.message : String(txError)}`));
+        }
+        
+        console.log(chalk.gray('Confirming approval...'));
+
+        try {
+          // Wait for the approval transaction to be confirmed with longer timeout for Base Sepolia
+          await client.viemClient.waitForTransactionReceipt({
+            hash: approveHash,
+            timeout: 180_000  // 3 minutes timeout for Base Sepolia
+          });
+          console.log(chalk.green('✓ Approval confirmed'));
+        } catch (error) {
+          // If approval confirmation times out or fails, we MUST NOT proceed
+          // because the buyWithErc20 will fail without approval
+          console.log(chalk.red('❌ Approval transaction failed or timed out'));
+          console.log(chalk.yellow('Cannot proceed with escrow creation without confirmed approval'));
+          console.log(chalk.gray(`Check transaction status: with tx ${approveHash}`));
+          throw new Error('Approval transaction failed or timed out. Please check BaseScan and retry.');
+        }
       }
 
       // Now create the escrow
+      // We gonna wait for 5 seconds to ensure the approval is fully processed on-chain
+      await new Promise(resolve => setTimeout(resolve, 5000));
       console.log(chalk.gray('Creating escrow...'));
-      const result = await client.erc20.buyWithErc20(
-        {
-          address: tokenAddress,
-          value: rewardAmount,
-        },
-        { arbiter: arbiterAddress, demand },
-        0n,
-      );
-      escrow = result.attested;
-      console.log(chalk.green('✓ Used approve + transfer'));
+      try {
+        const result = await client.erc20.buyWithErc20(
+          {
+            address: tokenAddress,
+            value: rewardAmount,
+          },
+          { arbiter: arbiterAddress, demand },
+          0n,
+        );
+        escrow = result.attested;
+        console.log(chalk.green('✓ Used approve + transfer'));
+      } catch (buyError: any) {
+        console.log(chalk.red('❌ Failed to create escrow'));
+        console.log(chalk.yellow('Error details:'));
+        console.log(chalk.gray(buyError instanceof Error ? buyError.message : String(buyError)));
+        
+        // Check if it's a contract revert error
+        if (buyError.message?.includes('ERC20TransferFailed')) {
+          console.log(chalk.yellow('\nPossible causes:'));
+          console.log(chalk.gray('  1. Insufficient token balance'));
+          console.log(chalk.gray('  2. Approval not confirmed yet (blockchain delay)'));
+          console.log(chalk.gray('  3. Token transfer restrictions'));
+          console.log(chalk.yellow('Please try again in a few minutes'));
+        }
+        
+        throw new Error('Escrow creation failed. See error details above.');
+      }
     }
 
     console.log(chalk.green('Escrow created successfully!'));
