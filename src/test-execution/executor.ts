@@ -243,6 +243,7 @@ export class TestExecutor {
     }
     
     const { command, args } = parseCommand(installCommand);
+    Logger.step(`Executing install command: ${command} with args: ${args.join(' ')}`);
     
     const result = await executeCommand(
       command,

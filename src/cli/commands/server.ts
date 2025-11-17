@@ -208,7 +208,7 @@ export async function serverCommand(options: ServerOptions) {
         testConfig.repositories.source.commitHash = obligation.commitHash;
 
         // If test command doesn't include installation (no && or ;), auto-detect install command
-        // This allows users to submit just "poetry run pytest" and have "poetry install" run automatically
+        // This allows users to submit just "poetry run pytest" and have "poetry install --with dev" run automatically
         const hasInstallInCommand = /&&|;/.test(demand.testsCommand);
         if (!hasInstallInCommand) {
           console.log('🔍 Test command does not include install step, will auto-detect install command from testcase repo');

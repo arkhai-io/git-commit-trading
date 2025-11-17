@@ -450,7 +450,7 @@ async function detectPythonProject(projectPath: string): Promise<PythonDetection
       case 'poetry':
         // Explicit Poetry project (has poetry.lock)
         commands = {
-          installCommand: 'poetry install',
+          installCommand: 'poetry install --with dev',
           buildCommand: 'poetry build',
           testCommand: 'poetry run pytest'
         };
@@ -464,7 +464,7 @@ async function detectPythonProject(projectPath: string): Promise<PythonDetection
           
           if (isPoetryProject) {
             commands = {
-              installCommand: 'poetry install',
+              installCommand: 'poetry install --with dev',
               buildCommand: 'poetry build',
               testCommand: 'poetry run pytest'
             };
