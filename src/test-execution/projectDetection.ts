@@ -449,9 +449,8 @@ async function detectPythonProject(projectPath: string): Promise<PythonDetection
     switch (configType) {
       case 'poetry':
         // Explicit Poetry project (has poetry.lock)
-        // Add --no-cache to avoid namespace package conflicts (e.g., nvidia packages)
         commands = {
-          installCommand: 'poetry install --no-cache --with-dev',
+          installCommand: 'poetry install --with dev --no-cache',
           buildCommand: 'poetry build',
           testCommand: 'poetry run pytest'
         };
@@ -464,9 +463,8 @@ async function detectPythonProject(projectPath: string): Promise<PythonDetection
                                   pyprojectContent.includes('tool.poetry');
           
           if (isPoetryProject) {
-            // Add --no-cache to avoid namespace package conflicts (e.g., nvidia packages)
             commands = {
-              installCommand: 'poetry install --no-cache',
+              installCommand: 'poetry install --with dev',
               buildCommand: 'poetry build',
               testCommand: 'poetry run pytest'
             };
