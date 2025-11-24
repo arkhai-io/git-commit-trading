@@ -15,10 +15,17 @@
       "installCommand": "bun install"
     }
   },
-  "execution": {
+ "execution": {
     "timeout": 300000,
     "cleanupAfterExecution": true,
     "isolatedEnvironment": true,
-    "tempDirectory": "./temp"
+    "tempDirectory": "./temp",
+    "containerPool": {
+      "enabled": true,
+      "poolSize": 5,
+      "imageName": "git-test-executor:latest",
+      "containerPrefix": "test-executor",
+      "resetStrategy": "cleanup"
+    }
   }
 }

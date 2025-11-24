@@ -2,11 +2,57 @@ import { TestExecutor } from './executor.js';
 import type { Config, ExecutionResult, TestResult, ProjectLanguage } from './types.js';
 import { loadConfig, validateCommitHash } from './utils.js';
 import { detectProjectCommands } from './projectDetection.js';
+import { ContainerPool } from './containerPool.js';
 
 /**
  * SDK interface for programmatic test execution
  */
 export class GitTestExecution {
+  private static containerPool: ContainerPool | null = null;
+
+  /**
+   * Initialize container pool for test execution
+   * @param config - Container pool configuration from execution config
+   */
+  static async initializeContainerPool(config?: Config): Promise<void> {
+    const poolConfig = config?.execution?.containerPool;
+    
+    if (!poolConfig?.enabled) {
+      return;
+    }
+
+    if (this.containerPool) {
+      console.log('Container pool already initialized');
+      return;
+    }
+
+    this.containerPool = new ContainerPool({
+      poolSize: poolConfig.poolSize || 5,
+      imageName: poolConfig.imageName || 'git-test-executor:latest',
+      containerPrefix: poolConfig.containerPrefix || 'test-executor',
+      resetStrategy: poolConfig.resetStrategy || 'cleanup',
+    });
+
+    await this.containerPool.initialize();
+  }
+
+  /**
+   * Destroy container pool
+   */
+  static async destroyContainerPool(): Promise<void> {
+    if (this.containerPool) {
+      await this.containerPool.destroy();
+      this.containerPool = null;
+    }
+  }
+
+  /**
+   * Get container pool status
+   */
+  static getContainerPoolStatus(): { total: number; inUse: number; available: number } | null {
+    return this.containerPool ? this.containerPool.getStatus() : null;
+  }
+
   /**
    * Execute tests with a configuration object
    * @param config - Test execution configuration
@@ -17,7 +63,7 @@ export class GitTestExecution {
     silent?: boolean;
     onProgress?: (step: string) => void;
   }): Promise<ExecutionResult & { detectedLanguage: ProjectLanguage | null }> {
-    const executor = new TestExecutor(config);
+    const executor = new TestExecutor(config, this.containerPool || undefined);
     
     // Set up progress callback if provided
     if (options?.onProgress) {
@@ -124,7 +170,14 @@ export class GitTestExecution {
         timeout: 300000,
         cleanupAfterExecution: true,
         isolatedEnvironment: true,
-        tempDirectory: './temp'
+        tempDirectory: './temp',
+        containerPool: {
+          enabled: false, // Set to true to use container pool
+          poolSize: 5,
+          imageName: 'git-test-executor:latest',
+          containerPrefix: 'test-executor',
+          resetStrategy: 'cleanup'
+        }
       }
     };
   }

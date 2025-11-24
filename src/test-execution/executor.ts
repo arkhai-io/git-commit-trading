@@ -1,10 +1,13 @@
 import path from 'path';
+import { promises as fs } from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import chalk from 'chalk';
 import type { Config, ExecutionResult, TestResult, RepositoryConfig, ProjectLanguage } from './types.js';
 import { Logger, executeCommand, ensureDirectory, removeDirectory, copyDirectory, parseCommand, validateCommitHash, normalizeCommitHash, cloneGitRepository } from './utils.js';
 import { detectProjectCommands, detectPackageManager, updateCommandsForPackageManager, type ProjectCommands } from './projectDetection.js';
 import { GitCommitVerifier } from '../utils/gitVerification.js';
+import { ContainerPool, type Container, type ContainerBuildArgs } from './containerPool.js';
+import { detectFramework } from './frameworkDetection.js';
 
 export class TestExecutor {
   private config: Config;
@@ -15,8 +18,10 @@ export class TestExecutor {
   private detectedLanguage: ProjectLanguage | null = null;
   private projectCommands: ProjectCommands | null = null;
   private gitVerifier: GitCommitVerifier | null = null;
+  private containerPool: ContainerPool | null = null;
+  private container: Container | null = null;
 
-  constructor(config: Config) {
+  constructor(config: Config, containerPool?: ContainerPool) {
     this.config = config;
     this.workingDir = path.resolve(config.execution.tempDirectory, `execution-${uuidv4()}`);
     this.sourceDir = path.join(this.workingDir, 'source');
@@ -27,6 +32,9 @@ export class TestExecutor {
     if (config.execution.verifyCommitSignatures) {
       this.gitVerifier = new GitCommitVerifier({});
     }
+    
+    // Use provided container pool or null for local execution
+    this.containerPool = containerPool || null;
   }
 
   async execute(): Promise<ExecutionResult> {
@@ -69,30 +77,86 @@ export class TestExecutor {
       result.testcaseSignatureVerified = await this.cloneRepository(this.config.repositories.testcase, this.testcaseDir, 'testcase');
       result.testcaseCloned = true;
 
-      // Step 3: Merge Bob's solution into Alice's test structure
-      console.log(chalk.cyan('Merging solution with tests...'));
-      await this.mergeTestcases();
+      // If using container pool, build and run container with everything inside
+      if (this.containerPool) {
+        console.log(chalk.cyan('Detecting framework...'));
+        const frameworkResult = await detectFramework(this.testcaseDir);
+        console.log(chalk.green(`✅ Detected framework: ${frameworkResult.framework}`));
+        
+        // Write dockerfile to test repo if using default framework
+        if (frameworkResult.dockerfileContent) {
+          console.log(chalk.gray('Writing default dockerfile to test repository...'));
+          await ensureDirectory(path.dirname(frameworkResult.dockerfilePath));
+          await fs.writeFile(frameworkResult.dockerfilePath, frameworkResult.dockerfileContent, 'utf-8');
+        }
+        
+        console.log(chalk.gray(`   Dockerfile: ${frameworkResult.dockerfilePath}`));
 
-      // Step 4: Install dependencies
-      console.log(chalk.cyan('Installing dependencies...'));
-      await this.installDependencies();
-      result.dependenciesInstalled = true;
+        // Build container with repos baked in
+        console.log(chalk.cyan('Building test container...'));
+        const buildArgs: ContainerBuildArgs = {
+          dockerfilePath: frameworkResult.dockerfilePath,
+          sourceRepo: this.config.repositories.source.url,
+          sourceCommit: this.config.repositories.source.commitHash,
+          testRepo: this.config.repositories.testcase.url,
+          testCommit: this.config.repositories.testcase.commitHash,
+        };
 
-      // Step 5: Build source if needed (use Alice's build command if available)
-      const buildCommand = this.config.repositories.testcase.buildCommand || this.config.repositories.source.buildCommand;
-      if (buildCommand) {
-        console.log(chalk.cyan('Building project...'));
-        await this.buildSource();
+        this.container = await this.containerPool.buildAndRunContainer(buildArgs);
+
+        // Wait for container to finish running tests
+        console.log(chalk.cyan('Waiting for tests to complete...'));
+        const startTime = Date.now();
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Give it time to start
+
+        // Get test results
+        const testOutput = await this.containerPool.runTestsInContainer(this.container);
+        const duration = Date.now() - startTime;
+        
+        result.testResult = {
+          success: testOutput.exitCode === 0,
+          output: testOutput.stdout,
+          error: testOutput.exitCode !== 0 ? testOutput.stderr : undefined,
+          duration,
+          timestamp: new Date(),
+        };
+        result.testsExecuted = true;
+        result.dependenciesInstalled = true;
+
+      } else {
+        // Fallback to local execution (old behavior)
+        console.log(chalk.cyan('Merging solution with tests...'));
+        await this.mergeTestcases();
+
+        console.log(chalk.cyan('Installing dependencies...'));
+        await this.installDependencies();
+        result.dependenciesInstalled = true;
+
+        const buildCommand = this.config.repositories.testcase.buildCommand || this.config.repositories.source.buildCommand;
+        if (buildCommand) {
+          console.log(chalk.cyan('Building project...'));
+          await this.buildSource();
+        }
+
+        console.log(chalk.cyan('Running tests...'));
+        result.testResult = await this.runTests();
+        result.testsExecuted = true;
       }
-
-      // Step 6: Run tests
-      console.log(chalk.cyan('Running tests...'));
-      result.testResult = await this.runTests();
-      result.testsExecuted = true;
 
     } catch (error) {
       result.testResult.error = error instanceof Error ? error.message : String(error);
     } finally {
+      // Cleanup container (one-time use)
+      if (this.container && this.containerPool) {
+        console.log(chalk.cyan('Cleaning up container...'));
+        try {
+          await this.containerPool.cleanupContainer(this.container);
+          this.container = null;
+        } catch (error) {
+          console.error(chalk.red('Failed to cleanup container:'), error);
+        }
+      }
+      
       // Cleanup if configured
       if (this.config.execution.cleanupAfterExecution) {
         console.log(chalk.cyan('Cleaning up...'));
@@ -245,13 +309,10 @@ export class TestExecutor {
     const { command, args } = parseCommand(installCommand);
     Logger.step(`Executing install command: ${command} with args: ${args.join(' ')}`);
     
-    const result = await executeCommand(
+    const result = await this.executeCommandInEnvironment(
       command,
       args,
-      {
-        cwd: this.mergedDir,
-        timeout: this.config.execution.timeout,
-      }
+      this.mergedDir
     );
 
     if (result.exitCode !== 0) {
@@ -274,13 +335,10 @@ export class TestExecutor {
 
     const { command, args } = parseCommand(buildCommand);
     
-    const result = await executeCommand(
+    const result = await this.executeCommandInEnvironment(
       command,
       args,
-      {
-        cwd: this.mergedDir,
-        timeout: this.config.execution.timeout,
-      }
+      this.mergedDir
     );
 
     if (result.exitCode !== 0) {
@@ -305,13 +363,10 @@ export class TestExecutor {
 
       const { command, args } = parseCommand(testCommand);
 
-      const result = await executeCommand(
+      const result = await this.executeCommandInEnvironment(
         command,
         args,
-        {
-          cwd: this.mergedDir,
-          timeout: this.config.execution.timeout,
-        }
+        this.mergedDir
       );
 
       const duration = Date.now() - startTime;
@@ -332,6 +387,25 @@ export class TestExecutor {
         duration,
         timestamp: new Date(),
       };
+    }
+  }
+
+  private async executeCommandInEnvironment(
+    command: string,
+    args: string[],
+    cwd: string
+  ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+    if (this.container && this.containerPool) {
+      // Execute in container
+      const containerWorkDir = cwd.replace(this.mergedDir, '/workspace/project');
+      const fullCommand = [command, ...args].join(' ');
+      return await this.containerPool.executeInContainer(this.container, fullCommand, containerWorkDir);
+    } else {
+      // Execute locally
+      return await executeCommand(command, args, {
+        cwd,
+        timeout: this.config.execution.timeout,
+      });
     }
   }
 

@@ -2,6 +2,12 @@ import chalk from 'chalk';
 import { encodeAbiParameters, parseAbiParameters } from 'viem';
 import { CommitAlgo } from '../../clients/commitObligation.js';
 import { createClientFromEnv, requireEnvFile } from '../utils/envLoader.js';
+import { promises as fs } from 'fs';
+import * as readline from 'readline/promises';
+import { detectFramework } from '../../test-execution/frameworkDetection.js';
+import { cloneGitRepository } from '../../test-execution/utils.js';
+import path from 'path';
+import os from 'os';
 
 interface SubmitOptions {
   testsRepo: string;
@@ -12,6 +18,7 @@ interface SubmitOptions {
   arbiter?: string;
   oracle?: string;
   token?: string;
+  customDockerfile?: string;
 }
 
 export async function submitCommand(options: SubmitOptions) {
@@ -21,6 +28,94 @@ export async function submitCommand(options: SubmitOptions) {
     // Validate inputs
     if (!options.testsRepo || !options.testsCommit || !options.reward) {
       throw new Error('Missing required options: --tests-repo, --tests-commit, --reward');
+    }
+
+    // Step 1: Clone test repo to detect framework
+    console.log(chalk.cyan('Cloning test repository to detect framework...'));
+    const tmpDir = path.join(os.tmpdir(), `git-test-detect-${Date.now()}`);
+    await fs.mkdir(tmpDir, { recursive: true });
+    const testRepoPath = path.join(tmpDir, 'test-repo');
+    
+    try {
+      await cloneGitRepository(options.testsRepo, testRepoPath, options.testsCommit);
+      
+      let dockerfilePath: string;
+      let isCustom = false;
+      
+      // Priority 1: Check if user provided --custom-dockerfile option
+      if (options.customDockerfile) {
+        dockerfilePath = path.resolve(options.customDockerfile);
+        isCustom = true;
+        console.log(chalk.cyan(`Using custom dockerfile from: ${dockerfilePath}`));
+        
+        // Verify the file exists
+        try {
+          await fs.access(dockerfilePath);
+        } catch (error) {
+          throw new Error(`Custom dockerfile not found at: ${dockerfilePath}`);
+        }
+      }
+      // Priority 2: Check if arkhai_tests.dockerfile exists in the test repo
+      else {
+        const repoDockerfilePath = path.join(testRepoPath, 'arkhai_tests.dockerfile');
+        try {
+          await fs.access(repoDockerfilePath);
+          dockerfilePath = repoDockerfilePath;
+          isCustom = true;
+          console.log(chalk.cyan('Found arkhai_tests.dockerfile in repository'));
+        } catch (error) {
+          // Priority 3: Detect framework and use default dockerfile content
+          console.log(chalk.cyan('No custom dockerfile found, detecting project framework...'));
+          const frameworkResult = await detectFramework(testRepoPath);
+          dockerfilePath = frameworkResult.dockerfilePath;
+          console.log(chalk.green(`\nYour repo was detected as a ${chalk.bold(frameworkResult.framework)} project.`));
+        }
+      }
+      
+      console.log(chalk.white(`\nTests will be run via:\n`));
+      
+      // Read and display dockerfile
+      let dockerfileContent: string;
+      if (isCustom) {
+        // Read custom dockerfile from file
+        dockerfileContent = await fs.readFile(dockerfilePath, 'utf-8');
+      } else {
+        // Use hardcoded default dockerfile content
+        const frameworkResult = await detectFramework(testRepoPath);
+        dockerfileContent = frameworkResult.dockerfileContent || '';
+      }
+      console.log(chalk.gray('---'));
+      console.log(chalk.cyan(dockerfileContent));
+      console.log(chalk.gray('---\n'));
+      
+      // Ask for confirmation
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+      });
+      
+      const answer = await rl.question(
+        chalk.yellow('Is that okay? If not, please provide a custom dockerfile.\n') +
+        chalk.green('[(Y)es]') + chalk.gray('/(n)o: ')
+      );
+      rl.close();
+      
+      if (answer.toLowerCase() === 'n' || answer.toLowerCase() === 'no') {
+        console.log(chalk.yellow('\n📝 To use a custom dockerfile:'));
+        console.log(chalk.gray('  Option 1: Create "arkhai_tests.dockerfile" in your test repository'));
+        console.log(chalk.gray('    1. Create a file named "arkhai_tests.dockerfile" in your test repository'));
+        console.log(chalk.gray('    2. Commit and push it'));
+        console.log(chalk.gray('    3. Run this command again'));
+        console.log(chalk.gray('\n  Option 2: Use --custom-dockerfile flag'));
+        console.log(chalk.gray('    git-escrows submit --custom-dockerfile=/path/to/your.dockerfile [other options]\n'));
+        process.exit(0);
+      }
+      
+      console.log(chalk.green('✅ Proceeding with escrow creation...\n'));
+      
+    } finally {
+      // Cleanup temp directory
+      await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
     }
 
     // Parse commit algorithm

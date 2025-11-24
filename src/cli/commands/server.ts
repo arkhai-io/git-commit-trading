@@ -43,6 +43,32 @@ export async function serverCommand(options: ServerOptions) {
     console.log(chalk.gray(`  Test Timeout: ${timeout}ms`));
     console.log(chalk.gray(`  Cleanup: ${cleanup}`));
     console.log(chalk.gray(`  Git Verify Commit: ${useGitVerifyCommit ? 'Enabled' : 'Disabled'}`));
+    console.log(chalk.gray(`  Container Execution: Enabled (framework-based)`));
+
+    // Initialize container pool manager (no pre-warming, containers built on-demand)
+    console.log(chalk.cyan('Initializing container pool manager...'));
+    const containerPoolConfig = {
+      repositories: {
+        source: { url: '', commitHash: '' },
+        testcase: { url: '', commitHash: '' }
+      },
+      execution: {
+        timeout,
+        cleanupAfterExecution: cleanup,
+        isolatedEnvironment: true,
+        tempDirectory: './temp',
+        containerPool: {
+          enabled: true,
+          poolSize: 5, // Not used for pre-warming, just for tracking
+          containerPrefix: 'test-executor',
+          resetStrategy: 'cleanup' as const
+        }
+      }
+    };
+    
+    await GitTestExecution.initializeContainerPool(containerPoolConfig);
+    console.log(chalk.green(`✓ Container pool manager ready`));
+    console.log(chalk.gray(`   Containers will be built on-demand based on detected framework`));
 
     // Check for .env file and load client
     requireEnvFile();
@@ -302,11 +328,14 @@ export async function serverCommand(options: ServerOptions) {
       // Setup graceful shutdown before starting
       let unwatchFn: (() => void) | null = null;
       
-      process.on('SIGINT', () => {
+      process.on('SIGINT', async () => {
         console.log(chalk.yellow('\nShutting down server...'));
         if (unwatchFn) {
           unwatchFn();
         }
+        
+        console.log(chalk.green('✓ Server shutdown complete'));
+        
         process.exit(0);
       });
 

@@ -1,7 +1,8 @@
 // Main SDK exports
 export { GitTestExecution } from './sdk.js';
 export { TestExecutor } from './executor.js';
-export type { Config, ExecutionResult, TestResult, RepositoryConfig } from './types.js';
+export { ContainerPool } from './containerPool.js';
+export type { Config, ExecutionResult, TestResult, RepositoryConfig, ContainerPoolConfig } from './types.js';
 export { loadConfig } from './utils.js';
 
 // Default export for convenience
