@@ -8,7 +8,10 @@ A sophisticated git-based escrow system for code challenges, bounties, and trust
 - **Blockchain Integration**: Smart contract-based escrow system on Ethereum
 - **Multi-Key Support**: Register and verify SSH Ed25519/ECDSA, PGP v4, and X.509 keys
 - **Cross-Platform Builds**: Binary distribution for Linux, macOS, and Windows
-- **Oracle Integration**: Automated test execution and verification
+- **Oracle Integration**: Automated test execution and verification with Docker isolation
+- **Framework Auto-Detection**: Automatically detects project frameworks and generates appropriate test environments
+- **Embedded Dockerfiles**: 7 framework templates built into binary for zero-dependency test execution
+- **Container Pool Management**: Smart container lifecycle with configurable concurrency limits
 - **Comprehensive CLI**: Full-featured command-line interface for all operations
 
 ## Prerequisites
@@ -71,7 +74,28 @@ Create a `.env` file or use the CLI to generate one:
   --tests-command "bun test" \
   --arbiter 0x... \
   --token 0x...
+
+# With custom dockerfile
+./bin/git-escrows submit \
+  --tests-repo https://github.com/user/tests.git \
+  --tests-commit abc123... \
+  --reward 1000000000000000000 \
+  --custom-dockerfile ./custom.dockerfile
 ```
+
+**Dockerfile Handling:**
+- **Auto-detection**: Automatically detects framework from lock files (package-lock.json, Cargo.toml, pyproject.toml, etc.)
+- **Embedded templates**: 7 built-in dockerfile templates embedded in binary for common frameworks:
+  - `cargo` - Rust projects with Cargo.toml
+  - `pytest_uv` - Python projects with uv.lock
+  - `pytest_poetry` - Python projects with poetry.lock
+  - `bun_test` - Bun projects with bun.lockb (using `bun test`)
+  - `bun_jest` - Bun projects with bun.lockb (using `bun jest`)
+  - `node_jest` - Node.js projects with package-lock.json
+  - `pnpm_jest` - Node.js projects with pnpm-lock.yaml
+- **Custom dockerfile**: Use `--custom-dockerfile` to provide your own dockerfile
+- **Repository dockerfile**: If `arkhai_tests.dockerfile` exists in test repo, it will be used automatically
+- **Priority**: Custom flag > Repository dockerfile > Auto-detected template
 
 #### List Available Escrows
 ```bash
@@ -120,6 +144,65 @@ Start the verification oracle server:
 
 ```bash
 ./bin/git-escrows server --port 3000 --config config.json
+```
+
+## Test Execution Architecture
+
+### Framework Auto-Detection
+
+The system automatically detects project frameworks by analyzing lock files in the test repository:
+
+| Lock File | Framework | Dockerfile Template |
+|-----------|-----------|---------------------|
+| `Cargo.toml` | Rust/Cargo | `cargo` |
+| `uv.lock` | Python/uv | `pytest_uv` |
+| `poetry.lock` | Python/Poetry | `pytest_poetry` |
+| `bun.lockb` + `bun test` command | Bun Test | `bun_test` |
+| `bun.lockb` + `jest` command | Bun Jest | `bun_jest` |
+| `package-lock.json` | Node.js Jest | `node_jest` |
+| `pnpm-lock.yaml` | pnpm Jest | `pnpm_jest` |
+
+### Dockerfile Templates
+
+All dockerfile templates are embedded in the binary at build time, ensuring:
+- **Zero external dependencies**: No need to distribute dockerfile files separately
+- **Consistent execution**: Same templates across all deployments
+- **Easy updates**: Modify `frameworks/*.dockerfile` and rebuild
+
+Each dockerfile receives build arguments:
+- `SOURCE_REPO`: Git URL of the solution repository
+- `SOURCE_COMMIT`: Commit hash of the solution
+- `TEST_REPO`: Git URL of the test repository
+- `TEST_COMMIT`: Commit hash of the tests
+
+### Container Pool Strategy
+
+The oracle maintains a pool of Docker containers with smart lifecycle management:
+
+**Key Principles:**
+- **Fresh containers per test**: Each test builds a new container to prevent state pollution
+- **Concurrent limit**: Maximum N containers run simultaneously (configurable)
+- **Auto-cleanup**: Containers and images removed immediately after test completion
+- **Wait on capacity**: New tests wait if pool is at capacity
+
+**Benefits:**
+- Isolation between tests
+- Deterministic test environments
+- Resource management
+- Prevents runaway container growth
+
+**Configuration:**
+```json
+{
+  "execution": {
+    "containerPoolSize": 5
+  },
+  "docker": {
+    "freshContainers": true,
+    "maxConcurrentContainers": 5,
+    "autoCleanup": true
+  }
+}
 ```
 
 ## Usage Scenarios
@@ -320,7 +403,8 @@ bun run build:binary
     "isolatedEnvironment": true,
     "tempDirectory": "/tmp/git-escrows",
     "maxMemoryMB": 1024,
-    "allowedCommands": ["bun", "npm", "yarn", "pnpm", "cargo", "go", "python", "node"]
+    "allowedCommands": ["bun", "npm", "yarn", "pnpm", "cargo", "go", "python", "node"],
+    "containerPoolSize": 5       # Max concurrent Docker containers
   },
   "security": {
     "enableNetworkAccess": false,    # Block network during tests
@@ -333,6 +417,11 @@ bun run build:binary
     "maxConcurrentJobs": 3,          # Parallel execution limit
     "retryFailedTests": 2,           # Retry attempts for flaky tests
     "enableDetailedLogging": true
+  },
+  "docker": {
+    "freshContainers": true,         # Rebuild containers for each test (prevents state pollution)
+    "maxConcurrentContainers": 5,   # Limit concurrent containers
+    "autoCleanup": true              # Remove containers and images after tests
   }
 }
 ```
@@ -700,6 +789,8 @@ Creating new escrow demand...
 │ Reward Amount: 1.5 ETH                                                         │
 │ Token: ETH (Native)                                                             │
 │ Test Command: bun test                                                          │
+│ Framework Detected: bun_test (auto-detected from bun.lockb)                    │
+│ Dockerfile: Using embedded template (included in binary)                        │
 │ Commit Algorithm: SHA256                                                        │
 │ Arbiter: 0x1234567890abcdef... (default)                                       │
 ├─────────────────────────────────────────────────────────────────────────────────┤
