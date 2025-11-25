@@ -52,8 +52,9 @@ program
 // List command - Show all available escrows
 program
   .command('list')
-  .description('List all available escrows')
-  .option('--status <status>', 'Filter by status (open, fulfilled, completed)')
+  .description('List all available escrows from the blockchain')
+  .option('--status <status>', 'Filter by status (open, fulfilled, expired)')
+  .option('--address <address>', 'Filter by buyer or recipient address')
   .option('--limit <number>', 'Maximum number of escrows to show', '20')
   .option('--format <format>', 'Output format (table, json, csv)', 'table')
   .option('--verbose', 'Show detailed information', false)
