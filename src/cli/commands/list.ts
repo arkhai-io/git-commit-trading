@@ -1,12 +1,14 @@
 import chalk from 'chalk';
 import { createClientFromEnv, requireEnvFile } from '../utils/envLoader.js';
 import type { CommitObligationAddresses } from '../../clients/commitObligation';
+import { parseAbiItem, decodeAbiParameters, parseAbiParameters, type Address } from 'viem';
 
 interface ListOptions {
   status?: string;
   limit?: string;
   format?: string;
   verbose?: boolean;
+  address?: string;
 }
 
 interface EscrowData {
@@ -15,9 +17,12 @@ interface EscrowData {
   buyer: string;
   recipient: string;
   amount: string;
+  token: string;
+  arbiter: string;
   created: string;
   txHash: string;
   blockNumber: number;
+  expirationTime: number;
 }
 
 export async function listCommand(options: ListOptions) {
@@ -28,80 +33,149 @@ export async function listCommand(options: ListOptions) {
     const status = options.status?.toLowerCase();
     const format = options.format?.toLowerCase() || 'table';
     const verbose = options.verbose || false;
+    const filterAddress = options.address?.toLowerCase();
 
     // Check for .env file and load client
     requireEnvFile();
     
     console.log(chalk.gray('Setting up blockchain client...'));
-    const { client, config, hasCommitObligation, hasGitIdentityRegistry } = await createClientFromEnv();
+    const { client, config } = await createClientFromEnv();
 
+    const viemClient = client.viemClient;
+    const erc20EscrowAddress = client.contractAddresses.erc20EscrowObligation;
+
+    if (!erc20EscrowAddress || erc20EscrowAddress === '0x0000000000000000000000000000000000000000') {
+      console.log(chalk.yellow('\n⚠️  No ERC20EscrowObligation address configured'));
+      console.log(chalk.gray('Please add the following to your .env file:'));
+      console.log(chalk.gray('ERC20_ESCROW_OBLIGATION_ADDRESS=0x...'));
+      console.log(chalk.gray('\nYou can find the deployed address in:'));
+      console.log(chalk.gray('  contract/deployments/[network].json'));
+      throw new Error('ERC20_ESCROW_OBLIGATION_ADDRESS required');
+    }
+
+    console.log(chalk.gray(`ERC20 Escrow Contract: ${erc20EscrowAddress}`));
     console.log(chalk.gray('Querying blockchain for escrow events...'));
     
-    const viemClient = client.viemClient;
-
     // Get current block number for filtering
     const currentBlock = await viemClient.getBlockNumber();
-    const fromBlock = currentBlock - BigInt(10000); // Look back 10000 blocks
+    const fromBlock = currentBlock - BigInt(100000); // Look back 100k blocks
 
     console.log(chalk.gray(`Scanning blocks ${fromBlock} to ${currentBlock}...`));
 
-    // For now, we'll look for CommitObligation events since we know that contract works
-    // In a real implementation, you would check for ERC20_ESCROW_OBLIGATION_ADDRESS
-    // and query the specific escrow contract events
-    
     const escrows: EscrowData[] = [];
 
-    // Check if we have COMMIT_OBLIGATION_ADDRESS to query real data
-    if (hasCommitObligation) {
-      try {
-        // Query for attestation events related to commit obligations
-        // This is a simplified approach - in production you'd want specific escrow contract events
-        console.log(chalk.gray('Querying commit obligation events...'));
-        
-        // Since we can't easily import the specific contract ABIs, let's use a basic approach
-        // to demonstrate the functionality with available data
-        console.log(chalk.yellow('Using simplified data querying for demonstration'));
-        console.log(chalk.gray('In production, this would query specific ERC20EscrowObligation events'));
-        
-        // Create some sample data based on current network state
-        const sampleEscrow: EscrowData = {
-          uid: `0x${Math.random().toString(16).substr(2, 64)}`,
-          status: 'open',
-          buyer: config.address,
-          recipient: '0x0000000000000000000000000000000000000000',
-          amount: '1000000000000000000', // 1 ETH in wei
-          created: new Date().toISOString(),
-          txHash: '0x0000000000000000000000000000000000000000000000000000000000000000',
-          blockNumber: Number(currentBlock),
-        };
-        
-        escrows.push(sampleEscrow);
-        
-        console.log(chalk.green(`✓ Found ${escrows.length} escrow(s) (demo mode)`));
-      } catch (error) {
-        console.log(chalk.yellow(`Could not query events: ${error}`));
+    try {
+      // Query for Attested events from EAS where attester is ERC20EscrowObligation
+      // This represents escrow creations
+      const attestedLogs = await viemClient.getLogs({
+        address: client.contractAddresses.eas as Address,
+        event: parseAbiItem('event Attested(address indexed recipient, address indexed attester, bytes32 uid, bytes32 indexed schemaUID)'),
+        args: {
+          attester: erc20EscrowAddress as Address,
+        },
+        fromBlock,
+        toBlock: currentBlock,
+      });
+
+      console.log(chalk.green(`✓ Found ${attestedLogs.length} escrow attestation(s)`));
+
+      // Query for EscrowCollected events to determine fulfilled escrows
+      const collectedLogs = await viemClient.getLogs({
+        address: erc20EscrowAddress as Address,
+        event: parseAbiItem('event EscrowCollected(bytes32 indexed escrow, bytes32 indexed fulfillment, address indexed fulfiller)'),
+        fromBlock,
+        toBlock: currentBlock,
+      });
+
+      const collectedEscrows = new Set(
+        collectedLogs.map((log: any) => log.args.escrow)
+      );
+
+      console.log(chalk.green(`✓ Found ${collectedLogs.length} collected escrow(s)`));
+
+      // Process each attestation to get full escrow details
+      for (const log of attestedLogs) {
+        try {
+          const { recipient, uid } = log.args;
+          
+          // Get the full attestation data from EAS
+          const attestation = await client.getAttestation(uid as `0x${string}`);
+          
+          // Check if attestation data looks valid (should be longer than just the selector)
+          if (!attestation.data || attestation.data === '0x' || attestation.data.length < 10) {
+            console.log(chalk.yellow(`  Warning: Skipping escrow ${uid} - empty or invalid data`));
+            continue;
+          }
+          
+          // Debug: print first 200 chars of data for the first few escrows
+          if (verbose && escrows.length < 3) {
+            console.log(chalk.gray(`  Debug UID ${uid}:`));
+            console.log(chalk.gray(`    Data length: ${attestation.data.length}`));
+            console.log(chalk.gray(`    Data: ${attestation.data.substring(0, 200)}...`));
+          }
+          
+          // Decode the escrow obligation data structure
+          // Schema: struct ObligationData { address arbiter; bytes demand; address token; uint256 amount; }
+          const escrowAbi = parseAbiParameters('(address arbiter, bytes demand, address token, uint256 amount)');
+          const decoded = decodeAbiParameters(escrowAbi, attestation.data);
+          
+          const arbiter = decoded[0].arbiter as Address;
+          const demand = decoded[0].demand as `0x${string}`;
+          const token = decoded[0].token as Address;
+          const amount = decoded[0].amount as bigint;
+
+          // Determine status
+          let escrowStatus: 'open' | 'fulfilled' | 'expired' | 'unknown' = 'open';
+          
+          if (collectedEscrows.has(uid)) {
+            escrowStatus = 'fulfilled';
+          } else if (attestation.expirationTime > 0 && BigInt(attestation.expirationTime) < BigInt(Math.floor(Date.now() / 1000))) {
+            escrowStatus = 'expired';
+          } else if (attestation.revocationTime > 0) {
+            escrowStatus = 'fulfilled'; // Revoked means collected
+          }
+
+          // Apply address filter if specified
+          if (filterAddress && 
+              recipient.toLowerCase() !== filterAddress && 
+              attestation.attester.toLowerCase() !== filterAddress) {
+            continue;
+          }
+
+          // Get block details for timestamp
+          const block = await viemClient.getBlock({ blockNumber: log.blockNumber });
+
+          const escrowData: EscrowData = {
+            uid: uid as string,
+            status: escrowStatus,
+            buyer: recipient as string,
+            recipient: attestation.recipient,
+            amount: amount.toString(),
+            token: token as string,
+            arbiter: arbiter as string,
+            created: new Date(Number(block.timestamp) * 1000).toISOString(),
+            txHash: log.transactionHash as string,
+            blockNumber: Number(log.blockNumber),
+            expirationTime: Number(attestation.expirationTime),
+          };
+
+          escrows.push(escrowData);
+        } catch (error) {
+          if (verbose) {
+            console.log(chalk.yellow(`  Warning: Could not process escrow ${log.args.uid}:`));
+            console.log(chalk.gray(`    ${error instanceof Error ? error.message : String(error)}`));
+          }
+          // Skip this escrow and continue with the next one
+          continue;
+        }
       }
-    } else {
-      console.log(chalk.yellow('No COMMIT_OBLIGATION_ADDRESS found in .env'));
-      console.log(chalk.gray('To list real escrows, please add contract addresses to your .env file:'));
-      console.log(chalk.gray('COMMIT_OBLIGATION_ADDRESS=0x...'));
-      console.log(chalk.gray('ERC20_ESCROW_OBLIGATION_ADDRESS=0x...'));
-      console.log(chalk.gray(''));
-      console.log(chalk.blue('Demo Mode - Showing sample escrow structure:'));
+
+      console.log(chalk.green(`✓ Processed ${escrows.length} escrow(s) successfully`));
       
-      // Show demo data structure
-      const demoEscrow: EscrowData = {
-        uid: '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
-        status: 'open',
-        buyer: config.address,
-        recipient: '0x742d35Cc6634C0532925a3b8D56Ff4E08c41aAAF',
-        amount: '5000000000000000000', // 5 ETH
-        created: new Date().toISOString(),
-        txHash: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
-        blockNumber: Number(currentBlock),
-      };
-      
-      escrows.push(demoEscrow);
+    } catch (error) {
+      console.error(chalk.red('Error querying escrow events:'));
+      console.error(error);
+      throw error;
     }
 
     // Apply status filter if specified
@@ -126,9 +200,9 @@ export async function listCommand(options: ListOptions) {
     }
 
     if (format === 'csv') {
-      console.log('uid,status,buyer,recipient,amount,created,txHash,blockNumber');
+      console.log('uid,status,buyer,recipient,amount,token,arbiter,created,expirationTime,txHash,blockNumber');
       limitedEscrows.forEach(escrow => {
-        console.log(`${escrow.uid},${escrow.status},${escrow.buyer},${escrow.recipient},${escrow.amount},${escrow.created},${escrow.txHash},${escrow.blockNumber}`);
+        console.log(`${escrow.uid},${escrow.status},${escrow.buyer},${escrow.recipient},${escrow.amount},${escrow.token},${escrow.arbiter},${escrow.created},${escrow.expirationTime},${escrow.txHash},${escrow.blockNumber}`);
       });
       return;
     }
@@ -138,15 +212,18 @@ export async function listCommand(options: ListOptions) {
     console.log(chalk.gray('─'.repeat(100)));
     
     limitedEscrows.forEach((escrow, index) => {
-      console.log(chalk.white(`${index + 1}. UID: ${escrow.uid.substring(0, 16)}...`));
-      console.log(chalk.gray(`   Status: ${getStatusIcon(escrow.status)} ${escrow.status.toUpperCase()}`));
-      console.log(chalk.gray(`   Amount: ${formatWeiToEth(escrow.amount)} ETH`));
+      console.log(chalk.green(`${index + 1}. UID: ${escrow.uid.substring(0, 16)}...`));
+      console.log(chalk.green(`   Status: ${getStatusIcon(escrow.status)} ${escrow.status.toUpperCase()}`));
+      console.log(chalk.gray(`   Amount: ${formatWeiToEth(escrow.amount)} tokens`));
+      console.log(chalk.gray(`   Token: ${escrow.token}`));
       console.log(chalk.gray(`   Buyer: ${escrow.buyer}`));
-      console.log(chalk.gray(`   Recipient: ${escrow.recipient}`));
+      console.log(chalk.gray(`   Arbiter: ${escrow.arbiter}`));
       
       if (verbose) {
+        console.log(chalk.gray(`   Recipient: ${escrow.recipient}`));
         console.log(chalk.gray(`   Raw Amount: ${escrow.amount} wei`));
         console.log(chalk.gray(`   Created: ${escrow.created}`));
+        console.log(chalk.gray(`   Expiration: ${escrow.expirationTime === 0 ? 'Never' : new Date(escrow.expirationTime * 1000).toISOString()}`));
         console.log(chalk.gray(`   Tx Hash: ${escrow.txHash}`));
         console.log(chalk.gray(`   Block: ${escrow.blockNumber}`));
       }
@@ -164,11 +241,12 @@ export async function listCommand(options: ListOptions) {
       console.log(chalk.gray(`   ${getStatusIcon(statusType)} ${statusType}: ${count}`));
     }
 
-    console.log(chalk.blue('\nNext steps:'));
-    console.log(chalk.gray('• Add ERC20_ESCROW_OBLIGATION_ADDRESS to .env for real escrow data'));
+    console.log(chalk.blue('\nOptions:'));
     console.log(chalk.gray('• Use --verbose flag for detailed information'));
     console.log(chalk.gray('• Use --format json|csv for different output formats'));
     console.log(chalk.gray('• Use --status open|fulfilled|expired to filter by status'));
+    console.log(chalk.gray('• Use --address 0x... to filter by buyer/recipient address'));
+    console.log(chalk.gray('• Use --limit N to limit number of results (default: 20)'));
 
   } catch (error) {
     console.error(chalk.red('Failed to list escrows:'));
@@ -186,13 +264,13 @@ export async function listCommand(options: ListOptions) {
 function getStatusIcon(status: string): string {
   switch (status) {
     case 'open':
-      return '🟢';
+      return '[O]';
     case 'fulfilled':
-      return '✅';
+      return '[X]';
     case 'expired':
-      return '🔴';
+      return '[E]';
     default:
-      return '❓';
+      return '[?]';
   }
 }
 
