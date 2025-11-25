@@ -113,6 +113,14 @@ Create a `.env` file or use the CLI to generate one:
 
 **Note:** Requires `ERC20_ESCROW_OBLIGATION_ADDRESS` in your `.env` file. The command queries the blockchain directly using event logs from the ERC20EscrowObligation contract.
 
+**Output includes:**
+- Escrow UID, status, amount, and token address
+- Buyer and arbiter addresses
+- **Test repository URL** (GitHub repo)
+- **Test commit hash**
+<!-- - Test command to run -->
+- Creation timestamp and expiration time
+
 #### Fulfill Escrow (Submit Solution)
 ```bash
 ./bin/git-escrows-docker fulfill \

@@ -23,6 +23,9 @@ interface EscrowData {
   txHash: string;
   blockNumber: number;
   expirationTime: number;
+  testsRepo?: string;
+  testsCommit?: string;
+  testsCommand?: string;
 }
 
 export async function listCommand(options: ListOptions) {
@@ -124,6 +127,32 @@ export async function listCommand(options: ListOptions) {
           const token = decoded[0].token as Address;
           const amount = decoded[0].amount as bigint;
 
+          // Try to decode the demand to extract test repo and commit info
+          let testsRepo: string | undefined;
+          let testsCommit: string | undefined;
+          let testsCommand: string | undefined;
+          
+          try {
+            // Demand structure: (address oracle, bytes data)
+            const demandAbi = parseAbiParameters('(address oracle, bytes data)');
+            const decodedDemand = decodeAbiParameters(demandAbi, demand);
+            const oracleData = decodedDemand[0].data as `0x${string}`;
+            
+            // Oracle data structure: (string testsCommitHash, string testsCommand, uint8 testsCommitAlgo, string[] hosts)
+            const oracleDataAbi = parseAbiParameters('(string testsCommitHash, string testsCommand, uint8 testsCommitAlgo, string[] hosts)');
+            const decodedOracleData = decodeAbiParameters(oracleDataAbi, oracleData);
+            
+            testsCommit = decodedOracleData[0].testsCommitHash;
+            testsCommand = decodedOracleData[0].testsCommand;
+            const hosts = decodedOracleData[0].hosts;
+            testsRepo = hosts.length > 0 ? hosts[0] : undefined;
+          } catch (demandError) {
+            // If demand decoding fails, just skip it - not all escrows may have this structure
+            if (verbose) {
+              console.log(chalk.gray(`    Could not decode demand data for ${uid}`));
+            }
+          }
+
           // Determine status
           let escrowStatus: 'open' | 'fulfilled' | 'expired' | 'unknown' = 'open';
           
@@ -157,6 +186,9 @@ export async function listCommand(options: ListOptions) {
             txHash: log.transactionHash as string,
             blockNumber: Number(log.blockNumber),
             expirationTime: Number(attestation.expirationTime),
+            testsRepo,
+            testsCommit,
+            testsCommand,
           };
 
           escrows.push(escrowData);
@@ -200,9 +232,9 @@ export async function listCommand(options: ListOptions) {
     }
 
     if (format === 'csv') {
-      console.log('uid,status,buyer,recipient,amount,token,arbiter,created,expirationTime,txHash,blockNumber');
+      console.log('uid,status,buyer,recipient,amount,token,arbiter,testsRepo,testsCommit,testsCommand,created,expirationTime,txHash,blockNumber');
       limitedEscrows.forEach(escrow => {
-        console.log(`${escrow.uid},${escrow.status},${escrow.buyer},${escrow.recipient},${escrow.amount},${escrow.token},${escrow.arbiter},${escrow.created},${escrow.expirationTime},${escrow.txHash},${escrow.blockNumber}`);
+        console.log(`${escrow.uid},${escrow.status},${escrow.buyer},${escrow.recipient},${escrow.amount},${escrow.token},${escrow.arbiter},${escrow.testsRepo || ''},${escrow.testsCommit || ''},${escrow.testsCommand || ''},${escrow.created},${escrow.expirationTime},${escrow.txHash},${escrow.blockNumber}`);
       });
       return;
     }
@@ -219,11 +251,25 @@ export async function listCommand(options: ListOptions) {
       console.log(chalk.gray(`   Buyer: ${escrow.buyer}`));
       console.log(chalk.gray(`   Arbiter: ${escrow.arbiter}`));
       
+      // Show test repository and commit info if available
+      if (escrow.testsRepo) {
+        console.log(chalk.grey(`   Tests Repo: ${escrow.testsRepo}`));
+      }
+      if (escrow.testsCommit) {
+        console.log(chalk.grey(`   Tests Commit: ${escrow.testsCommit.substring(0, 12)}...`));
+      }
+      // if (escrow.testsCommand) {
+      //   console.log(chalk.grey(`   Test Command: ${escrow.testsCommand}`));
+      // }
+      
       if (verbose) {
         console.log(chalk.gray(`   Recipient: ${escrow.recipient}`));
         console.log(chalk.gray(`   Raw Amount: ${escrow.amount} wei`));
         console.log(chalk.gray(`   Created: ${escrow.created}`));
         console.log(chalk.gray(`   Expiration: ${escrow.expirationTime === 0 ? 'Never' : new Date(escrow.expirationTime * 1000).toISOString()}`));
+        if (escrow.testsCommit) {
+          console.log(chalk.gray(`   Full Tests Commit: ${escrow.testsCommit}`));
+        }
         console.log(chalk.gray(`   Tx Hash: ${escrow.txHash}`));
         console.log(chalk.gray(`   Block: ${escrow.blockNumber}`));
       }
