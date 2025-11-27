@@ -21,8 +21,8 @@ export async function checkKeyCommand(options: CheckKeyOptions) {
       throw new Error('GIT_IDENTITY_REGISTRY_ADDRESS is required in .env file for this command');
     }
 
-    // Normalize address to lowercase to avoid checksum case mismatches
-    const addressToCheck = ((options.address || config.address) as string).toLowerCase() as `0x${string}`;
+    // Use address as provided - Solidity's address type is case-insensitive
+    const addressToCheck = (options.address || config.address) as `0x${string}`;
     console.log(chalk.gray(`Checking address: ${addressToCheck}`));
 
     try {

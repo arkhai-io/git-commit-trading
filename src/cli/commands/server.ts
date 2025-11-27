@@ -112,8 +112,8 @@ export async function serverCommand(options: ServerOptions) {
 
       // Extract sender address from the obligation
       const obligation = obligationData[0];
-      // Normalize sender address to lowercase to avoid checksum case mismatches
-      const senderAddress = obligation.sender.toLowerCase();
+      // Use address as returned from contract
+      const senderAddress = obligation.sender;
       console.log(`🔍 Fulfillment submitted by: ${senderAddress}`);
 
       // Step 1: Verify Git key registration and commit signature (if enabled)

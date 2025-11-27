@@ -50,10 +50,10 @@ export async function submitCommand(options: SubmitOptions) {
       throw new Error('You must provide --arbiter, --oracle, and --token addresses when using environment configuration');
     }
     
-    // Normalize addresses to lowercase to avoid checksum case mismatches
-    const arbiterAddress = options.arbiter.toLowerCase();
-    const oracleAddress = options.oracle.toLowerCase(); 
-    const tokenAddress = options.token.toLowerCase();
+    // Use addresses as provided - Solidity's address type is case-insensitive
+    const arbiterAddress = options.arbiter as `0x${string}`;
+    const oracleAddress = options.oracle as `0x${string}`; 
+    const tokenAddress = options.token as `0x${string}`;
 
     // Encode the demand data
     const encodeCommitTestsDemand = (demand: {

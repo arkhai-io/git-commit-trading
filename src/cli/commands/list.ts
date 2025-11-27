@@ -36,6 +36,7 @@ export async function listCommand(options: ListOptions) {
     const status = options.status?.toLowerCase();
     const format = options.format?.toLowerCase() || 'table';
     const verbose = options.verbose || false;
+    // Lowercase for case-insensitive comparison
     const filterAddress = options.address?.toLowerCase();
 
     // Check for .env file and load client

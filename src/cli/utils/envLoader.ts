@@ -68,19 +68,15 @@ function validateEnvConfig(envVars: Record<string, string>): EnvConfig {
     throw new Error('ADDRESS must be a valid Ethereum address starting with 0x and 40 characters long');
   }
 
-  // Normalize all addresses to lowercase to avoid checksum case mismatches
-  const normalizedAddress = address.toLowerCase();
-  const normalizedCommitObligation = envVars.COMMIT_OBLIGATION_ADDRESS?.toLowerCase();
-  const normalizedGitIdentityRegistry = envVars.GIT_IDENTITY_REGISTRY_ADDRESS?.toLowerCase();
-
+  // Preserve address format as provided - Solidity's address type is case-insensitive
   return {
     privateKey,
-    address: normalizedAddress,
+    address: address as `0x${string}`,
     network: envVars.NETWORK || 'anvil',
     rpcUrl: envVars.RPC_URL,
     wsRpcUrl: envVars.WS_RPC_URL,
-    commitObligationAddress: normalizedCommitObligation,
-    gitIdentityRegistryAddress: normalizedGitIdentityRegistry,
+    commitObligationAddress: envVars.COMMIT_OBLIGATION_ADDRESS as `0x${string}` | undefined,
+    gitIdentityRegistryAddress: envVars.GIT_IDENTITY_REGISTRY_ADDRESS as `0x${string}` | undefined,
   };
 }
 
