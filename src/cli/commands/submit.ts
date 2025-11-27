@@ -52,7 +52,7 @@ export async function submitCommand(options: SubmitOptions) {
     
     // Normalize addresses to lowercase to avoid checksum case mismatches
     const arbiterAddress = options.arbiter.toLowerCase();
-    const oracleAddress = options.oracle.toLowerCase(); 
+    const oracleAddress = options.oracle; // keep checksummed format to match msg.sender 
     const tokenAddress = options.token.toLowerCase();
 
     // Encode the demand data
