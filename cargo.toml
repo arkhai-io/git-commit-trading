@@ -1,5 +1,7 @@
 [workspace]
 members = [
-    "intent-verification/packages/rs"
+    "intent-verification/packages/rs",
+    "intent-verification/packages/py",
 ]
 
+resolver = "2"

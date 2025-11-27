@@ -10,11 +10,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = "0.25.0"
-
-intent-verification = { 
-    git = "https://github.com/arkhai-io/git-commit-trading",
-    branch = "intent-verification",
-}
+intent-verification = { git = "https://github.com/arkhai-io/git-commit-trading", branch = "intent-verification" }
 
 tokio = { version = "1.48.0", features = ["rt", "rt-multi-thread", "macros"] }
 dotenvy = "0.15.7"
