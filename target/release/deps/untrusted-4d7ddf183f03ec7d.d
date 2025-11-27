@@ -1,0 +1,10 @@
+/Users/thanhngocnguyenduc/Desktop/git-commit-trading/target/release/deps/untrusted-4d7ddf183f03ec7d.d: /Users/thanhngocnguyenduc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/untrusted-0.9.0/src/lib.rs /Users/thanhngocnguyenduc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/untrusted-0.9.0/src/input.rs /Users/thanhngocnguyenduc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/untrusted-0.9.0/src/no_panic.rs /Users/thanhngocnguyenduc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/untrusted-0.9.0/src/reader.rs
+
+/Users/thanhngocnguyenduc/Desktop/git-commit-trading/target/release/deps/libuntrusted-4d7ddf183f03ec7d.rlib: /Users/thanhngocnguyenduc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/untrusted-0.9.0/src/lib.rs /Users/thanhngocnguyenduc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/untrusted-0.9.0/src/input.rs /Users/thanhngocnguyenduc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/untrusted-0.9.0/src/no_panic.rs /Users/thanhngocnguyenduc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/untrusted-0.9.0/src/reader.rs
+
+/Users/thanhngocnguyenduc/Desktop/git-commit-trading/target/release/deps/libuntrusted-4d7ddf183f03ec7d.rmeta: /Users/thanhngocnguyenduc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/untrusted-0.9.0/src/lib.rs /Users/thanhngocnguyenduc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/untrusted-0.9.0/src/input.rs /Users/thanhngocnguyenduc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/untrusted-0.9.0/src/no_panic.rs /Users/thanhngocnguyenduc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/untrusted-0.9.0/src/reader.rs
+
+/Users/thanhngocnguyenduc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/untrusted-0.9.0/src/lib.rs:
+/Users/thanhngocnguyenduc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/untrusted-0.9.0/src/input.rs:
+/Users/thanhngocnguyenduc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/untrusted-0.9.0/src/no_panic.rs:
+/Users/thanhngocnguyenduc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/untrusted-0.9.0/src/reader.rs:
