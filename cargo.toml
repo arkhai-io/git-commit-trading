@@ -3,3 +3,8 @@ members = [
     "intent-verification/packages/rs",
 ]
 
+exclude = [
+    "intent-verification/packages/py",
+]
+
+resolver = "2"
