@@ -1,8 +1,0 @@
-/Users/thanhngocnguyenduc/Desktop/git-commit-trading/target/release/build/target-lexicon-647864ceb6518fe9/build_script_build-647864ceb6518fe9.d: /Users/thanhngocnguyenduc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/target-lexicon-0.13.3/build.rs /Users/thanhngocnguyenduc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/target-lexicon-0.13.3/src/data_model.rs /Users/thanhngocnguyenduc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/target-lexicon-0.13.3/src/triple.rs /Users/thanhngocnguyenduc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/target-lexicon-0.13.3/src/targets.rs
-
-/Users/thanhngocnguyenduc/Desktop/git-commit-trading/target/release/build/target-lexicon-647864ceb6518fe9/build_script_build-647864ceb6518fe9: /Users/thanhngocnguyenduc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/target-lexicon-0.13.3/build.rs /Users/thanhngocnguyenduc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/target-lexicon-0.13.3/src/data_model.rs /Users/thanhngocnguyenduc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/target-lexicon-0.13.3/src/triple.rs /Users/thanhngocnguyenduc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/target-lexicon-0.13.3/src/targets.rs
-
-/Users/thanhngocnguyenduc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/target-lexicon-0.13.3/build.rs:
-/Users/thanhngocnguyenduc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/target-lexicon-0.13.3/src/data_model.rs:
-/Users/thanhngocnguyenduc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/target-lexicon-0.13.3/src/triple.rs:
-/Users/thanhngocnguyenduc/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/target-lexicon-0.13.3/src/targets.rs:
