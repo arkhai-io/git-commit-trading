@@ -74,13 +74,6 @@ Create a `.env` file or use the CLI to generate one:
   --tests-command "bun test" \
   --arbiter 0x... \
   --token 0x...
-
-# With custom dockerfile
-./bin/git-escrows-docker submit \
-  --tests-repo https://github.com/user/tests.git \
-  --tests-commit abc123... \
-  --reward 1000000000000000000 \
-  --custom-dockerfile ./custom.dockerfile
 ```
 
 **Dockerfile Handling:**
@@ -93,9 +86,8 @@ Create a `.env` file or use the CLI to generate one:
   - `bun_jest` - Bun projects with bun.lockb (using `bun jest`)
   - `node_jest` - Node.js projects with package-lock.json
   - `pnpm_jest` - Node.js projects with pnpm-lock.yaml
-- **Custom dockerfile**: Use `--custom-dockerfile` to provide your own dockerfile
 - **Repository dockerfile**: If `arkhai_tests.dockerfile` exists in test repo, it will be used automatically
-- **Priority**: Custom flag > Repository dockerfile > Auto-detected template
+- **Priority**: Repository dockerfile > Auto-detected template
 
 #### List Available Escrows
 ```bash

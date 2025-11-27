@@ -18,7 +18,6 @@ interface SubmitOptions {
   arbiter?: string;
   oracle?: string;
   token?: string;
-  customDockerfile?: string;
 }
 
 export async function submitCommand(options: SubmitOptions) {
@@ -42,34 +41,19 @@ export async function submitCommand(options: SubmitOptions) {
       let dockerfilePath: string;
       let isCustom = false;
       
-      // Priority 1: Check if user provided --custom-dockerfile option
-      if (options.customDockerfile) {
-        dockerfilePath = path.resolve(options.customDockerfile);
+      // Priority 1: Check if arkhai_tests.dockerfile exists in the test repo
+      const repoDockerfilePath = path.join(testRepoPath, 'arkhai_tests.dockerfile');
+      try {
+        await fs.access(repoDockerfilePath);
+        dockerfilePath = repoDockerfilePath;
         isCustom = true;
-        console.log(chalk.cyan(`Using custom dockerfile from: ${dockerfilePath}`));
-        
-        // Verify the file exists
-        try {
-          await fs.access(dockerfilePath);
-        } catch (error) {
-          throw new Error(`Custom dockerfile not found at: ${dockerfilePath}`);
-        }
-      }
-      // Priority 2: Check if arkhai_tests.dockerfile exists in the test repo
-      else {
-        const repoDockerfilePath = path.join(testRepoPath, 'arkhai_tests.dockerfile');
-        try {
-          await fs.access(repoDockerfilePath);
-          dockerfilePath = repoDockerfilePath;
-          isCustom = true;
-          console.log(chalk.cyan('Found arkhai_tests.dockerfile in repository'));
-        } catch (error) {
-          // Priority 3: Detect framework and use default dockerfile content
-          console.log(chalk.cyan('No custom dockerfile found, detecting project framework...'));
-          const frameworkResult = await detectFramework(testRepoPath);
-          dockerfilePath = frameworkResult.dockerfilePath;
-          console.log(chalk.green(`\nYour repo was detected as a ${chalk.bold(frameworkResult.framework)} project.`));
-        }
+        console.log(chalk.cyan('Found arkhai_tests.dockerfile in repository'));
+      } catch (error) {
+        // Priority 2: Detect framework and use default dockerfile content
+        console.log(chalk.cyan('No custom dockerfile found, detecting project framework...'));
+        const frameworkResult = await detectFramework(testRepoPath);
+        dockerfilePath = frameworkResult.dockerfilePath;
+        console.log(chalk.green(`\nYour repo was detected as a ${chalk.bold(frameworkResult.framework)} project.`));
       }
       
       console.log(chalk.white(`\nTests will be run via:\n`));
@@ -102,12 +86,10 @@ export async function submitCommand(options: SubmitOptions) {
       
       if (answer.toLowerCase() === 'n' || answer.toLowerCase() === 'no') {
         console.log(chalk.yellow('\n📝 To use a custom dockerfile:'));
-        console.log(chalk.gray('  Option 1: Create "arkhai_tests.dockerfile" in your test repository'));
+        console.log(chalk.gray('  Create "arkhai_tests.dockerfile" in your test repository'));
         console.log(chalk.gray('    1. Create a file named "arkhai_tests.dockerfile" in your test repository'));
         console.log(chalk.gray('    2. Commit and push it'));
-        console.log(chalk.gray('    3. Run this command again'));
-        console.log(chalk.gray('\n  Option 2: Use --custom-dockerfile flag'));
-        console.log(chalk.gray('    git-escrows submit --custom-dockerfile=/path/to/your.dockerfile [other options]\n'));
+        console.log(chalk.gray('    3. Run this command again\n'));
         process.exit(0);
       }
       

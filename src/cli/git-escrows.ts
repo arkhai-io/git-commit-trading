@@ -71,7 +71,7 @@ program
   .option('--arbiter <address>', 'Arbiter contract address')
   .option('--oracle <address>', 'Oracle address for arbitration')
   .option('--token <address>', 'ERC20 token contract address')
-  .option('--custom-dockerfile <path>', 'Path to custom dockerfile for running tests')
+
   .action(submitCommand);
 
 // Fulfill command - Bob submits a solution
