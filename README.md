@@ -42,23 +42,23 @@ Create a `.env` file or use the CLI to generate one:
 
 ```bash
 # Initialize client with private key and network
-./bin/git-escrows new-client --privateKey 0x... --network anvil
+./bin/git-escrows-docker new-client --privateKey 0x... --network anvil
 ```
 
 ### Register Your Git Keys
 
 ```bash
 # Register SSH key
-./bin/git-escrows register-key --path ~/.ssh/id_ed25519.pub
+./bin/git-escrows-docker register-key --path ~/.ssh/id_ed25519.pub
 
 # Register PGP key
-./bin/git-escrows register-key --pgp-key-file ~/.gnupg/pubkey.asc
+./bin/git-escrows-docker register-key --pgp-key-file ~/.gnupg/pubkey.asc
 
 # Register X.509 certificate
-./bin/git-escrows register-key --x509-cert-file ./cert.pem
+./bin/git-escrows-docker register-key --x509-cert-file ./cert.pem
 
 # Verify registration
-./bin/git-escrows check-key --verbose
+./bin/git-escrows-docker check-key --verbose
 ```
 
 ## CLI Commands
@@ -67,7 +67,7 @@ Create a `.env` file or use the CLI to generate one:
 
 #### Submit Escrow Demand
 ```bash
-./bin/git-escrows submit \
+./bin/git-escrows-docker submit \
   --tests-repo https://github.com/user/tests.git \
   --tests-commit abc123... \
   --reward 1000000000000000000 \
@@ -76,7 +76,7 @@ Create a `.env` file or use the CLI to generate one:
   --token 0x...
 
 # With custom dockerfile
-./bin/git-escrows submit \
+./bin/git-escrows-docker submit \
   --tests-repo https://github.com/user/tests.git \
   --tests-commit abc123... \
   --reward 1000000000000000000 \
@@ -99,12 +99,12 @@ Create a `.env` file or use the CLI to generate one:
 
 #### List Available Escrows
 ```bash
-./bin/git-escrows list [--address 0x...]
+./bin/git-escrows-docker list [--address 0x...]
 ```
 
 #### Fulfill Escrow (Submit Solution)
 ```bash
-./bin/git-escrows fulfill \
+./bin/git-escrows-docker fulfill \
   --escrow-id 1 \
   --solution-repo https://github.com/dev/solution.git \
   --solution-commit def456...
@@ -112,7 +112,7 @@ Create a `.env` file or use the CLI to generate one:
 
 #### Collect Rewards
 ```bash
-./bin/git-escrows collect --escrow-id 1
+./bin/git-escrows-docker collect --escrow-id 1
 ```
 
 ### Key Management
@@ -120,22 +120,22 @@ Create a `.env` file or use the CLI to generate one:
 #### Register Keys
 ```bash
 # SSH Keys
-./bin/git-escrows register-key \
+./bin/git-escrows-docker register-key \
   --public-key-file ~/.ssh/id_ed25519.pub \
   --private-key-file ~/.ssh/id_ed25519
 
 # PGP Keys  
-./bin/git-escrows register-key \
+./bin/git-escrows-docker register-key \
   --pgp-key-file ~/.gnupg/pubkey.asc
 
 # X.509 Certificates
-./bin/git-escrows register-key \
+./bin/git-escrows-docker register-key \
   --x509-cert-file ./certificate.pem
 ```
 
 #### Verify Registration
 ```bash
-./bin/git-escrows check-key --address 0x... --verbose
+./bin/git-escrows-docker check-key --address 0x... --verbose
 ```
 
 ### Development Server
@@ -143,7 +143,7 @@ Create a `.env` file or use the CLI to generate one:
 Start the verification oracle server:
 
 ```bash
-./bin/git-escrows server --port 3000 --config config.json
+./bin/git-escrows-docker server --port 3000 --config config.json
 ```
 
 ## Test Execution Architecture
@@ -233,17 +233,17 @@ git log --oneline -n 5  # Note the commit hash you want to use
 **2. Setup Your Environment**
 ```bash
 # Initialize client configuration
-./bin/git-escrows new-client \
+./bin/git-escrows-docker new-client \
   --privateKey 0x1234567890abcdef... \
   --network sepolia
 
 # Register your Git signing key (if not done already)
-./bin/git-escrows register-key --path ~/.ssh/id_ed25519.pub
+./bin/git-escrows-docker register-key --path ~/.ssh/id_ed25519.pub
 ```
 
 **3. Submit the Escrow Demand**
 ```bash
-./bin/git-escrows submit \
+./bin/git-escrows-docker submit \
   --tests-repo https://github.com/yourorg/challenge-tests.git \
   --tests-commit a1b2c3d4e5f6... \
   --reward 1000000000000000000 \
@@ -255,10 +255,10 @@ git log --oneline -n 5  # Note the commit hash you want to use
 **4. Monitor Your Escrow**
 ```bash
 # List your created escrows
-./bin/git-escrows list --address 0xYourAddress
+./bin/git-escrows-docker list --address 0xYourAddress
 
 # Check status periodically
-watch -n 30 './bin/git-escrows list --address 0xYourAddress'
+watch -n 30 './bin/git-escrows-docker list --address 0xYourAddress'
 ```
 
 ---
@@ -277,10 +277,10 @@ watch -n 30 './bin/git-escrows list --address 0xYourAddress'
 **1. Find Available Challenges**
 ```bash
 # List all available escrows
-./bin/git-escrows list
+./bin/git-escrows-docker list
 
 # Or filter by specific criteria
-./bin/git-escrows list --address 0xSpecificDemander
+./bin/git-escrows-docker list --address 0xSpecificDemander
 ```
 
 **2. Analyze the Challenge**
@@ -316,19 +316,19 @@ git log --oneline -n 1
 **4. Setup Environment and Register Keys**
 ```bash
 # Setup your client (if not done already)
-./bin/git-escrows new-client \
+./bin/git-escrows-docker new-client \
   --privateKey 0xYourPrivateKey... \
   --network sepolia
 
 # Register your signing key (required for commit verification)
-./bin/git-escrows register-key \
+./bin/git-escrows-docker register-key \
   --public-key-file ~/.ssh/id_ed25519.pub \
   --private-key-file ~/.ssh/id_ed25519
 ```
 
 **5. Submit Your Solution**
 ```bash
-./bin/git-escrows fulfill \
+./bin/git-escrows-docker fulfill \
   --escrow-id 42 \
   --solution-repo https://github.com/yourusername/solution-repo.git \
   --solution-commit def456abc789...
@@ -337,10 +337,10 @@ git log --oneline -n 1
 **6. Wait for Verification and Collect Reward**
 ```bash
 # Monitor verification status
-./bin/git-escrows list --address 0xYourAddress
+./bin/git-escrows-docker list --address 0xYourAddress
 
 # Once verified and approved, collect your reward
-./bin/git-escrows collect --escrow-id 42
+./bin/git-escrows-docker collect --escrow-id 42
 ```
 
 ---
@@ -359,8 +359,8 @@ git log --oneline -n 1
 **1. Server Setup and Configuration**
 ```bash
 # Clone and setup the project
-git clone https://github.com/yourorg/git-escrows.git
-cd git-escrows/git-app
+git clone https://github.com/yourorg/git-escrows-docker.git
+cd git-escrows-docker/git-app
 bun install
 bun run build:contracts
 bun run build:binary
@@ -369,12 +369,12 @@ bun run build:binary
 **2. Configure Oracle Environment**
 ```bash
 # Create oracle-specific .env
-./bin/git-escrows new-client \
+./bin/git-escrows-docker new-client \
   --privateKey 0xOraclePrivateKey... \
   --network sepolia
 
 # Register oracle's verification keys
-./bin/git-escrows register-key --path ~/.ssh/id_rsa.pub
+./bin/git-escrows-docker register-key --path ~/.ssh/id_rsa.pub
 ```
 
 **3. Create Oracle Configuration File**
@@ -401,7 +401,7 @@ bun run build:binary
     "timeout": 300000,           # 5 minutes max per test
     "cleanupAfterExecution": true,
     "isolatedEnvironment": true,
-    "tempDirectory": "/tmp/git-escrows",
+    "tempDirectory": "/tmp/git-escrows-docker",
     "maxMemoryMB": 1024,
     "allowedCommands": ["bun", "npm", "yarn", "pnpm", "cargo", "go", "python", "node"],
     "containerPoolSize": 5       # Max concurrent Docker containers
@@ -429,24 +429,24 @@ bun run build:binary
 **4. Start Oracle Server**
 ```bash
 # Start in production mode
-./bin/git-escrows server \
+./bin/git-escrows-docker server \
   --port 3000 \
   --config config/oracle-config.json \
   --log-level info
 
 # Or with PM2 for production deployment
-pm2 start ./bin/git-escrows --name "git-escrows-oracle" -- \
+pm2 start ./bin/git-escrows-docker --name "git-escrows-docker-oracle" -- \
   server --port 3000 --config config/oracle-config.json
 ```
 
 **5. Monitor Oracle Operations**
 ```bash
 # Check oracle status and logs
-./bin/git-escrows server --status
+./bin/git-escrows-docker server --status
 tail -f logs/oracle.log
 
 # Monitor processed escrows
-./bin/git-escrows list --oracle-stats
+./bin/git-escrows-docker list --oracle-stats
 
 # Health check endpoint
 curl http://localhost:3000/health
@@ -461,9 +461,9 @@ curl http://localhost:3000/health
 # Setup automatic backups of verification results
 
 # Example systemd service
-sudo cp scripts/git-escrows-oracle.service /etc/systemd/system/
-sudo systemctl enable git-escrows-oracle
-sudo systemctl start git-escrows-oracle
+sudo cp scripts/git-escrows-docker-oracle.service /etc/systemd/system/
+sudo systemctl enable git-escrows-docker-oracle
+sudo systemctl start git-escrows-docker-oracle
 ```
 
 ## Repository Structure Requirements
@@ -688,7 +688,7 @@ fn quicksort(arr: &mut [i32], low: usize, high: usize) {
 ### List Command Output
 
 ```bash
-./bin/git-escrows list
+./bin/git-escrows-docker list
 ```
 
 **Example Output:**
@@ -737,7 +737,7 @@ Total Value Locked: 2.3 ETH + 500 USDC
 ### Check Key Command Output
 
 ```bash
-./bin/git-escrows check-key --verbose
+./bin/git-escrows-docker check-key --verbose
 ```
 
 **Example Output:**
@@ -760,7 +760,7 @@ Total Value Locked: 2.3 ETH + 500 USDC
 │ PGP Key                                                                      │
 │ Status: NOT REGISTERED                                                        │
 │ Local Key: Found (4096-bit RSA, expires 2026-09-28)                            │
-│ Suggestion: Run `./bin/git-escrows register-key --pgp-key-file ~/.gnupg/...`   │
+│ Suggestion: Run `./bin/git-escrows-docker register-key --pgp-key-file ~/.gnupg/...`   │
 ├─────────────────────────────────────────────────────────────────────────────────┤
 │ X.509 Certificate                                                            │
 │ Status: NOT REGISTERED                                                        │
@@ -774,7 +774,7 @@ Ready to submit solutions with SSH-signed commits
 ### Submit Command Output
 
 ```bash
-./bin/git-escrows submit --tests-repo https://github.com/challenges/fibonacci --tests-commit a1b2c3d4 --reward 1500000000000000000
+./bin/git-escrows-docker submit --tests-repo https://github.com/challenges/fibonacci --tests-commit a1b2c3d4 --reward 1500000000000000000
 ```
 
 **Example Output:**
@@ -812,14 +812,14 @@ Creating new escrow demand...
 │                                                                                 │
 │ Escrow ID: 42                                                               │
 │ Explorer: https://sepolia.etherscan.io/tx/0xabcdef...                       │
-│ Monitor: ./bin/git-escrows list --address 0xa1b2c3d4e5f6...                 │
+│ Monitor: ./bin/git-escrows-docker list --address 0xa1b2c3d4e5f6...                 │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Fulfill Command Output
 
 ```bash
-./bin/git-escrows fulfill --escrow-id 42 --solution-repo https://github.com/dev/fibonacci-solution --solution-commit def456
+./bin/git-escrows-docker fulfill --escrow-id 42 --solution-repo https://github.com/dev/fibonacci-solution --solution-commit def456
 ```
 
 **Example Output:**
@@ -856,14 +856,14 @@ Submitting solution for escrow #42...
 │ Solution verified successfully!                                              │
 │                                                                                 │
 │ Reward pending arbiter approval                                              │
-│ Monitor: ./bin/git-escrows list --address 0x9876543210fe...                 │
+│ Monitor: ./bin/git-escrows-docker list --address 0x9876543210fe...                 │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Server Status Output
 
 ```bash
-./bin/git-escrows server --status
+./bin/git-escrows-docker server --status
 ```
 
 **Example Output:**
@@ -912,7 +912,7 @@ Performance: Normal (avg response time: 120ms)
 ```
 src/
 ├── cli/                    # CLI interface and commands
-│   ├── git-escrows.ts     # Main CLI entry point
+│   ├── git-escrows-docker.ts     # Main CLI entry point
 │   └── commands/          # Individual command implementations
 ├── clients/               # Blockchain client abstractions
 │   ├── commitObligation.ts
@@ -1060,13 +1060,13 @@ The `config.json` file defines **test execution and repository handling settings
 
 ```bash
 # Use default config.json for oracle server
-./bin/git-escrows server --port 3000
+./bin/git-escrows-docker server --port 3000
 
 # Use custom configuration file
-./bin/git-escrows server --port 3000 --config ./custom-config.json
+./bin/git-escrows-docker server --port 3000 --config ./custom-config.json
 
 # Generate .env file interactively
-./bin/git-escrows new-client --privateKey 0x... --network sepolia
+./bin/git-escrows-docker new-client --privateKey 0x... --network sepolia
 ```
 
 ## Security Features
