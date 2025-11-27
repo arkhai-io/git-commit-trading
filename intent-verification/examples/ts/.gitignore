@@ -4,7 +4,6 @@ node_modules
 # output
 out
 dist
-bin
 *.tgz
 
 # code coverage
@@ -18,16 +17,10 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # dotenv environment variable files
 .env
-
-# Integration test sensitive files - NEVER COMMIT THESE
-# integration-test-config.json
-test-keys/
-temp/
 .env.development.local
 .env.test.local
 .env.production.local
 .env.local
-*.asc
 
 # caches
 .eslintcache
@@ -39,6 +32,3 @@ temp/
 
 # Finder (MacOS) folder config
 .DS_Store
-abi
-.temp
-target

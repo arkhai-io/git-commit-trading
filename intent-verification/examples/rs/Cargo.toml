@@ -1,0 +1,9 @@
+[package]
+name = "intent-verification-sample-rs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+intent-verification = { path = "../../packages/rs" }
+tokio = { version = "1.48.0", features = ["rt", "rt-multi-thread", "macros"] }
+dotenvy = "0.15.7"
