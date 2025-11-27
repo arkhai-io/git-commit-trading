@@ -6,5 +6,6 @@ requires-python = ">=3.10"
 dependencies = [
     "python-dotenv>=1.0.0",
     "pytest>=7.0.0",
-    "intent-verification-py @ git+https://github.com/VAR-META-Tech/intent-verification-py.git",
+
+    "intent-verification-py @ file:../../packages/py",
 ]
