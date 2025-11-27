@@ -92,23 +92,23 @@ Create a `.env` file or use the CLI to generate one:
 #### List Available Escrows
 ```bash
 # List all escrows
-./bin/git-escrows list
+./bin/git-escrows-docker list
 
 # Filter by status
-./bin/git-escrows list --status open
+./bin/git-escrows-docker list --status open
 
 # Filter by address (buyer or recipient)
-./bin/git-escrows list --address 0x...
+./bin/git-escrows-docker list --address 0x...
 
 # Show detailed information
-./bin/git-escrows list --verbose
+./bin/git-escrows-docker list --verbose
 
 # Export as JSON or CSV
-./bin/git-escrows list --format json
-./bin/git-escrows list --format csv
+./bin/git-escrows-docker list --format json
+./bin/git-escrows-docker list --format csv
 
 # Combine options
-./bin/git-escrows list --status open --address 0x... --verbose --limit 10
+./bin/git-escrows-docker list --status open --address 0x... --verbose --limit 10
 ```
 
 **Note:** Requires `ERC20_ESCROW_OBLIGATION_ADDRESS` in your `.env` file. The command queries the blockchain directly using event logs from the ERC20EscrowObligation contract.
