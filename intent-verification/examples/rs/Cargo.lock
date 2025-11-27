@@ -614,7 +614,6 @@ dependencies = [
 [[package]]
 name = "intent-verification"
 version = "0.1.0"
-source = "git+https://github.com/VAR-META-Tech/intent-verification#0e82c9d8d4100b3539b2e97650367c0886903af4"
 dependencies = [
  "async-openai",
  "colored",
