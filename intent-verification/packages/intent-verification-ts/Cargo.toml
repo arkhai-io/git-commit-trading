@@ -1,0 +1,24 @@
+
+[package]
+authors = ["LongYinan <lynweklm@gmail.com>"]
+edition = "2021"
+name    = "intent_verification_ts"
+version = "0.1.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+dotenvy             = "0.15.7"
+intent-verification = { git = "https://github.com/VAR-META-Tech/intent-verification" }
+napi                = { version = "3.0.0", features = ["async", "tokio_rt"] }
+napi-derive         = "3.0.0"
+serde_json          = "1.0"
+tokio               = { version = "1.48.0", features = ["rt", "rt-multi-thread", "macros"] }
+
+[build-dependencies]
+napi-build = "2"
+
+[profile.release]
+lto   = true
+strip = "symbols"
