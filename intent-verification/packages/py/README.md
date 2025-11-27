@@ -4,27 +4,12 @@ Python bindings for the intent-verification Rust library.
 
 ## Installation
 
-### Development Setup
 
-1. Install maturin:
-```bash
-pip install maturin
-```
-
-2. Build and install the package in development mode:
-```bash
-maturin develop
-```
-
-Or build for release:
-```bash
-maturin build --release
-```
-
-### Install Test Dependencies
-
-```bash
-pip install -r requirements-dev.txt
+``` zsh
+python3 -m venv venv
+source venv/bin/activate
+pip install .
+pytest
 ```
 
 ## Usage
