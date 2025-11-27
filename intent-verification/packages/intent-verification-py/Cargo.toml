@@ -1,0 +1,15 @@
+[package]
+name = "intent-verification-py"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "intent_verification_py"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = "0.25.0"
+intent-verification = { git = "https://github.com/VAR-META-Tech/intent-verification" }
+tokio = { version = "1.48.0", features = ["rt", "rt-multi-thread", "macros"] }
+dotenvy = "0.15.7"
