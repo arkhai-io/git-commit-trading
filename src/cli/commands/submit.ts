@@ -72,27 +72,7 @@ export async function submitCommand(options: SubmitOptions) {
       console.log(chalk.cyan(dockerfileContent));
       console.log(chalk.gray('---\n'));
       
-      // Ask for confirmation
-      const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-      });
-      
-      const answer = await rl.question(
-        chalk.yellow('Is that okay? If not, please provide a custom dockerfile.\n') +
-        chalk.green('[(Y)es]') + chalk.gray('/(n)o: ')
-      );
-      rl.close();
-      
-      if (answer.toLowerCase() === 'n' || answer.toLowerCase() === 'no') {
-        console.log(chalk.yellow('\n📝 To use a custom dockerfile:'));
-        console.log(chalk.gray('  Create "arkhai_tests.dockerfile" in your test repository'));
-        console.log(chalk.gray('    1. Create a file named "arkhai_tests.dockerfile" in your test repository'));
-        console.log(chalk.gray('    2. Commit and push it'));
-        console.log(chalk.gray('    3. Run this command again\n'));
-        process.exit(0);
-      }
-      
+      console.log(chalk.gray('💡 To use a custom dockerfile, create "arkhai_tests.dockerfile" in your test repository\n'));
       console.log(chalk.green('✅ Proceeding with escrow creation...\n'));
       
     } finally {
