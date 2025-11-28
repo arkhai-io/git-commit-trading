@@ -1,0 +1,72 @@
+# Dependencies
+node_modules
+# Note: bun.lock is needed for Docker build, so don't exclude it
+
+# Build outputs
+out
+dist
+bin
+*.tgz
+
+# Test files
+tests
+*.test.ts
+*.test.js
+
+# Coverage
+coverage
+*.lcov
+
+# Logs
+logs
+*.log
+report.*.json
+
+# Environment files (should be provided via Cloud Run secrets)
+.env
+.env.*
+testVerify.env
+
+# Git
+.git
+.gitignore
+.gitmodules
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation (optional, can include if needed)
+# README.md
+# *.md
+
+# Contract build artifacts (large, not needed for runtime)
+contract/out
+contract/cache
+contract/broadcast
+
+# Temporary files
+temp
+.temp
+*.tmp
+
+# Integration test configs
+integration-test-config.json
+test-keys
+
+# Caches
+.eslintcache
+.cache
+*.tsbuildinfo
+
+# Other
+abi
+target
+

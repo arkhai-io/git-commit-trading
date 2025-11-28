@@ -135,10 +135,33 @@ export class GitCommitVerifier {
   }
 
   /**
+   * Authenticate a GitHub URL with a Personal Access Token if available.
+   * @param gitUrl The git repository URL (e.g. https://github.com/user/repo.git)
+   * @returns The authenticated URL if token is available, otherwise the original URL
+   */
+  private authenticateGitHubUrl(gitUrl: string): string {
+    const githubToken = process.env.GITHUB_TOKEN;
+    
+    if (githubToken && gitUrl.includes('github.com')) {
+      // Embed token in GitHub URL: https://token@github.com/user/repo.git
+      // Handle both https://github.com/... and https://www.github.com/...
+      const authenticatedUrl = gitUrl.replace(
+        /https:\/\/(?:www\.)?(github\.com\/)/,
+        `https://${githubToken}@$1`
+      );
+      return authenticatedUrl;
+    }
+    
+    return gitUrl;
+  }
+
+  /**
    * Clone a Git repository to a temporary directory
    */
   private async cloneRepository(repositoryUrl: string, targetDir: string): Promise<void> {
-    const command = `git clone --depth 50 "${repositoryUrl}" "${targetDir}"`;
+    // Authenticate GitHub URL if token is available
+    const authenticatedUrl = this.authenticateGitHubUrl(repositoryUrl);
+    const command = `git clone --depth 50 "${authenticatedUrl}" "${targetDir}"`;
     
     try {
       const { stdout, stderr } = await execAsync(command, {

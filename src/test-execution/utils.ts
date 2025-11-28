@@ -258,6 +258,26 @@ export function normalizeCommitHash(commitHash: string): string {
   return commitHash.trim().toLowerCase();
 }
 
+/**
+ * Authenticate a GitHub URL with a Personal Access Token if available.
+ * @param gitUrl The git repository URL (e.g. https://github.com/user/repo.git)
+ * @returns The authenticated URL if token is available, otherwise the original URL
+ */
+export function authenticateGitHubUrl(gitUrl: string): string {
+  const githubToken = process.env.GITHUB_TOKEN;
+  
+  if (githubToken && gitUrl.includes('github.com')) {
+    // Embed token in GitHub URL: https://token@github.com/user/repo.git
+    // Handle both https://github.com/... and https://www.github.com/...
+    const authenticatedUrl = gitUrl.replace(
+      /https:\/\/(?:www\.)?(github\.com\/)/,
+      `https://${githubToken}@$1`
+    );
+    return authenticatedUrl;
+  }
+  
+  return gitUrl;
+}
 
 /**
  * Clone a git repository and checkout a specific commit.
@@ -267,8 +287,11 @@ export function normalizeCommitHash(commitHash: string): string {
  */
 export async function cloneGitRepository(gitUrl: string, targetDir: string, commitHash?: string): Promise<void> {
   return new Promise((resolve, reject) => {
+    // Authenticate GitHub URL if token is available
+    const authenticatedUrl = authenticateGitHubUrl(gitUrl);
+    
     // First, clone the repository
-    const cloneCmd = `git clone "${gitUrl}" "${targetDir}"`;
+    const cloneCmd = `git clone "${authenticatedUrl}" "${targetDir}"`;
     exec(cloneCmd, (error, stdout, stderr) => {
       if (error) {
         reject(new Error(`Failed to clone repository: ${stderr || error.message}`));
