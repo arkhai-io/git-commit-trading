@@ -389,38 +389,46 @@ async function detectPythonProject(projectPath: string): Promise<PythonDetection
     let hasConfigFile = false;
     let configType = '';
     
-    // Check for poetry.lock first (explicit Poetry project)
-    const poetryLockPath = path.join(projectPath, 'poetry.lock');
+    // Check for uv.lock first (explicit UV project)
+    const uvLockPath = path.join(projectPath, 'uv.lock');
     try {
-      await fs.access(poetryLockPath);
+      await fs.access(uvLockPath);
       hasConfigFile = true;
-      configType = 'poetry';
+      configType = 'uv';
     } catch {
-      // Check for pyproject.toml (modern Python projects)
+      // Check for poetry.lock (explicit Poetry project)
+      const poetryLockPath = path.join(projectPath, 'poetry.lock');
       try {
-        await fs.access(pyprojectPath);
+        await fs.access(poetryLockPath);
         hasConfigFile = true;
-        configType = 'pyproject.toml';
+        configType = 'poetry';
       } catch {
-        // Check for requirements.txt
+        // Check for pyproject.toml (modern Python projects)
         try {
-          await fs.access(requirementsPath);
+          await fs.access(pyprojectPath);
           hasConfigFile = true;
-          configType = 'requirements.txt';
+          configType = 'pyproject.toml';
         } catch {
-          // Check for setup.py
+          // Check for requirements.txt
           try {
-            await fs.access(setupPyPath);
+            await fs.access(requirementsPath);
             hasConfigFile = true;
-            configType = 'setup.py';
+            configType = 'requirements.txt';
           } catch {
-            // Check for Pipfile
+            // Check for setup.py
             try {
-              await fs.access(pipfilePath);
+              await fs.access(setupPyPath);
               hasConfigFile = true;
-              configType = 'Pipfile';
+              configType = 'setup.py';
             } catch {
-              // No config file found
+              // Check for Pipfile
+              try {
+                await fs.access(pipfilePath);
+                hasConfigFile = true;
+                configType = 'Pipfile';
+              } catch {
+                // No config file found
+              }
             }
           }
         }
@@ -438,7 +446,7 @@ async function detectPythonProject(projectPath: string): Promise<PythonDetection
         isValidProject: false,
         hasConfigFile: false,
         commands: null,
-        error: 'No Python project indicators found (no .py files, pyproject.toml, requirements.txt, setup.py, or Pipfile)'
+        error: 'No Python project indicators found (no .py files, uv.lock, poetry.lock, pyproject.toml, requirements.txt, setup.py, or Pipfile)'
       };
     }
 
@@ -447,6 +455,14 @@ async function detectPythonProject(projectPath: string): Promise<PythonDetection
     let commands: PythonCommands;
     
     switch (configType) {
+      case 'uv':
+        // Explicit UV project (has uv.lock)
+        commands = {
+          installCommand: 'uv sync',
+          buildCommand: 'uv build',
+          testCommand: 'uv run pytest'
+        };
+        break;
       case 'poetry':
         // Explicit Poetry project (has poetry.lock)
         commands = {
@@ -456,13 +472,21 @@ async function detectPythonProject(projectPath: string): Promise<PythonDetection
         };
         break;
       case 'pyproject.toml':
-        // Check if this is a Poetry project
+        // Check if this is a UV project, Poetry project, or regular pyproject.toml
         try {
           const pyprojectContent = await fs.readFile(pyprojectPath, 'utf-8');
+          const isUvProject = pyprojectContent.includes('[tool.uv]') || 
+                             pyprojectContent.includes('tool.uv');
           const isPoetryProject = pyprojectContent.includes('[tool.poetry]') || 
                                   pyprojectContent.includes('tool.poetry');
           
-          if (isPoetryProject) {
+          if (isUvProject) {
+            commands = {
+              installCommand: 'uv sync',
+              buildCommand: 'uv build',
+              testCommand: 'uv run pytest'
+            };
+          } else if (isPoetryProject) {
             commands = {
               installCommand: 'poetry install --with dev',
               buildCommand: 'poetry build',

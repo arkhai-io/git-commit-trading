@@ -36,7 +36,7 @@ describe("Python Tool Detection", () => {
 
         expect(result.isValidProject).toBe(true);
         expect(result.language).toBe("python");
-        expect(result.commands?.installCommand).toBe("poetry install --with dev");
+        expect(result.commands?.installCommand).toBe("poetry install --with dev --no-cache");
         expect(result.commands?.testCommand).toBe("poetry run pytest");
     });
 
@@ -264,7 +264,7 @@ build-backend = "setuptools.build_meta"
 
         expect(result.isValidProject).toBe(true);
         expect(result.language).toBe("python");
-        expect(result.commands?.installCommand).toBe("poetry install --with dev");
+        expect(result.commands?.installCommand).toBe("poetry install --with dev --no-cache");
         expect(result.commands?.testCommand).toBe("poetry run pytest");
     });
 
