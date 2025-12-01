@@ -55,6 +55,7 @@ program
   .description('List all available escrows from the blockchain')
   .option('--status <status>', 'Filter by status (open, fulfilled, expired)')
   .option('--address <address>', 'Filter by buyer or recipient address')
+  .option('--oracle <address>', 'Filter by oracle address')
   .option('--limit <number>', 'Maximum number of escrows to show', '20')
   .option('--format <format>', 'Output format (table, json, csv)', 'table')
   .option('--verbose', 'Show detailed information', false)
