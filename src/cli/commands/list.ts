@@ -10,6 +10,7 @@ interface ListOptions {
   verbose?: boolean;
   address?: string;
   oracle?: string;
+  fromBlock?: string;
 }
 
 interface EscrowData {
@@ -28,6 +29,10 @@ interface EscrowData {
   testsRepo?: string;
   testsCommit?: string;
   testsCommand?: string;
+  fulfillmentUid?: string;
+  fulfillmentRepo?: string;
+  fulfillmentCommit?: string;
+  fulfiller?: string;
 }
 
 export async function listCommand(options: ListOptions) {
@@ -41,6 +46,7 @@ export async function listCommand(options: ListOptions) {
     // Lowercase for case-insensitive comparison
     const filterAddress = options.address?.toLowerCase();
     const filterOracle = options.oracle?.toLowerCase();
+    const customFromBlock = options.fromBlock ? BigInt(options.fromBlock) : undefined;
 
     // Check for .env file and load client
     requireEnvFile();
@@ -65,9 +71,17 @@ export async function listCommand(options: ListOptions) {
     
     // Get current block number for filtering
     const currentBlock = await viemClient.getBlockNumber();
-    const fromBlock = currentBlock - BigInt(100000); // Look back 100k blocks
+    
+    // Calculate fromBlock: use custom value or default to 30 days
+    // Base Sepolia: ~2s/block => ~43,200 blocks/day => ~1,296,000 blocks/30 days
+    const fromBlock = customFromBlock ?? (currentBlock - BigInt(1296000));
 
     console.log(chalk.gray(`Scanning blocks ${fromBlock} to ${currentBlock}...`));
+    if (customFromBlock) {
+      console.log(chalk.gray('Using custom from-block parameter'));
+    } else {
+      console.log(chalk.gray('Using default 30-day lookback'));
+    }
 
     const escrows: EscrowData[] = [];
 
@@ -94,8 +108,11 @@ export async function listCommand(options: ListOptions) {
         toBlock: currentBlock,
       });
 
-      const collectedEscrows = new Set(
-        collectedLogs.map((log: any) => log.args.escrow)
+      const collectedEscrows = new Map(
+        collectedLogs.map((log: any) => [
+          log.args.escrow,
+          { fulfillmentUid: log.args.fulfillment, fulfiller: log.args.fulfiller }
+        ])
       );
 
       console.log(chalk.green(`✓ Found ${collectedLogs.length} collected escrow(s)`));
@@ -159,11 +176,39 @@ export async function listCommand(options: ListOptions) {
             }
           }
 
-          // Determine status
+          // Determine status and fetch fulfillment data if fulfilled
           let escrowStatus: 'open' | 'fulfilled' | 'expired' | 'unknown' = 'open';
+          let fulfillmentUid: string | undefined;
+          let fulfillmentRepo: string | undefined;
+          let fulfillmentCommit: string | undefined;
+          let fulfiller: string | undefined;
           
           if (collectedEscrows.has(uid)) {
             escrowStatus = 'fulfilled';
+            const fulfillmentData = collectedEscrows.get(uid) as { fulfillmentUid: string; fulfiller: string } | undefined;
+            fulfillmentUid = fulfillmentData?.fulfillmentUid;
+            fulfiller = fulfillmentData?.fulfiller;
+            
+            // Fetch fulfillment attestation to get repo and commit
+            if (fulfillmentUid) {
+              try {
+                const fulfillmentAttestation = await client.getAttestation(fulfillmentUid as `0x${string}`);
+                
+                if (fulfillmentAttestation.data && fulfillmentAttestation.data !== '0x' && fulfillmentAttestation.data.length > 10) {
+                  // Decode fulfillment data: CommitObligation schema (string commitHash, uint8 commitAlgo, string[] hosts, address sender)
+                  const fulfillmentAbi = parseAbiParameters('(string commitHash, uint8 commitAlgo, string[] hosts, address sender)');
+                  const decodedFulfillment = decodeAbiParameters(fulfillmentAbi, fulfillmentAttestation.data);
+                  
+                  fulfillmentCommit = decodedFulfillment[0].commitHash;
+                  const hosts = decodedFulfillment[0].hosts;
+                  fulfillmentRepo = hosts.length > 0 ? hosts[0] : undefined;
+                }
+              } catch (fulfillmentError) {
+                if (verbose) {
+                  console.log(chalk.gray(`    Could not decode fulfillment data for ${fulfillmentUid}`));
+                }
+              }
+            }
           } else if (attestation.expirationTime > 0 && BigInt(attestation.expirationTime) < BigInt(Math.floor(Date.now() / 1000))) {
             escrowStatus = 'expired';
           } else if (attestation.revocationTime > 0) {
@@ -201,6 +246,10 @@ export async function listCommand(options: ListOptions) {
             testsRepo,
             testsCommit,
             testsCommand,
+            fulfillmentUid,
+            fulfillmentRepo,
+            fulfillmentCommit,
+            fulfiller,
           };
 
           escrows.push(escrowData);
@@ -244,9 +293,9 @@ export async function listCommand(options: ListOptions) {
     }
 
     if (format === 'csv') {
-      console.log('uid,status,buyer,recipient,amount,token,arbiter,oracle,testsRepo,testsCommit,testsCommand,created,expirationTime,txHash,blockNumber');
+      console.log('uid,status,buyer,recipient,amount,token,arbiter,oracle,testsRepo,testsCommit,testsCommand,fulfiller,fulfillmentRepo,fulfillmentCommit,created,expirationTime,txHash,blockNumber');
       limitedEscrows.forEach(escrow => {
-        console.log(`${escrow.uid},${escrow.status},${escrow.buyer},${escrow.recipient},${escrow.amount},${escrow.token},${escrow.arbiter},${escrow.oracle || ''},${escrow.testsRepo || ''},${escrow.testsCommit || ''},${escrow.testsCommand || ''},${escrow.created},${escrow.expirationTime},${escrow.txHash},${escrow.blockNumber}`);
+        console.log(`${escrow.uid},${escrow.status},${escrow.buyer},${escrow.recipient},${escrow.amount},${escrow.token},${escrow.arbiter},${escrow.oracle || ''},${escrow.testsRepo || ''},${escrow.testsCommit || ''},${escrow.testsCommand || ''},${escrow.fulfiller || ''},${escrow.fulfillmentRepo || ''},${escrow.fulfillmentCommit || ''},${escrow.created},${escrow.expirationTime},${escrow.txHash},${escrow.blockNumber}`);
       });
       return;
     }
@@ -277,6 +326,19 @@ export async function listCommand(options: ListOptions) {
       //   console.log(chalk.grey(`   Test Command: ${escrow.testsCommand}`));
       // }
       
+      // Show fulfillment info for fulfilled escrows
+      if (escrow.status === 'fulfilled') {
+        if (escrow.fulfiller) {
+          console.log(chalk.cyan(`   Fulfiller: ${escrow.fulfiller}`));
+        }
+        if (escrow.fulfillmentRepo) {
+          console.log(chalk.cyan(`   Solution Repo: ${escrow.fulfillmentRepo}`));
+        }
+        if (escrow.fulfillmentCommit) {
+          console.log(chalk.cyan(`   Solution Commit: ${escrow.fulfillmentCommit.substring(0, 12)}...`));
+        }
+      }
+      
       if (verbose) {
         console.log(chalk.gray(`   Recipient: ${escrow.recipient}`));
         console.log(chalk.gray(`   Raw Amount: ${escrow.amount} wei`));
@@ -284,6 +346,12 @@ export async function listCommand(options: ListOptions) {
         console.log(chalk.gray(`   Expiration: ${escrow.expirationTime === 0 ? 'Never' : new Date(escrow.expirationTime * 1000).toISOString()}`));
         if (escrow.testsCommit) {
           console.log(chalk.gray(`   Full Tests Commit: ${escrow.testsCommit}`));
+        }
+        if (escrow.fulfillmentCommit && escrow.status === 'fulfilled') {
+          console.log(chalk.cyan(`   Full Solution Commit: ${escrow.fulfillmentCommit}`));
+        }
+        if (escrow.fulfillmentUid && escrow.status === 'fulfilled') {
+          console.log(chalk.cyan(`   Fulfillment UID: ${escrow.fulfillmentUid}`));
         }
         console.log(chalk.gray(`   Tx Hash: ${escrow.txHash}`));
         console.log(chalk.gray(`   Block: ${escrow.blockNumber}`));

@@ -56,6 +56,7 @@ program
   .option('--status <status>', 'Filter by status (open, fulfilled, expired)')
   .option('--address <address>', 'Filter by buyer or recipient address')
   .option('--oracle <address>', 'Filter by oracle address')
+  .option('--from-block <number>', 'Starting block number to scan from (defaults to 30 days ago)')
   .option('--limit <number>', 'Maximum number of escrows to show', '20')
   .option('--format <format>', 'Output format (table, json, csv)', 'table')
   .option('--verbose', 'Show detailed information', false)
