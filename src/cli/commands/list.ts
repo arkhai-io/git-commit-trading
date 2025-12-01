@@ -9,6 +9,7 @@ interface ListOptions {
   format?: string;
   verbose?: boolean;
   address?: string;
+  oracle?: string;
 }
 
 interface EscrowData {
@@ -19,6 +20,7 @@ interface EscrowData {
   amount: string;
   token: string;
   arbiter: string;
+  oracle?: string;
   created: string;
   txHash: string;
   blockNumber: number;
@@ -38,6 +40,7 @@ export async function listCommand(options: ListOptions) {
     const verbose = options.verbose || false;
     // Lowercase for case-insensitive comparison
     const filterAddress = options.address?.toLowerCase();
+    const filterOracle = options.oracle?.toLowerCase();
 
     // Check for .env file and load client
     requireEnvFile();
@@ -132,11 +135,13 @@ export async function listCommand(options: ListOptions) {
           let testsRepo: string | undefined;
           let testsCommit: string | undefined;
           let testsCommand: string | undefined;
+          let oracle: string | undefined;
           
           try {
             // Demand structure: (address oracle, bytes data)
             const demandAbi = parseAbiParameters('(address oracle, bytes data)');
             const decodedDemand = decodeAbiParameters(demandAbi, demand);
+            oracle = decodedDemand[0].oracle as Address;
             const oracleData = decodedDemand[0].data as `0x${string}`;
             
             // Oracle data structure: (string testsCommitHash, string testsCommand, uint8 testsCommitAlgo, string[] hosts)
@@ -172,6 +177,11 @@ export async function listCommand(options: ListOptions) {
             continue;
           }
 
+          // Apply oracle filter if specified
+          if (filterOracle && oracle?.toLowerCase() !== filterOracle) {
+            continue;
+          }
+
           // Get block details for timestamp
           const block = await viemClient.getBlock({ blockNumber: log.blockNumber });
 
@@ -183,6 +193,7 @@ export async function listCommand(options: ListOptions) {
             amount: amount.toString(),
             token: token as string,
             arbiter: arbiter as string,
+            oracle,
             created: new Date(Number(block.timestamp) * 1000).toISOString(),
             txHash: log.transactionHash as string,
             blockNumber: Number(log.blockNumber),
@@ -233,9 +244,9 @@ export async function listCommand(options: ListOptions) {
     }
 
     if (format === 'csv') {
-      console.log('uid,status,buyer,recipient,amount,token,arbiter,testsRepo,testsCommit,testsCommand,created,expirationTime,txHash,blockNumber');
+      console.log('uid,status,buyer,recipient,amount,token,arbiter,oracle,testsRepo,testsCommit,testsCommand,created,expirationTime,txHash,blockNumber');
       limitedEscrows.forEach(escrow => {
-        console.log(`${escrow.uid},${escrow.status},${escrow.buyer},${escrow.recipient},${escrow.amount},${escrow.token},${escrow.arbiter},${escrow.testsRepo || ''},${escrow.testsCommit || ''},${escrow.testsCommand || ''},${escrow.created},${escrow.expirationTime},${escrow.txHash},${escrow.blockNumber}`);
+        console.log(`${escrow.uid},${escrow.status},${escrow.buyer},${escrow.recipient},${escrow.amount},${escrow.token},${escrow.arbiter},${escrow.oracle || ''},${escrow.testsRepo || ''},${escrow.testsCommit || ''},${escrow.testsCommand || ''},${escrow.created},${escrow.expirationTime},${escrow.txHash},${escrow.blockNumber}`);
       });
       return;
     }
@@ -251,6 +262,9 @@ export async function listCommand(options: ListOptions) {
       console.log(chalk.gray(`   Token: ${escrow.token}`));
       console.log(chalk.gray(`   Buyer: ${escrow.buyer}`));
       console.log(chalk.gray(`   Arbiter: ${escrow.arbiter}`));
+      if (escrow.oracle) {
+        console.log(chalk.gray(`   Oracle: ${escrow.oracle}`));
+      }
       
       // Show test repository and commit info if available
       if (escrow.testsRepo) {
@@ -293,6 +307,7 @@ export async function listCommand(options: ListOptions) {
     console.log(chalk.gray('• Use --format json|csv for different output formats'));
     console.log(chalk.gray('• Use --status open|fulfilled|expired to filter by status'));
     console.log(chalk.gray('• Use --address 0x... to filter by buyer/recipient address'));
+    console.log(chalk.gray('• Use --oracle 0x... to filter by oracle address'));
     console.log(chalk.gray('• Use --limit N to limit number of results (default: 20)'));
 
   } catch (error) {
