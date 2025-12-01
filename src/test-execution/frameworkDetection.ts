@@ -13,11 +13,46 @@ export interface FrameworkDetectionResult {
 /**
  * Detect framework type by checking for lock files and configuration
  * Priority: Lock files > Package manager files
- * Note: arkhai_tests.dockerfile is handled separately by the submit command
+ * Note: If arkhai_tests.dockerfile exists, we use it instead of generating a template
  */
 export async function detectFramework(testRepoPath: string): Promise<FrameworkDetectionResult> {
   try {
     const files = await fs.readdir(testRepoPath);
+
+    // Check if custom dockerfile exists first - if so, use it instead of template
+    const customDockerfilePath = path.join(testRepoPath, 'arkhai_tests.dockerfile');
+    const hasCustomDockerfile = files.includes('arkhai_tests.dockerfile');
+    
+    console.log(`[Framework Detection] Checking for custom dockerfile in: ${testRepoPath}`);
+    console.log(`[Framework Detection] Files found: ${files.join(', ')}`);
+    console.log(`[Framework Detection] Custom dockerfile exists: ${hasCustomDockerfile}`);
+    
+    if (hasCustomDockerfile) {
+      // Detect framework for logging purposes, but don't provide template content
+      let detectedFramework: FrameworkType = 'custom';
+      if (files.includes('Cargo.lock') || files.includes('Cargo.toml')) {
+        detectedFramework = 'cargo';
+      } else if (files.includes('uv.lock')) {
+        detectedFramework = 'pytest-uv';
+      } else if (files.includes('poetry.lock')) {
+        detectedFramework = 'pytest-poetry';
+      } else if (files.includes('bun.lockb')) {
+        detectedFramework = await checkForJest(testRepoPath, files) ? 'bun-jest' : 'bun-test';
+      } else if (files.includes('pnpm-lock.yaml')) {
+        detectedFramework = 'pnpm-jest';
+      } else if (files.includes('package-lock.json')) {
+        detectedFramework = 'node-jest';
+      } else if (files.includes('pyproject.toml') || files.includes('requirements.txt')) {
+        detectedFramework = 'pytest-poetry';
+      }
+      
+      return {
+        framework: detectedFramework,
+        dockerfilePath: customDockerfilePath,
+        dockerfileContent: undefined, // Don't overwrite custom dockerfile
+        confidence: 'high'
+      };
+    }
 
     // Check for Rust - Cargo.lock
     if (files.includes('Cargo.lock') || files.includes('Cargo.toml')) {
