@@ -1,4 +1,4 @@
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 import chalk from 'chalk';
 
@@ -83,7 +83,11 @@ export class ContainerPool {
         .`;
 
       console.log(chalk.gray(`  Building image: ${imageName}`));
-      await execAsync(buildCommand, { maxBuffer: 50 * 1024 * 1024 });
+      console.log(chalk.gray(`  Build command: ${buildCommand.replace(/\s+/g, ' ')}`));
+      
+      // Stream build output in real-time
+      await this.streamDockerCommand('build', buildCommand);
+      
       console.log(chalk.green(`✅ Image built successfully`));
 
       // Run container
@@ -148,19 +152,14 @@ export class ContainerPool {
    */
   async runTestsInContainer(container: Container): Promise<{ stdout: string; stderr: string; exitCode: number }> {
     console.log(chalk.cyan(`Running tests in container ${container.name}...`));
+    console.log(chalk.gray(`  Streaming test output in real-time:`));
+    console.log(chalk.gray(`  ${'='.repeat(60)}`));
     
     try {
-      // Get container logs (the test output)
-      const { stdout, stderr } = await execAsync(`docker logs ${container.name}`, {
-        maxBuffer: 10 * 1024 * 1024,
-      });
+      // Stream logs in real-time while waiting for container to finish
+      const { stdout, stderr, exitCode } = await this.streamContainerLogs(container.name);
 
-      // Check container exit code
-      const { stdout: inspectOutput } = await execAsync(
-        `docker inspect --format='{{.State.ExitCode}}' ${container.name}`
-      );
-      const exitCode = parseInt(inspectOutput.trim(), 10);
-
+      console.log(chalk.gray(`  ${'='.repeat(60)}`));
       console.log(chalk.gray(`  Container ${container.name} finished with exit code ${exitCode}`));
 
       return {
@@ -169,6 +168,7 @@ export class ContainerPool {
         exitCode: exitCode || 0,
       };
     } catch (error: any) {
+      console.log(chalk.gray(`  ${'='.repeat(60)}`));
       return {
         stdout: error.stdout || '',
         stderr: error.stderr || error.message || '',
@@ -308,5 +308,98 @@ export class ContainerPool {
       inUse,
       available: this.containers.length - inUse,
     };
+  }
+
+  /**
+   * Stream Docker command output in real-time
+   */
+  private streamDockerCommand(label: string, command: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const proc = spawn('sh', ['-c', command], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+
+      proc.stdout.on('data', (data) => {
+        const lines = data.toString().split('\n').filter((l: string) => l.trim());
+        lines.forEach((line: string) => {
+          console.log(chalk.gray(`  [${label}] ${line}`));
+        });
+      });
+
+      proc.stderr.on('data', (data) => {
+        const lines = data.toString().split('\n').filter((l: string) => l.trim());
+        lines.forEach((line: string) => {
+          console.log(chalk.gray(`  [${label}] ${line}`));
+        });
+      });
+
+      proc.on('error', (error) => {
+        reject(error);
+      });
+
+      proc.on('close', (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`${label} failed with exit code ${code}`));
+        }
+      });
+    });
+  }
+
+  /**
+   * Stream container logs in real-time and wait for completion
+   */
+  private streamContainerLogs(containerName: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+    return new Promise((resolve, reject) => {
+      let stdout = '';
+      let stderr = '';
+
+      // Stream logs with --follow to see output in real-time
+      const logsProc = spawn('docker', ['logs', '--follow', containerName], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+
+      logsProc.stdout.on('data', (data) => {
+        const text = data.toString();
+        stdout += text;
+        // Print each line in real-time
+        const lines = text.split('\n');
+        lines.forEach((line: string) => {
+          if (line.trim()) {
+            console.log(chalk.white(`  ${line}`));
+          }
+        });
+      });
+
+      logsProc.stderr.on('data', (data) => {
+        const text = data.toString();
+        stderr += text;
+        // Print each line in real-time
+        const lines = text.split('\n');
+        lines.forEach((line: string) => {
+          if (line.trim()) {
+            console.log(chalk.yellow(`  ${line}`));
+          }
+        });
+      });
+
+      logsProc.on('error', (error) => {
+        reject(error);
+      });
+
+      logsProc.on('close', async () => {
+        // Get final exit code
+        try {
+          const { stdout: inspectOutput } = await execAsync(
+            `docker inspect --format='{{.State.ExitCode}}' ${containerName}`
+          );
+          const exitCode = parseInt(inspectOutput.trim(), 10);
+          resolve({ stdout, stderr, exitCode });
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
   }
 }

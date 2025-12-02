@@ -104,12 +104,9 @@ export class TestExecutor {
 
         this.container = await this.containerPool.buildAndRunContainer(buildArgs);
 
-        // Wait for container to finish running tests
+        // Get test results (runTestsInContainer will wait for completion)
         console.log(chalk.cyan('Waiting for tests to complete...'));
         const startTime = Date.now();
-        await new Promise(resolve => setTimeout(resolve, 2000)); // Give it time to start
-
-        // Get test results
         const testOutput = await this.containerPool.runTestsInContainer(this.container);
         const duration = Date.now() - startTime;
         
