@@ -81,7 +81,7 @@ export class TestExecutor {
       if (this.containerPool) {
         console.log(chalk.cyan('Detecting framework...'));
         const frameworkResult = await detectFramework(this.testcaseDir);
-        console.log(chalk.green(`✅ Detected framework: ${frameworkResult.framework}`));
+        console.log(chalk.green(`✅ Detected framework: ${frameworkResult.framework.name}`));
         
         // Write dockerfile to test repo if using default framework
         if (frameworkResult.dockerfileContent) {
@@ -109,11 +109,15 @@ export class TestExecutor {
         const startTime = Date.now();
         const testOutput = await this.containerPool.runTestsInContainer(this.container);
         const duration = Date.now() - startTime;
-        
+
+        // Use framework-specific test parsing to determine success
+        const combinedOutput = testOutput.stdout + '\n' + testOutput.stderr;
+        const testsPassed = frameworkResult.framework.parseTests(combinedOutput, testOutput.exitCode);
+
         result.testResult = {
-          success: testOutput.exitCode === 0,
+          success: testsPassed,
           output: testOutput.stdout,
-          error: testOutput.exitCode !== 0 ? testOutput.stderr : undefined,
+          error: !testsPassed ? testOutput.stderr : undefined,
           duration,
           timestamp: new Date(),
         };
