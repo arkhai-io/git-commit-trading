@@ -5,6 +5,37 @@ import { GitTestExecution } from '../../test-execution/index.js';
 import { verifyGitKeyClaimSignature } from '../../utils/sshSignatureUtils.js';
 import { getGitVerificationService } from '../../services/verificationService.js';
 
+/**
+ * Try an async operation with each host in order until one succeeds.
+ * Returns the result from the first successful host.
+ * Throws the last error if all hosts fail.
+ */
+async function tryHosts<T>(
+  hosts: string[],
+  operation: (host: string) => Promise<T>,
+  operationName: string
+): Promise<{ result: T; host: string }> {
+  if (hosts.length === 0) {
+    throw new Error(`No hosts provided for ${operationName}`);
+  }
+
+  let lastError: Error | null = null;
+  for (const host of hosts) {
+    try {
+      const result = await operation(host);
+      return { result, host };
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.log(chalk.yellow(`  ⚠️ ${operationName} failed for host ${host}: ${lastError.message}`));
+      if (hosts.indexOf(host) < hosts.length - 1) {
+        console.log(chalk.gray(`  Trying next host...`));
+      }
+    }
+  }
+
+  throw new Error(`${operationName} failed for all hosts. Last error: ${lastError?.message}`);
+}
+
 interface ServerOptions {
   port?: string;
   pollingInterval?: string;
@@ -177,29 +208,33 @@ export async function serverCommand(options: ServerOptions) {
           // Use enhanced Git verification service if available
           if (gitVerificationService) {
             console.log('🔐 Verifying commit signature using git verify-commit...');
-            
+
             // Create a map with only the latest key
             const registeredKeys = new Map();
             registeredKeys.set(senderAddress, latestKeyClaim);
-            
-            const verificationResult = await gitVerificationService.verifyCommit(
-              obligation.hosts[0],
-              obligation.commitHash,
-              registeredKeys
+
+            // Try each host until verification succeeds
+            const { result: verificationResult, host: usedHost } = await tryHosts(
+              obligation.hosts,
+              async (host) => {
+                const result = await gitVerificationService.verifyCommit(
+                  host,
+                  obligation.commitHash,
+                  registeredKeys
+                );
+                if (!result.isValid) {
+                  throw new Error(result.error || 'Verification failed');
+                }
+                return result;
+              },
+              'Commit signature verification'
             );
-            
-            if (!verificationResult.isValid) {
-              console.log('❌ Commit signature verification failed');
-              console.log(`   Method: ${verificationResult.verificationDetails.method}`);
-              console.log(`   Error: ${verificationResult.error}`);
-              console.log('   Fulfillment rejected: commit must be signed by sender\'s registered Git key');
-              return false;
-            }
-            
+
             console.log('✅ Commit signature verified using git verify-commit');
+            console.log(`   Host: ${usedHost}`);
             console.log(`   Method: ${verificationResult.verificationDetails.method}`);
             console.log(`   Signed by: ${verificationResult.registeredAddress}`);
-            
+
           } else {
             console.log('❌ Git verification service not available');
             console.log('   Fulfillment rejected: cannot verify commit signature without git verify-commit');
@@ -224,37 +259,84 @@ export async function serverCommand(options: ServerOptions) {
 
         // Extract demand data
         const demand = demandData[0];
-        
-        // Configure repositories from obligation and demand
-        testConfig.repositories.testcase.url = demand.hosts[0];
-        testConfig.repositories.testcase.commitHash = demand.testsCommitHash;
-        testConfig.repositories.testcase.testCommand = demand.testsCommand;
-
-        testConfig.repositories.source.url = obligation.hosts[0];
-        testConfig.repositories.source.commitHash = obligation.commitHash;
 
         // If test command doesn't include installation (no && or ;), auto-detect install command
         // This allows users to submit just "poetry run pytest" and have "poetry install --with dev" run automatically
         const hasInstallInCommand = /&&|;/.test(demand.testsCommand);
         if (!hasInstallInCommand) {
           console.log('🔍 Test command does not include install step, will auto-detect install command from testcase repo');
-          // Let the executor auto-detect install command from testcase repo files
-          // This will be done in the executor's installDependencies() method
         }
 
         // Set execution parameters
         testConfig.execution.timeout = timeout;
         testConfig.execution.cleanupAfterExecution = cleanup;
+        testConfig.repositories.testcase.commitHash = demand.testsCommitHash;
+        testConfig.repositories.testcase.testCommand = demand.testsCommand;
+        testConfig.repositories.source.commitHash = obligation.commitHash;
 
-        console.log('📁 Repository configuration:');
-        console.log(`   Test repo: ${testConfig.repositories.testcase.url}`);
+        // Try each host for testcase repo, then each host for source repo
+        let result: Awaited<ReturnType<typeof GitTestExecution.executeTests>> | null = null;
+        let workingTestcaseHost: string | null = null;
+        let workingSourceHost: string | null = null;
+
+        // First: find a working testcase host
+        for (const testcaseHost of demand.hosts) {
+          testConfig.repositories.testcase.url = testcaseHost;
+          testConfig.repositories.source.url = obligation.hosts[0]; // Use first source host for initial attempt
+
+          console.log('📁 Trying testcase host:');
+          console.log(`   Test repo: ${testcaseHost}`);
+
+          result = await GitTestExecution.executeTests(testConfig, {
+            onProgress: (step) => console.log(`  → ${step}`)
+          });
+
+          if (result.testcaseCloned) {
+            workingTestcaseHost = testcaseHost;
+            if (result.sourceCloned) {
+              workingSourceHost = obligation.hosts[0];
+            }
+            break;
+          }
+          console.log(chalk.yellow(`  ⚠️ Failed to clone testcase from ${testcaseHost}. Trying next host...`));
+        }
+
+        if (!workingTestcaseHost) {
+          console.log(chalk.red(`❌ Failed to clone testcase repository from any host`));
+          return false;
+        }
+
+        // Second: if source clone failed, try other source hosts
+        if (!workingSourceHost && obligation.hosts.length > 1) {
+          for (let i = 1; i < obligation.hosts.length; i++) {
+            const sourceHost = obligation.hosts[i];
+            testConfig.repositories.source.url = sourceHost;
+
+            console.log('📁 Trying source host:');
+            console.log(`   Solution repo: ${sourceHost}`);
+
+            result = await GitTestExecution.executeTests(testConfig, {
+              onProgress: (step) => console.log(`  → ${step}`)
+            });
+
+            if (result.sourceCloned) {
+              workingSourceHost = sourceHost;
+              break;
+            }
+            console.log(chalk.yellow(`  ⚠️ Failed to clone source from ${sourceHost}. Trying next host...`));
+          }
+        }
+
+        if (!result || !workingSourceHost) {
+          console.log(chalk.red(`❌ Failed to clone source repository from any host`));
+          return false;
+        }
+
+        console.log('📁 Final repository configuration:');
+        console.log(`   Test repo: ${workingTestcaseHost}`);
         console.log(`   Test commit: ${testConfig.repositories.testcase.commitHash}`);
-        console.log(`   Solution repo: ${testConfig.repositories.source.url}`);
+        console.log(`   Solution repo: ${workingSourceHost}`);
         console.log(`   Solution commit: ${testConfig.repositories.source.commitHash}`);
-
-        const result = await GitTestExecution.executeTests(testConfig, {
-          onProgress: (step) => console.log(`  → ${step}`)
-        });
 
         console.log(`\n🎯 Test execution result: ${result.testResult.success ? 'PASSED ✅' : 'FAILED ❌'}`);
         console.log(`   Duration: ${result.testResult.duration}ms`);

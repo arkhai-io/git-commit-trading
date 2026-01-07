@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { encodeAbiParameters, parseAbiParameters } from "viem";
 import { setupTest } from "./utils/setup";
-import { teardownTestEnvironment, type TestContext } from "alkahest-ts/tests/utils/setup";
+import { type TestContext } from "alkahest-ts/sdks/ts/tests/utils/setup";
 import { CommitAlgo } from "../src/clients/commitObligation";
 import { spawn } from "child_process";
 import path from "path";
@@ -25,14 +25,14 @@ describe("Server Command Tests", () => {
         testContext = setup.testContext;
         aliceClient = setup.aliceClient;
         bobClient = setup.bobClient;
-        arbiterClient = testContext.charlieClient;
+        arbiterClient = setup.charlieClient;
 
-        // Extract the values we need for tests
-        alice = testContext.alice;
-        bob = testContext.bob;
-        oracle = testContext.charlie;
+        // Extract the values we need for tests (new SDK structure)
+        alice = testContext.alice.address;
+        bob = testContext.bob.address;
+        oracle = testContext.charlie.address;
         commitObligationAddress = setup.commitObligationAddress;
-        
+
         console.log("Test environment setup complete!");
     });
 
@@ -47,7 +47,7 @@ describe("Server Command Tests", () => {
 
     afterAll(async () => {
         // Clean up
-        await teardownTestEnvironment(testContext);
+        await testContext.anvil.stop();
     });
 
     describe("Oracle Functions (Direct Testing)", () => {

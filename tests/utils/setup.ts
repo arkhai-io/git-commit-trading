@@ -1,7 +1,7 @@
 import {
   setupTestEnvironment,
   type TestContext,
-} from "alkahest-ts/tests/utils/setup";
+} from "alkahest-ts/sdks/ts/tests/utils/setup";
 import CommitObligation from "@contracts/CommitObligation.json";
 import GitIdentityRegistry from "../../src/contracts/GitIdentityRegistry.json";
 import {
@@ -33,7 +33,8 @@ export async function setupTest() {
     gitIdentityRegistry: gitIdentityRegistryAddress,
   };
 
-  const aliceClient = testContext.aliceClient.extend((client: any) => ({
+  // New SDK structure: testContext.alice.client instead of testContext.aliceClient
+  const aliceClient = testContext.alice.client.extend((client: any) => ({
     commitObligation: makeCommitObligationClient(
       client.viemClient,
       commitObligationAddresses
@@ -44,7 +45,18 @@ export async function setupTest() {
     ),
   }));
 
-  const bobClient = testContext.bobClient.extend((client: any) => ({
+  const bobClient = testContext.bob.client.extend((client: any) => ({
+    commitObligation: makeCommitObligationClient(
+      client.viemClient,
+      commitObligationAddresses
+    ),
+    gitIdentityRegistry: makeGitIdentityRegistryClient(
+      client.viemClient,
+      gitIdentityRegistryAddresses
+    ),
+  }));
+
+  const charlieClient = testContext.charlie.client.extend((client: any) => ({
     commitObligation: makeCommitObligationClient(
       client.viemClient,
       commitObligationAddresses
@@ -61,5 +73,10 @@ export async function setupTest() {
     gitIdentityRegistryAddress,
     aliceClient,
     bobClient,
+    charlieClient,
+    // Also export addresses for convenience
+    alice: testContext.alice,
+    bob: testContext.bob,
+    charlie: testContext.charlie,
   };
 }

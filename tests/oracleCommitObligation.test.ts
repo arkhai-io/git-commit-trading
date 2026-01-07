@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:tes
 import { decodeAbiParameters, encodeAbiParameters, parseAbiParameters } from "viem";
 import sshpk from 'sshpk';
 import { setupTest } from "./utils/setup";
-import { teardownTestEnvironment, type TestContext } from "alkahest-ts/tests/utils/setup";
+import { type TestContext } from "alkahest-ts/sdks/ts/tests/utils/setup";
 import { CommitAlgo, type CommitObligationData } from "../src/clients/commitObligation";
 import { KeyType } from "../src/clients/gitIdentityRegistry";
 import { GitTestExecution } from "../src/test-execution/";
@@ -26,17 +26,12 @@ describe("Oracle CommitObligation Tests", () => {
         testContext = setup.testContext;
         aliceClient = setup.aliceClient;
         bobClient = setup.bobClient;
+        arbiterClient = setup.charlieClient;
 
-        // Extend charlie client with our contracts
-        arbiterClient = testContext.charlieClient.extend((client: any) => ({
-            commitObligation: setup.aliceClient.commitObligation,
-            gitIdentityRegistry: setup.aliceClient.gitIdentityRegistry,
-        }));
-
-        // Extract the values we need for tests
-        alice = testContext.alice;
-        bob = testContext.bob;
-        oracle = testContext.charlie;
+        // Extract the values we need for tests (new SDK structure)
+        alice = testContext.alice.address;
+        bob = testContext.bob.address;
+        oracle = testContext.charlie.address;
         commitObligationAddress = setup.commitObligationAddress;
         gitIdentityRegistryAddress = setup.gitIdentityRegistryAddress;
     });
@@ -52,7 +47,7 @@ describe("Oracle CommitObligation Tests", () => {
 
     afterAll(async () => {
         // Clean up
-        await teardownTestEnvironment(testContext);
+        await testContext.anvil.stop();
     });
 
     describe("Git App Flow", () => {

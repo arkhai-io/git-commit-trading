@@ -3,7 +3,7 @@ import {
     encodeAbiParameters,
     parseAbiParameters,
 } from "viem";
-import { getAttestation, getAttestedEventFromTxHash, type ViemClient } from "alkahest-ts";
+import { getAttestedEventFromTxHash, type ViemClient } from "alkahest-ts";
 
 import { abi as commitObligationAbi } from "../contracts/CommitObligation";
 

@@ -11,7 +11,7 @@ import {
     parseAbiParameters,
 } from "viem";
 import { setupTest } from "./utils/setup";
-import { teardownTestEnvironment, type TestContext } from "alkahest-ts/tests/utils/setup";
+import { type TestContext } from "alkahest-ts/sdks/ts/tests/utils/setup";
 import { CommitAlgo, type CommitObligationData } from "../src/clients/commitObligation";
 
 describe("CommitObligation Tests", () => {
@@ -29,9 +29,9 @@ describe("CommitObligation Tests", () => {
         aliceClient = setup.aliceClient;
         bobClient = setup.bobClient;
 
-        // Extract the values we need for tests
-        alice = testContext.alice;
-        bob = testContext.bob;
+        // Extract the values we need for tests (new SDK structure)
+        alice = testContext.alice.address;
+        bob = testContext.bob.address;
         testClient = testContext.testClient;
     });
 
@@ -45,8 +45,8 @@ describe("CommitObligation Tests", () => {
     });
 
     afterAll(async () => {
-        // Clean up
-        await teardownTestEnvironment(testContext);
+        // Clean up - stop anvil instance
+        await testContext.anvil.stop();
     });
 
     describe("CommitObligation - Contract Interactions", () => {

@@ -44,7 +44,7 @@
     "@peculiar/x509": "^1.13.0",
     "@types/openpgp": "^5.0.0",
     "@viem/anvil": "^0.0.10",
-    "alkahest-ts": "git+https://github.com/principia-systems/alkahest-ts.git#mlegls-dev",
+    "alkahest-ts": "github:arkhai-io/alkahest#91bc004bc2c32b11aad2e0a2a0e4bf6124d5ebcb",
     "chalk": "^5.6.0",
     "commander": "^12.1.0",
     "simple-git": "^3.28.0",

@@ -3,7 +3,7 @@ import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
 import { parseAbiParameters, encodeAbiParameters } from "viem";
 import { setupTest } from "./utils/setup";
-import { teardownTestEnvironment, type TestContext } from "alkahest-ts/tests/utils/setup";
+import { type TestContext } from "alkahest-ts/sdks/ts/tests/utils/setup";
 import { CommitAlgo, type CommitObligationData } from "../src/clients/commitObligation";
 import { KeyType, createGitKeyClaim } from "../src/clients/gitIdentityRegistry";
 import { GitTestExecution } from "../src/test-execution/";
@@ -122,17 +122,13 @@ describe("🚀 Complete Integration Test - Real Keys & Commits", () => {
     globalAliceClient = aliceClient;
     globalBobClient = bobClient;
 
-    // Extend charlie client as oracle/arbiter
-    arbiterClient = testContext.charlieClient.extend((client: any) => ({
-      commitObligation: setup.aliceClient.commitObligation,
-      gitIdentityRegistry: setup.aliceClient.gitIdentityRegistry,
-    }));
-
+    // Extend charlie client as oracle/arbiter (new SDK structure)
+    arbiterClient = setup.charlieClient;
     globalArbiterClient = arbiterClient;
 
-    alice = testContext.alice;
-    bob = testContext.bob;
-    oracle = testContext.charlie;
+    alice = testContext.alice.address;
+    bob = testContext.bob.address;
+    oracle = testContext.charlie.address;
     commitObligationAddress = setup.commitObligationAddress;
     gitIdentityRegistryAddress = setup.gitIdentityRegistryAddress;
 
@@ -145,7 +141,7 @@ describe("🚀 Complete Integration Test - Real Keys & Commits", () => {
   afterAll(async () => {
     if (config.test.cleanupAfterTest) {
       console.log(chalk.yellow("🧹 Cleaning up test environment..."));
-      await teardownTestEnvironment(testContext);
+      await testContext.anvil.stop();
       console.log(chalk.green("✅ Cleanup completed"));
     }
   });
@@ -210,12 +206,12 @@ async function runTestWithKeyType(keyType: "pgp" | "ssh", config: IntegrationCon
   console.log(chalk.green(`✅ Loaded ${keyType.toUpperCase()} key material`));
 
   // Get the global clients that were set up in beforeAll
-  const registrationResult = await registerBobKey(globalBobClient, keyData, testContext.bob, tempConfig);
+  const registrationResult = await registerBobKey(globalBobClient, keyData, testContext.bob.address, tempConfig);
   console.log(chalk.green("✅ Bob's key registered successfully"));
 
   // Verify registration (only for single key type tests)
   if (config.keys.preferredKeyType !== "both") {
-    const registeredClaim = await globalBobClient.gitIdentityRegistry.getLatestKeyClaim(testContext.bob);
+    const registeredClaim = await globalBobClient.gitIdentityRegistry.getLatestKeyClaim(testContext.bob.address);
     console.log(chalk.blue(`🔍 Expected key: ${keyData.publicKeyMaterial}`));
     console.log(chalk.blue(`🔍 Registered key: ${registeredClaim?.publicKey}`));
     expect(registeredClaim?.publicKey).toBe(keyData.publicKeyMaterial);
@@ -229,7 +225,7 @@ async function runTestWithKeyType(keyType: "pgp" | "ssh", config: IntegrationCon
   // Step 2: Alice creates escrow challenge
   console.log(chalk.blue("\n📋 Step 2: Alice Creates Escrow Challenge"));
   
-  const escrowResult = await createAliceEscrow(globalAliceClient, config, testContext.charlie, testContext);
+  const escrowResult = await createAliceEscrow(globalAliceClient, config, testContext.charlie.address, testContext);
   console.log(chalk.green("✅ Alice's escrow challenge created"));
   console.log(chalk.gray(`   Escrow UID: ${escrowResult.attested.uid}`));
 

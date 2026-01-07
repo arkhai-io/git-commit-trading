@@ -240,7 +240,7 @@ export async function submitCommand(options: SubmitOptions) {
       }
 
       // Now create the escrow
-      // We gonna wait for 5 seconds to ensure the approval is fully processed on-chain
+      // TODO: Remove this workaround when migrating to new SDK with permitAnd_ functions
       await new Promise(resolve => setTimeout(resolve, 5000));
       console.log(chalk.gray('Creating escrow...'));
       try {
