@@ -1,166 +1,169 @@
-import { spawn, type SpawnOptions } from 'child_process';
-import { promises as fs } from 'fs';
-import path from 'path';
-import chalk from 'chalk';
-import { exec } from 'child_process';
-
-
+import chalk from "chalk";
+import { exec, type SpawnOptions, spawn } from "child_process";
+import { promises as fs } from "fs";
+import path from "path";
 
 export class Logger {
-  static info(message: string) {
-    console.log(chalk.blue('ℹ'), message);
-  }
+	static info(message: string) {
+		console.log(chalk.blue("ℹ"), message);
+	}
 
-  static success(message: string) {
-    console.log(chalk.green('✓'), message);
-  }
+	static success(message: string) {
+		console.log(chalk.green("✓"), message);
+	}
 
-  static error(message: string) {
-    console.log(chalk.red('✗'), message);
-  }
+	static error(message: string) {
+		console.log(chalk.red("✗"), message);
+	}
 
-  static warning(message: string) {
-    console.log(chalk.yellow('⚠'), message);
-  }
+	static warning(message: string) {
+		console.log(chalk.yellow("⚠"), message);
+	}
 
-  static step(message: string) {
-    console.log(chalk.cyan('→'), message);
-  }
+	static step(message: string) {
+		console.log(chalk.cyan("→"), message);
+	}
 }
 
 export async function executeCommand(
-  command: string,
-  args: string[],
-  options: SpawnOptions & { timeout?: number } = {}
+	command: string,
+	args: string[],
+	options: SpawnOptions & { timeout?: number } = {},
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  return new Promise((resolve, reject) => {
-    const { timeout = 30000, ...spawnOptions } = options;
-    
-    // Ensure PATH includes common global binary locations
-    // This is important for commands like "bun test", "npm test", etc.
-    const env = spawnOptions.env || { ...process.env };
-    const additionalPaths = [
-      '/usr/local/bin',
-      '/usr/bin',
-      '/bin',
-      '/opt/homebrew/bin', // macOS Homebrew on Apple Silicon
-      '/home/linuxbrew/.linuxbrew/bin', // Linux Homebrew
-      process.env.HOME ? `${process.env.HOME}/.bun/bin` : null, // Bun
-      process.env.HOME ? `${process.env.HOME}/.cargo/bin` : null, // Rust/Cargo
-      process.env.HOME ? `${process.env.HOME}/.local/bin` : null, // Python user installs
-    ].filter(Boolean) as string[];
-    
-    // Split current PATH into individual paths and deduplicate
-    const currentPath = env.PATH || '';
-    const existingPaths = currentPath.split(':').filter(Boolean);
-    
-    // Add additional paths only if not already present (exact match)
-    const pathsToAdd = additionalPaths.filter(p => !existingPaths.includes(p));
-    
-    // Rebuild PATH with deduplication: additional paths first, then existing paths
-    if (pathsToAdd.length > 0) {
-      const allPaths = [...pathsToAdd, ...existingPaths];
-      // Final deduplication in case of any edge cases
-      const uniquePaths = Array.from(new Set(allPaths));
-      env.PATH = uniquePaths.join(':');
-    }
-    
-    const child = spawn(command, args, {
-      stdio: 'pipe',
-      env,
-      ...spawnOptions,
-    });
+	return new Promise((resolve, reject) => {
+		const { timeout = 30000, ...spawnOptions } = options;
 
-    let stdout = '';
-    let stderr = '';
+		// Ensure PATH includes common global binary locations
+		// This is important for commands like "bun test", "npm test", etc.
+		const env = spawnOptions.env || { ...process.env };
+		const additionalPaths = [
+			"/usr/local/bin",
+			"/usr/bin",
+			"/bin",
+			"/opt/homebrew/bin", // macOS Homebrew on Apple Silicon
+			"/home/linuxbrew/.linuxbrew/bin", // Linux Homebrew
+			process.env.HOME ? `${process.env.HOME}/.bun/bin` : null, // Bun
+			process.env.HOME ? `${process.env.HOME}/.cargo/bin` : null, // Rust/Cargo
+			process.env.HOME ? `${process.env.HOME}/.local/bin` : null, // Python user installs
+		].filter(Boolean) as string[];
 
-    child.stdout?.on('data', (data: any) => {
-      stdout += data.toString();
-    });
+		// Split current PATH into individual paths and deduplicate
+		const currentPath = env.PATH || "";
+		const existingPaths = currentPath.split(":").filter(Boolean);
 
-    child.stderr?.on('data', (data: any) => {
-      stderr += data.toString();
-    });
+		// Add additional paths only if not already present (exact match)
+		const pathsToAdd = additionalPaths.filter(
+			(p) => !existingPaths.includes(p),
+		);
 
-    const timeoutId = setTimeout(() => {
-      child.kill('SIGTERM');
-      reject(new Error(`Command timed out after ${timeout}ms: ${command} ${args.join(' ')}`));
-    }, timeout);
+		// Rebuild PATH with deduplication: additional paths first, then existing paths
+		if (pathsToAdd.length > 0) {
+			const allPaths = [...pathsToAdd, ...existingPaths];
+			// Final deduplication in case of any edge cases
+			const uniquePaths = Array.from(new Set(allPaths));
+			env.PATH = uniquePaths.join(":");
+		}
 
-    child.on('close', (code: number | null) => {
-      clearTimeout(timeoutId);
-      resolve({
-        stdout,
-        stderr,
-        exitCode: code || 0,
-      });
-    });
+		const child = spawn(command, args, {
+			stdio: "pipe",
+			env,
+			...spawnOptions,
+		});
 
-    child.on('error', (error: Error) => {
-      clearTimeout(timeoutId);
-      reject(error);
-    });
-  });
+		let stdout = "";
+		let stderr = "";
+
+		child.stdout?.on("data", (data: any) => {
+			stdout += data.toString();
+		});
+
+		child.stderr?.on("data", (data: any) => {
+			stderr += data.toString();
+		});
+
+		const timeoutId = setTimeout(() => {
+			child.kill("SIGTERM");
+			reject(
+				new Error(
+					`Command timed out after ${timeout}ms: ${command} ${args.join(" ")}`,
+				),
+			);
+		}, timeout);
+
+		child.on("close", (code: number | null) => {
+			clearTimeout(timeoutId);
+			resolve({
+				stdout,
+				stderr,
+				exitCode: code || 0,
+			});
+		});
+
+		child.on("error", (error: Error) => {
+			clearTimeout(timeoutId);
+			reject(error);
+		});
+	});
 }
 
 export async function ensureDirectory(dirPath: string): Promise<void> {
-  try {
-    await fs.access(dirPath);
-  } catch {
-    await fs.mkdir(dirPath, { recursive: true });
-  }
+	try {
+		await fs.access(dirPath);
+	} catch {
+		await fs.mkdir(dirPath, { recursive: true });
+	}
 }
 
 export async function removeDirectory(dirPath: string): Promise<void> {
-  try {
-    await fs.rm(dirPath, { recursive: true, force: true });
-  } catch (error) {
-    Logger.warning(`Failed to remove directory ${dirPath}: ${error}`);
-  }
+	try {
+		await fs.rm(dirPath, { recursive: true, force: true });
+	} catch (error) {
+		Logger.warning(`Failed to remove directory ${dirPath}: ${error}`);
+	}
 }
 
 export async function copyDirectory(src: string, dest: string): Promise<void> {
-  const entries = await fs.readdir(src, { withFileTypes: true });
-  
-  await ensureDirectory(dest);
-  
-  for (const entry of entries) {
-    const srcPath = path.join(src, entry.name);
-    const destPath = path.join(dest, entry.name);
-    
-    if (entry.isDirectory()) {
-      await copyDirectory(srcPath, destPath);
-    } else {
-      await fs.copyFile(srcPath, destPath);
-    }
-  }
+	const entries = await fs.readdir(src, { withFileTypes: true });
+
+	await ensureDirectory(dest);
+
+	for (const entry of entries) {
+		const srcPath = path.join(src, entry.name);
+		const destPath = path.join(dest, entry.name);
+
+		if (entry.isDirectory()) {
+			await copyDirectory(srcPath, destPath);
+		} else {
+			await fs.copyFile(srcPath, destPath);
+		}
+	}
 }
 
 export function getPackageManagerCommands(packageManager: string) {
-  const commands = {
-    npm: {
-      install: ['npm', 'install'],
-      run: (script: string) => ['npm', 'run', script],
-      test: ['npm', 'test'],
-    },
-    yarn: {
-      install: ['yarn', 'install'],
-      run: (script: string) => ['yarn', script],
-      test: ['yarn', 'test'],
-    },
-    pnpm: {
-      install: ['pnpm', 'install'],
-      run: (script: string) => ['pnpm', 'run', script],
-      test: ['pnpm', 'test'],
-    },
-    bun: {
-      install: ['bun', 'install'],
-      run: (script: string) => ['bun', 'run', script],
-      test: ['bun', 'test'],
-    },
-  };
+	const commands = {
+		npm: {
+			install: ["npm", "install"],
+			run: (script: string) => ["npm", "run", script],
+			test: ["npm", "test"],
+		},
+		yarn: {
+			install: ["yarn", "install"],
+			run: (script: string) => ["yarn", script],
+			test: ["yarn", "test"],
+		},
+		pnpm: {
+			install: ["pnpm", "install"],
+			run: (script: string) => ["pnpm", "run", script],
+			test: ["pnpm", "test"],
+		},
+		bun: {
+			install: ["bun", "install"],
+			run: (script: string) => ["bun", "run", script],
+			test: ["bun", "test"],
+		},
+	};
 
-  return commands[packageManager as keyof typeof commands] || commands.npm;
+	return commands[packageManager as keyof typeof commands] || commands.npm;
 }
 
 /**
@@ -168,87 +171,94 @@ export function getPackageManagerCommands(packageManager: string) {
  * @param fullCommand - Full command like "npm run test" or "bun install" or compound commands with &&, ||, ;
  * @returns {command: string, args: string[]}
  */
-export function parseCommand(fullCommand: string): { command: string; args: string[] } {
-  const trimmedCommand = fullCommand.trim();
-  
-  if (!trimmedCommand) {
-    throw new Error('Invalid command: empty command string');
-  }
-  
-  // Check if this is a compound command (contains &&, ||, ;, or |)
-  const hasShellOperators = /[;&|]/.test(trimmedCommand);
-  
-  if (hasShellOperators) {
-    // For compound commands, we need to run them in a shell
-    // Use 'sh' on Unix-like systems, 'cmd' on Windows
-    const isWindows = process.platform === 'win32';
-    
-    if (isWindows) {
-      return {
-        command: 'cmd',
-        args: ['/c', trimmedCommand]
-      };
-    } else {
-      return {
-        command: 'sh',
-        args: ['-c', trimmedCommand]
-      };
-    }
-  }
-  
-  // For simple commands, split by whitespace
-  const parts = trimmedCommand.split(/\s+/);
-  
-  if (!parts[0]) {
-    throw new Error('Invalid command: empty command string');
-  }
-  
-  return {
-    command: parts[0],
-    args: parts.slice(1)
-  };
+export function parseCommand(fullCommand: string): {
+	command: string;
+	args: string[];
+} {
+	const trimmedCommand = fullCommand.trim();
+
+	if (!trimmedCommand) {
+		throw new Error("Invalid command: empty command string");
+	}
+
+	// Check if this is a compound command (contains &&, ||, ;, or |)
+	const hasShellOperators = /[;&|]/.test(trimmedCommand);
+
+	if (hasShellOperators) {
+		// For compound commands, we need to run them in a shell
+		// Use 'sh' on Unix-like systems, 'cmd' on Windows
+		const isWindows = process.platform === "win32";
+
+		if (isWindows) {
+			return {
+				command: "cmd",
+				args: ["/c", trimmedCommand],
+			};
+		} else {
+			return {
+				command: "sh",
+				args: ["-c", trimmedCommand],
+			};
+		}
+	}
+
+	// For simple commands, split by whitespace
+	const parts = trimmedCommand.split(/\s+/);
+
+	if (!parts[0]) {
+		throw new Error("Invalid command: empty command string");
+	}
+
+	return {
+		command: parts[0],
+		args: parts.slice(1),
+	};
 }
 
 // Commit hash validation utilities
-export function validateCommitHash(commitHash: string, algorithm: 'sha256' | 'md5' | 'sha1' = 'sha1'): boolean {
-  if (!commitHash || commitHash.trim() === '') {
-    return false;
-  }
+export function validateCommitHash(
+	commitHash: string,
+	algorithm: "sha256" | "md5" | "sha1" = "sha1",
+): boolean {
+	if (!commitHash || commitHash.trim() === "") {
+		return false;
+	}
 
-  const trimmedHash = commitHash.trim();
+	const trimmedHash = commitHash.trim();
 
-  switch (algorithm) {
-    case 'sha256':
-      // SHA-256 produces 64 hexadecimal characters
-      return /^[a-f0-9]{64}$/i.test(trimmedHash);
-    case 'md5':
-      // MD5 produces 32 hexadecimal characters
-      return /^[a-f0-9]{32}$/i.test(trimmedHash);
-    case 'sha1':
-      // SHA-1 produces 40 hexadecimal characters (standard Git format)
-      return /^[a-f0-9]{40}$/i.test(trimmedHash);
-    default:
-      return false;
-  }
+	switch (algorithm) {
+		case "sha256":
+			// SHA-256 produces 64 hexadecimal characters
+			return /^[a-f0-9]{64}$/i.test(trimmedHash);
+		case "md5":
+			// MD5 produces 32 hexadecimal characters
+			return /^[a-f0-9]{32}$/i.test(trimmedHash);
+		case "sha1":
+			// SHA-1 produces 40 hexadecimal characters (standard Git format)
+			return /^[a-f0-9]{40}$/i.test(trimmedHash);
+		default:
+			return false;
+	}
 }
 
-export function getCommitHashLength(algorithm: 'sha256' | 'md5' | 'sha1'): number {
-  switch (algorithm) {
-    case 'sha256':
-      return 64;
-    case 'md5':
-      return 32;
-    case 'sha1':
-      return 40;
-    default:
-      return 40; // Default Git SHA-1 length
-  }
+export function getCommitHashLength(
+	algorithm: "sha256" | "md5" | "sha1",
+): number {
+	switch (algorithm) {
+		case "sha256":
+			return 64;
+		case "md5":
+			return 32;
+		case "sha1":
+			return 40;
+		default:
+			return 40; // Default Git SHA-1 length
+	}
 }
 
 export function normalizeCommitHash(commitHash: string): string {
-  return commitHash.trim().toLowerCase();
+	return commitHash.trim().toLowerCase();
 }
-
 
 /**
  * Clone a git repository and checkout a specific commit.
@@ -256,31 +266,41 @@ export function normalizeCommitHash(commitHash: string): string {
  * @param targetDir The directory to clone the repository into
  * @param commitHash The specific commit hash to checkout (optional)
  */
-export async function cloneGitRepository(gitUrl: string, targetDir: string, commitHash?: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    // First, clone the repository
-    const cloneCmd = `git clone "${gitUrl}" "${targetDir}"`;
-    exec(cloneCmd, (error, stdout, stderr) => {
-      if (error) {
-        reject(new Error(`Failed to clone repository: ${stderr || error.message}`));
-        return;
-      }
+export async function cloneGitRepository(
+	gitUrl: string,
+	targetDir: string,
+	commitHash?: string,
+): Promise<void> {
+	return new Promise((resolve, reject) => {
+		// First, clone the repository
+		const cloneCmd = `git clone "${gitUrl}" "${targetDir}"`;
+		exec(cloneCmd, (error, stdout, stderr) => {
+			if (error) {
+				reject(
+					new Error(`Failed to clone repository: ${stderr || error.message}`),
+				);
+				return;
+			}
 
-      // If no commit hash is specified, we're done
-      if (!commitHash) {
-        resolve();
-        return;
-      }
+			// If no commit hash is specified, we're done
+			if (!commitHash) {
+				resolve();
+				return;
+			}
 
-      // Checkout the specific commit
-      const checkoutCmd = `cd "${targetDir}" && git checkout "${commitHash}"`;
-      exec(checkoutCmd, (checkoutError, checkoutStdout, checkoutStderr) => {
-        if (checkoutError) {
-          reject(new Error(`Failed to checkout commit ${commitHash}: ${checkoutStderr || checkoutError.message}`));
-        } else {
-          resolve();
-        }
-      });
-    });
-  });
+			// Checkout the specific commit
+			const checkoutCmd = `cd "${targetDir}" && git checkout "${commitHash}"`;
+			exec(checkoutCmd, (checkoutError, checkoutStdout, checkoutStderr) => {
+				if (checkoutError) {
+					reject(
+						new Error(
+							`Failed to checkout commit ${commitHash}: ${checkoutStderr || checkoutError.message}`,
+						),
+					);
+				} else {
+					resolve();
+				}
+			});
+		});
+	});
 }

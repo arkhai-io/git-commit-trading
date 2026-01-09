@@ -1,24 +1,24 @@
 {
-  "repositories": {
-    "source": {
-      "url": "https://github.com/VAR-META-Tech/alkahest-rs.git",
-      "commitHash": "main",
-      "language": "rust",
-      "buildCommand": "cargo build --release",
-      "testCommand": "cargo test",
-      "installCommand": "cargo build"
-    },
-    "testcase": {
-      "url": "https://github.com/VAR-META-Tech/alkahest-rs.git",
-      "commitHash": "main",
-      "language": "rust",
-      "testCommand": "cargo test"
-    }
-  },
-  "execution": {
-    "timeout": 300000,
-    "cleanupAfterExecution": true,
-    "isolatedEnvironment": true,
-    "tempDirectory": "./temp"
-  }
+	"repositories": {
+		"source": {
+			"url": "https://github.com/VAR-META-Tech/alkahest-rs.git",
+			"commitHash": "main",
+			"language": "rust",
+			"buildCommand": "cargo build --release",
+			"testCommand": "cargo test",
+			"installCommand": "cargo build"
+		},
+		"testcase": {
+			"url": "https://github.com/VAR-META-Tech/alkahest-rs.git",
+			"commitHash": "main",
+			"language": "rust",
+			"testCommand": "cargo test"
+		}
+	},
+	"execution": {
+		"timeout": 300000,
+		"cleanupAfterExecution": true,
+		"isolatedEnvironment": true,
+		"tempDirectory": "./temp"
+	}
 }

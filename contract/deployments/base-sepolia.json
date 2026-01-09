@@ -1,11 +1,11 @@
 {
-  "gitIdentityRegistry": "0x199017039dcBAa45eDcABF761054f616ED6de654",
-  "commitObligation": "0x039336222fcec75041C8fE6c372997AF107e0d16",
-  "deployer": "0x9774A7c694198A46Ce9e360c4BD619641d32e2A6",
-  "blockNumber": 33343848,
-  "timestamp": 1762456007,
-  "easRegistry": "0x4200000000000000000000000000000000000021",
-  "schemaRegistry": "0x4200000000000000000000000000000000000020",
-  "network": "base-sepolia",
-  "chainId": 84532
+	"gitIdentityRegistry": "0x199017039dcBAa45eDcABF761054f616ED6de654",
+	"commitObligation": "0x039336222fcec75041C8fE6c372997AF107e0d16",
+	"deployer": "0x9774A7c694198A46Ce9e360c4BD619641d32e2A6",
+	"blockNumber": 33343848,
+	"timestamp": 1762456007,
+	"easRegistry": "0x4200000000000000000000000000000000000021",
+	"schemaRegistry": "0x4200000000000000000000000000000000000020",
+	"network": "base-sepolia",
+	"chainId": 84532
 }

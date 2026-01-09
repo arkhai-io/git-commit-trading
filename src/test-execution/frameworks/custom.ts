@@ -1,25 +1,25 @@
-import { promises as fs } from 'fs';
-import path from 'path';
-import type { Framework } from '../types.js';
+import { promises as fs } from "fs";
+import path from "path";
+import type { Framework } from "../types.js";
 
 export const customDockerfile: Framework = {
-  name: 'custom',
-  dockerfile: '', // Will be read from arkhai_tests.dockerfile
-  detectionPriority: 0, // Highest priority - always checked first
+	name: "custom",
+	dockerfile: "", // Will be read from arkhai_tests.dockerfile
+	detectionPriority: 0, // Highest priority - always checked first
 
-  async detect(testsPath: string): Promise<boolean> {
-    try {
-      const files = await fs.readdir(testsPath);
-      return files.includes('arkhai_tests.dockerfile');
-    } catch {
-      return false;
-    }
-  },
+	async detect(testsPath: string): Promise<boolean> {
+		try {
+			const files = await fs.readdir(testsPath);
+			return files.includes("arkhai_tests.dockerfile");
+		} catch {
+			return false;
+		}
+	},
 
-  parseTests(output: string, exitCode: number): boolean {
-    // For custom dockerfiles, rely on exit code
-    return exitCode === 0;
-  },
+	parseTests(output: string, exitCode: number): boolean {
+		// For custom dockerfiles, rely on exit code
+		return exitCode === 0;
+	},
 };
 
 /**
@@ -27,6 +27,6 @@ export const customDockerfile: Framework = {
  * This must be called after detection to populate the dockerfile content.
  */
 export async function readCustomDockerfile(testsPath: string): Promise<string> {
-  const dockerfilePath = path.join(testsPath, 'arkhai_tests.dockerfile');
-  return await fs.readFile(dockerfilePath, 'utf-8');
+	const dockerfilePath = path.join(testsPath, "arkhai_tests.dockerfile");
+	return await fs.readFile(dockerfilePath, "utf-8");
 }

@@ -1,4 +1,4 @@
-declare module '*.dockerfile' {
-  const content: string;
-  export default content;
+declare module "*.dockerfile" {
+	const content: string;
+	export default content;
 }

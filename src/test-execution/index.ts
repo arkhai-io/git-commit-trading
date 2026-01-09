@@ -1,37 +1,38 @@
 // Primitives
-export { cloneRepo, runTests } from './executor.js';
-
 // Composition
-export { verifyAndRunTests } from './executor.js';
-
-// Types
-export type {
-  Framework,
-  RegisteredKey,
-  RunTestsOptions,
-  TestResult,
-  RepoSpec,
-  VerifyAndRunTestsOptions,
-  ProjectLanguage,
-} from './types.js';
-
+// Default export
+export {
+	cloneRepo,
+	runTests,
+	verifyAndRunTests,
+	verifyAndRunTests as default,
+} from "./executor.js";
+// Framework detection utility
+export {
+	detectFramework,
+	type FrameworkDetectionResult,
+} from "./frameworkDetection.js";
 // Frameworks
 export {
-  defaultFrameworks,
-  cargo,
-  pytestUv,
-  pytestPoetry,
-  bunTest,
-  bunJest,
-  nodeJest,
-  pnpmJest,
-  customDockerfile,
-  pytestFallback,
-  nodeFallback,
-} from './frameworks/index.js';
-
-// Framework detection utility
-export { detectFramework, type FrameworkDetectionResult } from './frameworkDetection.js';
-
-// Default export
-export { verifyAndRunTests as default } from './executor.js';
+	bunJest,
+	bunTest,
+	cargo,
+	customDockerfile,
+	defaultFrameworks,
+	nodeFallback,
+	nodeJest,
+	pnpmJest,
+	pytestFallback,
+	pytestPoetry,
+	pytestUv,
+} from "./frameworks/index.js";
+// Types
+export type {
+	Framework,
+	ProjectLanguage,
+	RegisteredKey,
+	RepoSpec,
+	RunTestsOptions,
+	TestResult,
+	VerifyAndRunTestsOptions,
+} from "./types.js";

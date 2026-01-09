@@ -4,17 +4,16 @@
  * @returns Just the base64-encoded key material (without algorithm prefix or comment)
  */
 export function extractSSHKeyMaterial(sshPublicKey: string): string {
-    const parts = sshPublicKey.trim().split(' ');
-    if (parts.length < 2) {
-        throw new Error('Invalid SSH public key format');
-    }
+	const parts = sshPublicKey.trim().split(" ");
+	if (parts.length < 2) {
+		throw new Error("Invalid SSH public key format");
+	}
 
-    const base64Key = parts[1];
+	const base64Key = parts[1];
 
-    if (!base64Key) {
-        throw new Error('Invalid SSH public key format - missing key data');
-    }
+	if (!base64Key) {
+		throw new Error("Invalid SSH public key format - missing key data");
+	}
 
-    return base64Key;
+	return base64Key;
 }
-
