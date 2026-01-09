@@ -4,7 +4,7 @@ import {
 	type RegisteredKey,
 	verifyAndRunTests,
 } from "../../test-execution/index.js";
-import { verifyGitKeyClaimSignature } from "../../utils/sshSignatureUtils.js";
+import { verifyGitKeyClaimSignature } from "../../crypto/index.js";
 import { createClientFromEnv, requireEnvFile } from "../utils/envLoader.js";
 
 interface ServerOptions {

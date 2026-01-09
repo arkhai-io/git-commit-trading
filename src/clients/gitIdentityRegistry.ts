@@ -1,6 +1,5 @@
 import type { ViemClient } from "alkahest-ts";
 import { abi as gitIdentityRegistryAbi } from "../contracts/GitIdentityRegistry";
-import { verifyGitKeyClaimSignature } from "../utils/sshSignatureUtils.js";
 
 // Enum for KeyType from the contract
 export enum KeyType {

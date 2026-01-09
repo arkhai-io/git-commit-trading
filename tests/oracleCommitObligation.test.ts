@@ -19,17 +19,16 @@ import {
 } from "../src/clients/commitObligation";
 import { KeyType } from "../src/clients/gitIdentityRegistry";
 import { verifyAndRunTests } from "../src/test-execution/";
-import { extractSSHKeyMaterial } from "../src/utils/gitUtils";
-import { extractPGPKeyMaterial } from "../src/utils/keyUtils";
 import {
+	extractPGPKeyMaterial,
+	extractSSHKeyMaterial,
 	generatePGPKeyPair,
 	generatePGPSignature,
 	generateSigningMessage,
 	generateSSHSignature,
-	verifyCommitSignature,
 	verifyGitKeyClaimSignature,
 	verifySSHSignature,
-} from "../src/utils/sshSignatureUtils";
+} from "../src/crypto/index";
 import { setupTest } from "./utils/setup";
 
 describe("Oracle CommitObligation Tests", () => {

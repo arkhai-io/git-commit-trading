@@ -1,3 +1,6 @@
+/**
+ * Git commit signature verification
+ */
 import { exec } from "child_process";
 import { createHash } from "crypto";
 import fs from "fs/promises";

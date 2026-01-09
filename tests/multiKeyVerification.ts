@@ -4,8 +4,7 @@ import {
 	detectKeyTypeFromContent,
 	generateKeyFingerprint,
 	validateKeyForGitSigning,
-} from "../src/utils/keyUtils";
-import { verifyCommitSignature } from "../src/utils/sshSignatureUtils";
+} from "../src/crypto/index";
 
 describe("Enhanced Multi-Key Verification System", () => {
 	describe("Key Type Detection", () => {
@@ -71,91 +70,6 @@ MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1234567890abcdef1234567890
 
 			expect(validation.valid).toBe(false);
 			expect(validation.errors.length).toBeGreaterThan(0);
-		});
-	});
-
-	describe("Signature Verification Integration", () => {
-		const mockGitMetadata = {
-			signature:
-				"-----BEGIN SSH SIGNATURE-----\nU1NIU0lH\n-----END SSH SIGNATURE-----",
-			payload: "tree abc123\ncommit message",
-			verified: true,
-		};
-
-		test("should verify SSH Ed25519 signatures", async () => {
-			const gitKeyClaim = {
-				keyType: KeyType.SSHEd25519,
-				nonceHash:
-					"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef" as `0x${string}`,
-				sig: "0xfedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321" as `0x${string}`,
-				publicKey:
-					"AAAAC3NzaC1lZDI1NTE5AAAAIDpOOgAtLLU/X72Fku+nmmAhgeXGDzfF7sdYRiyxS7Qt",
-			};
-
-			const result = await verifyCommitSignature(mockGitMetadata, gitKeyClaim);
-			expect(result).toBe(true);
-		});
-
-		test("should handle PGP signature verification with fallback", async () => {
-			const pgpGitMetadata = {
-				signature: "-----BEGIN PGP SIGNATURE-----\nVersion: GnuPG v1\n...",
-				payload: "tree abc123\ncommit message",
-				verified: true,
-			};
-
-			const gitKeyClaim = {
-				keyType: KeyType.PGPv4,
-				nonceHash:
-					"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef" as `0x${string}`,
-				sig: "0xfedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321" as `0x${string}`,
-				publicKey: "mQINBFWMQw4BEADOqQQGY9gP...",
-			};
-
-			const result = await verifyCommitSignature(pgpGitMetadata, gitKeyClaim);
-			expect(result).toBe(true); // Falls back to GitHub verification
-		});
-
-		test("should handle X509 signature verification with fallback", async () => {
-			const x509GitMetadata = {
-				signature: "-----BEGIN PKCS7-----\nMIIBIjANBg...",
-				payload: "tree abc123\ncommit message",
-				verified: true,
-			};
-
-			const gitKeyClaim = {
-				keyType: KeyType.X509,
-				nonceHash:
-					"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef" as `0x${string}`,
-				sig: "0xfedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321" as `0x${string}`,
-				publicKey: "-----BEGIN CERTIFICATE-----\nMIIBIjANBgkqhkiG9w0B...",
-			};
-
-			const result = await verifyCommitSignature(x509GitMetadata, gitKeyClaim);
-			expect(result).toBe(true); // Falls back to GitHub verification
-		});
-
-		test("should reject unverified GitHub signatures", async () => {
-			const unverifiedGitMetadata = {
-				signature:
-					"-----BEGIN SSH SIGNATURE-----\nU1NIU0lH\n-----END SSH SIGNATURE-----",
-				payload: "tree abc123\ncommit message",
-				verified: false, // GitHub says it's not verified
-			};
-
-			const gitKeyClaim = {
-				keyType: KeyType.SSHEd25519,
-				nonceHash:
-					"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef" as `0x${string}`,
-				sig: "0xfedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321" as `0x${string}`,
-				publicKey:
-					"AAAAC3NzaC1lZDI1NTE5AAAAIDpOOgAtLLU/X72Fku+nmmAhgeXGDzfF7sdYRiyxS7Qt",
-			};
-
-			const result = await verifyCommitSignature(
-				unverifiedGitMetadata,
-				gitKeyClaim,
-			);
-			expect(result).toBe(false);
 		});
 	});
 
@@ -247,48 +161,6 @@ MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1234567890abcdef
 		});
 	});
 
-	describe("Git Integration Scenarios", () => {
-		test("should simulate real-world Git commit verification", async () => {
-			// Simulate a real Git commit scenario
-			const commitScenario = {
-				commitHash: "a1b2c3d4e5f6789012345678901234567890abcd",
-				author: "developer@example.com",
-				keyType: KeyType.SSHEd25519,
-				gitHubVerified: true,
-			};
-
-			console.log("📝 Git Commit Verification Scenario:");
-			console.log(`  Commit: ${commitScenario.commitHash.substring(0, 8)}...`);
-			console.log(`  Author: ${commitScenario.author}`);
-			console.log(`  Key Type: SSH Ed25519`);
-			console.log(`  GitHub Verified: ✅`);
-
-			// In a real scenario, this would fetch from GitHub API
-			const mockGitMetadata = {
-				signature:
-					"-----BEGIN SSH SIGNATURE-----\nU1NIU0lH\n-----END SSH SIGNATURE-----",
-				payload: `tree abc123\nauthor ${commitScenario.author} 1234567890 +0000\ncommitter ${commitScenario.author} 1234567890 +0000\n\nImplement feature`,
-				verified: commitScenario.gitHubVerified,
-			};
-
-			const gitKeyClaim = {
-				keyType: commitScenario.keyType,
-				nonceHash:
-					"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef" as `0x${string}`,
-				sig: "0xfedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321" as `0x${string}`,
-				publicKey:
-					"AAAAC3NzaC1lZDI1NTE5AAAAIDpOOgAtLLU/X72Fku+nmmAhgeXGDzfF7sdYRiyxS7Qt",
-			};
-
-			const verificationResult = await verifyCommitSignature(
-				mockGitMetadata,
-				gitKeyClaim,
-			);
-			console.log(`  Verification Result: ${verificationResult ? "✅" : "❌"}`);
-
-			expect(verificationResult).toBe(true);
-		});
-	});
 });
 
 describe("Implementation Status", () => {

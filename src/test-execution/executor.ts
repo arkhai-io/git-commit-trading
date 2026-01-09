@@ -3,7 +3,7 @@ import { exec } from "child_process";
 import { promises as fs } from "fs";
 import path from "path";
 import { promisify } from "util";
-import { verifyRepo } from "../utils/gitVerification.js";
+import { verifyRepo } from "../crypto/index.js";
 import { detectFramework } from "./frameworkDetection.js";
 import { defaultFrameworks } from "./frameworks/index.js";
 import type {

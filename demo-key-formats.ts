@@ -10,12 +10,12 @@ import {
 	createGitKeyClaim,
 	KeyType,
 } from "./src/clients/gitIdentityRegistry.js";
-import { extractSSHKeyMaterial } from "./src/utils/gitUtils.js";
 import {
 	extractPGPKeyMaterial,
+	extractSSHKeyMaterial,
 	formatKeyForStorage,
 	generatePGPKeyFingerprint,
-} from "./src/utils/keyUtils.js";
+} from "./src/crypto/index.js";
 
 async function demonstrateKeyFormats() {
 	console.log(

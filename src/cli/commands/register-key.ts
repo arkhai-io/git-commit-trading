@@ -5,24 +5,21 @@ import {
 	createGitKeyClaim,
 	KeyType,
 } from "../../clients/gitIdentityRegistry.js";
-import { extractSSHKeyMaterial } from "../../utils/gitUtils.js";
 import {
 	detectKeyTypeFromContent,
 	extractPGPKeyMaterial,
+	extractSSHKeyMaterial,
 	formatKeyForStorage,
+	generatePGPSignature,
+	generateSigningMessage,
+	generateSSHSignature,
 	getKeyTypeName,
 	importGPGKeyToServer,
 	importSSHKeyToServer,
 	isGPGKeyImported,
 	isSSHKeyImported,
-	preparePGPKeyForRegistration,
 	validateKeyForGitSigning,
-} from "../../utils/keyUtils.js";
-import {
-	generatePGPSignature,
-	generateSigningMessage,
-	generateSSHSignature,
-} from "../../utils/sshSignatureUtils.js";
+} from "../../crypto/index.js";
 import {
 	createClientFromEnv,
 	requireEnvFile,

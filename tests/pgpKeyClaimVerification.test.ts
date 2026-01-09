@@ -5,7 +5,7 @@ import {
 	generatePGPSignature,
 	generateSigningMessage,
 	verifyGitKeyClaimSignature,
-} from "../src/utils/sshSignatureUtils";
+} from "../src/crypto/index";
 
 describe("PGP Key Claim Signature", () => {
 	test("should generate and verify PGP signature for GitKeyClaim", async () => {

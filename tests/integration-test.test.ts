@@ -10,15 +10,14 @@ import {
 } from "../src/clients/commitObligation";
 import { createGitKeyClaim, KeyType } from "../src/clients/gitIdentityRegistry";
 import { cloneRepo, verifyAndRunTests } from "../src/test-execution/";
-import { extractSSHKeyMaterial } from "../src/utils/gitUtils";
-import { verifyRepo } from "../src/utils/gitVerification";
 import {
+	extractSSHKeyMaterial,
 	generatePGPSignature,
 	generateSigningMessage,
 	generateSSHSignature,
-	verifyCommitSignature,
 	verifyGitKeyClaimSignature,
-} from "../src/utils/sshSignatureUtils";
+	verifyRepo,
+} from "../src/crypto/index";
 import IntegrationTestHelpers from "./utils/integration-helpers";
 import { setupTest } from "./utils/setup";
 
@@ -520,8 +519,8 @@ async function loadRealKeys(config: IntegrationConfig) {
 		const pgpPublicKey = readFileSync(pgpPublicKeyPath, "utf-8").trim();
 
 		// For blockchain registration, extract base64 content using the new utility
-		const { extractPGPKeyMaterial } = await import("../src/utils/keyUtils.js");
-		const publicKeyMaterial = await extractPGPKeyMaterial(pgpPublicKey);
+		const { extractPGPKeyMaterial: extractPGP } = await import("../src/crypto/index");
+		const publicKeyMaterial = await extractPGP(pgpPublicKey);
 
 		return {
 			keyType: KeyType.PGPv4,

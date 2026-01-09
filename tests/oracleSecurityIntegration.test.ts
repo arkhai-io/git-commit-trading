@@ -18,13 +18,12 @@ import {
 } from "../src/clients/commitObligation";
 import { createGitKeyClaim, KeyType } from "../src/clients/gitIdentityRegistry";
 import { verifyAndRunTests } from "../src/test-execution/";
-import { extractSSHKeyMaterial } from "../src/utils/gitUtils";
 import {
+	extractSSHKeyMaterial,
 	generateSigningMessage,
 	generateSSHSignature,
-	verifyCommitSignature,
 	verifyGitKeyClaimSignature,
-} from "../src/utils/sshSignatureUtils";
+} from "../src/crypto/index";
 import { setupTest } from "./utils/setup";
 
 describe("Oracle CommitObligation Integration Tests", () => {
