@@ -8,6 +8,7 @@ import { detectFramework } from "./frameworkDetection.js";
 import { defaultFrameworks } from "./frameworks/index.js";
 import type {
 	Framework,
+	RepoSpec,
 	RunTestsOptions,
 	TestResult,
 	VerifyAndRunTestsOptions,
@@ -244,14 +245,7 @@ async function buildAndRunDocker(
 export async function verifyAndRunTests(
 	options: VerifyAndRunTestsOptions,
 ): Promise<TestResult> {
-	const {
-		tests,
-		source,
-		getRegisteredKey,
-		frameworks,
-		timeout,
-		cleanup = true,
-	} = options;
+	const { tests, source, frameworks, timeout, cleanup = true } = options;
 
 	const clonedDirs: string[] = [];
 	const startTime = Date.now();
@@ -267,60 +261,14 @@ export async function verifyAndRunTests(
 		const sourceDir = await cloneRepo(source.hosts, source.commit);
 		clonedDirs.push(sourceDir);
 
-		// Verify test repo if author specified
-		if (tests.author) {
-			console.log(chalk.cyan(`Verifying test repo author: ${tests.author}`));
-			if (!getRegisteredKey) {
-				throw new Error(
-					"getRegisteredKey callback required when author is specified",
-				);
-			}
-			const key = await getRegisteredKey(tests.author);
-			if (!key) {
-				throw new Error(
-					`No valid registered key for test repo author: ${tests.author}`,
-				);
-			}
-			const isValid = await verifyRepo(
-				testsDir,
-				tests.commit,
-				key.keyType,
-				key.publicKey,
-			);
-			if (!isValid) {
-				throw new Error(
-					`Test repo commit not signed by registered key for: ${tests.author}`,
-				);
-			}
-			console.log(chalk.green("✅ Test repo signature verified"));
+		// Verify test repo if key provided
+		if (tests.verifyWith) {
+			await verifyRepoSignature(testsDir, tests, "test");
 		}
 
-		// Verify source repo if author specified
-		if (source.author) {
-			console.log(chalk.cyan(`Verifying source repo author: ${source.author}`));
-			if (!getRegisteredKey) {
-				throw new Error(
-					"getRegisteredKey callback required when author is specified",
-				);
-			}
-			const key = await getRegisteredKey(source.author);
-			if (!key) {
-				throw new Error(
-					`No valid registered key for source repo author: ${source.author}`,
-				);
-			}
-			const isValid = await verifyRepo(
-				sourceDir,
-				source.commit,
-				key.keyType,
-				key.publicKey,
-			);
-			if (!isValid) {
-				throw new Error(
-					`Source repo commit not signed by registered key for: ${source.author}`,
-				);
-			}
-			console.log(chalk.green("✅ Source repo signature verified"));
+		// Verify source repo if key provided
+		if (source.verifyWith) {
+			await verifyRepoSignature(sourceDir, source, "source");
 		}
 
 		// Run tests
@@ -349,6 +297,28 @@ export async function verifyAndRunTests(
 			);
 		}
 	}
+}
+
+async function verifyRepoSignature(
+	repoDir: string,
+	repo: RepoSpec,
+	label: string,
+): Promise<void> {
+	const key = repo.verifyWith!;
+	console.log(chalk.cyan(`Verifying ${label} repo signature...`));
+
+	const isValid = await verifyRepo(
+		repoDir,
+		repo.commit,
+		key.keyType,
+		key.publicKey,
+	);
+
+	if (!isValid) {
+		throw new Error(`${label} repo commit not signed by provided key`);
+	}
+
+	console.log(chalk.green(`✅ ${label} repo signature verified`));
 }
 
 // ============================================================================

@@ -1,10 +1,7 @@
 import chalk from "chalk";
 import { parseAbiParameters } from "viem";
-import {
-	type RegisteredKey,
-	verifyAndRunTests,
-} from "../../test-execution/index.js";
-import { verifyGitKeyClaimSignature } from "../../crypto/index.js";
+import { getRegisteredKey } from "../../crypto/index.js";
+import { verifyAndRunTests } from "../../test-execution/index.js";
 import { createClientFromEnv, requireEnvFile } from "../utils/envLoader.js";
 
 interface ServerOptions {
@@ -93,56 +90,6 @@ export async function serverCommand(options: ServerOptions) {
 			);
 		}
 
-		// Create getRegisteredKey callback for verification
-		const getRegisteredKey = async (
-			address: `0x${string}`,
-		): Promise<RegisteredKey | null> => {
-			if (!client.gitIdentityRegistry) {
-				return null;
-			}
-
-			try {
-				// Fetch the latest key claim from the contract
-				const keyClaim =
-					await client.gitIdentityRegistry.getLatestKeyClaim(address);
-				if (
-					!keyClaim ||
-					!keyClaim.publicKey ||
-					keyClaim.publicKey.trim() === ""
-				) {
-					console.log(chalk.yellow(`  No registered key found for ${address}`));
-					return null;
-				}
-
-				console.log(
-					chalk.gray(
-						`  Found key for ${address}: ${keyClaim.keyType === 0 ? "PGP" : keyClaim.keyType === 1 ? "SSH-Ed25519" : "SSH-Secp256k1"}`,
-					),
-				);
-
-				// Verify the GitKeyClaim signature
-				const isValid = await verifyGitKeyClaimSignature(keyClaim, address);
-				if (!isValid) {
-					console.log(
-						chalk.red(`  GitKeyClaim signature invalid for ${address}`),
-					);
-					return null;
-				}
-
-				console.log(
-					chalk.green(`  ✓ GitKeyClaim signature verified for ${address}`),
-				);
-
-				return {
-					keyType: keyClaim.keyType,
-					publicKey: keyClaim.publicKey,
-				};
-			} catch (error) {
-				console.error(chalk.red(`  Error fetching key for ${address}:`), error);
-				return null;
-			}
-		};
-
 		// Define the arbitration logic
 		const arbitrate = async (attestation: any) => {
 			console.log(
@@ -187,19 +134,28 @@ export async function serverCommand(options: ServerOptions) {
 			const shouldVerify =
 				!options.skipKeyVerification && hasGitIdentityRegistry;
 
+			// Look up registered keys if verification is enabled
+			let sourceKey = null;
+			if (shouldVerify && client.gitIdentityRegistry) {
+				console.log(chalk.cyan(`Looking up registered key for ${senderAddress}...`));
+				sourceKey = await getRegisteredKey(client.gitIdentityRegistry, senderAddress);
+				if (sourceKey) {
+					console.log(chalk.green(`✅ Found registered key for sender`));
+				} else {
+					console.log(chalk.yellow(`⚠️ No valid registered key found for sender`));
+				}
+			}
+
 			const result = await verifyAndRunTests({
 				tests: {
 					hosts: demand.hosts,
 					commit: demand.testsCommitHash,
-					// Don't verify test repo author (it's from the escrow creator)
 				},
 				source: {
 					hosts: obligation.hosts,
 					commit: obligation.commitHash,
-					// Verify source repo was signed by the sender
-					author: shouldVerify ? senderAddress : undefined,
+					verifyWith: sourceKey ?? undefined,
 				},
-				getRegisteredKey: shouldVerify ? getRegisteredKey : undefined,
 				timeout,
 				cleanup,
 			});

@@ -80,8 +80,8 @@ export interface RepoSpec {
 	hosts: string[];
 	/** Commit hash to checkout */
 	commit: string;
-	/** Address that should have authored/signed this commit (optional) */
-	author?: `0x${string}`;
+	/** If provided, verify the commit was signed by this key */
+	verifyWith?: RegisteredKey;
 }
 
 /**
@@ -92,12 +92,6 @@ export interface VerifyAndRunTestsOptions {
 	tests: RepoSpec;
 	/** Source/solution repository specification */
 	source: RepoSpec;
-	/**
-	 * Callback to fetch a registered key for an address.
-	 * Required if any RepoSpec has an author field.
-	 * Should return null if no valid registered key exists.
-	 */
-	getRegisteredKey?: (address: `0x${string}`) => Promise<RegisteredKey | null>;
 	/** Frameworks to try for detection (defaults to all built-in frameworks) */
 	frameworks?: Framework[];
 	/** Docker run timeout in milliseconds (default: 300000) */

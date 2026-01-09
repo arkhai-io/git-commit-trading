@@ -117,6 +117,10 @@ export const makeGitIdentityRegistryClient = (
 	};
 };
 
+export type GitIdentityRegistryClient = ReturnType<
+	typeof makeGitIdentityRegistryClient
+>;
+
 // Helper function to create a proper Git key claim
 export function createGitKeyClaim(
 	keyType: KeyType,

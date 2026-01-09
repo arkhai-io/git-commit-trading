@@ -75,21 +75,19 @@ describe("Enhanced Test Execution with Security", () => {
 			tests: {
 				hosts: ["https://github.com/alice/tests.git"],
 				commit: "abc123",
-				// Test repo doesn't need author verification
+				// Verify test repo with this key
+				verifyWith: { keyType: 1, publicKey: "test-repo-public-key" },
 			},
 			source: {
 				hosts: ["https://github.com/bob/solution.git"],
 				commit: "def456",
-				author: "0x1234567890123456789012345678901234567890",
-			},
-			getRegisteredKey: async (address) => {
-				// Mock callback - would fetch from contract
-				return { keyType: 1, publicKey: "mock-public-key" };
+				// Verify source repo with this key
+				verifyWith: { keyType: 1, publicKey: "source-repo-public-key" },
 			},
 		};
 
-		expect(options.source.author).toBeDefined();
-		expect(options.getRegisteredKey).toBeDefined();
+		expect(options.tests.verifyWith).toBeDefined();
+		expect(options.source.verifyWith).toBeDefined();
 
 		console.log("✅ Author verification configuration validated");
 	});

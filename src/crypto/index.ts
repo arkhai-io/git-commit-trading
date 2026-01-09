@@ -15,6 +15,9 @@ export {
 	getKeyTypeName,
 } from "./keys.js";
 
+// Registry key lookup and verification
+export { getRegisteredKey } from "./registry.js";
+
 // Signature generation and verification
 export {
 	generatePGPKeyPair,
