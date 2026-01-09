@@ -21,6 +21,70 @@ export type GitIdentityRegistryAddresses = {
 	gitIdentityRegistry: `0x${string}`;
 };
 
+// Minimal viem client interface for standalone functions
+interface MinimalViemClient {
+	getLogs: (args: any) => Promise<any[]>;
+}
+
+const GIT_KEY_CLAIMED_EVENT = {
+	type: "event",
+	name: "GitKeyClaimed",
+	inputs: [
+		{ name: "claimant", type: "address", indexed: true },
+		{
+			name: "claim",
+			type: "tuple",
+			components: [
+				{ name: "keyType", type: "uint8" },
+				{ name: "nonceHash", type: "bytes32" },
+				{ name: "sig", type: "bytes" },
+				{ name: "publicKey", type: "string" },
+			],
+		},
+	],
+} as const;
+
+// ============================================================================
+// Standalone functions (can be used without the full client)
+// ============================================================================
+
+/**
+ * Get all key claims for an address from the GitIdentityRegistry.
+ */
+export async function getKeyClaims(
+	viemClient: MinimalViemClient,
+	registryAddress: `0x${string}`,
+	claimant: `0x${string}`,
+	fromBlock?: bigint,
+): Promise<GitKeyClaim[]> {
+	const events = await viemClient.getLogs({
+		address: registryAddress,
+		event: GIT_KEY_CLAIMED_EVENT,
+		args: { claimant },
+		fromBlock: fromBlock || 0n,
+		toBlock: "latest",
+	});
+
+	return events.map((event) => event.args.claim as GitKeyClaim);
+}
+
+/**
+ * Get the most recent key claim for an address from the GitIdentityRegistry.
+ */
+export async function getLatestKeyClaim(
+	viemClient: MinimalViemClient,
+	registryAddress: `0x${string}`,
+	claimant: `0x${string}`,
+	fromBlock?: bigint,
+): Promise<GitKeyClaim | null> {
+	const claims = await getKeyClaims(viemClient, registryAddress, claimant, fromBlock);
+	return claims.length > 0 ? claims[claims.length - 1]! : null;
+}
+
+// ============================================================================
+// Client factory (for use with alkahest client extension)
+// ============================================================================
+
 export const makeGitIdentityRegistryClient = (
 	viemClient: ViemClient,
 	addresses: GitIdentityRegistryAddresses,
@@ -37,55 +101,12 @@ export const makeGitIdentityRegistryClient = (
 		return { hash };
 	};
 
-	// Get key claims by listening to events from the blockchain
-	const getKeyClaims = async (
-		claimant: `0x${string}`,
-		fromBlock?: bigint,
-	): Promise<GitKeyClaim[]> => {
-		const events = await viemClient.getLogs({
-			address: addresses.gitIdentityRegistry,
-			event: {
-				type: "event",
-				name: "GitKeyClaimed",
-				inputs: [
-					{ name: "claimant", type: "address", indexed: true },
-					{
-						name: "claim",
-						type: "tuple",
-						components: [
-							{ name: "keyType", type: "uint8" },
-							{ name: "nonceHash", type: "bytes32" },
-							{ name: "sig", type: "bytes" },
-							{ name: "publicKey", type: "string" },
-						],
-					},
-				],
-			},
-			args: {
-				claimant,
-			},
-			fromBlock: fromBlock || 0n,
-			toBlock: "latest",
-		});
-
-		return events.map((event) => event.args.claim as GitKeyClaim);
-	};
-
-	// Get the most recent key claim for an address
-	const getLatestKeyClaim = async (
-		claimant: `0x${string}`,
-		fromBlock?: bigint,
-	): Promise<GitKeyClaim | null> => {
-		const claims = await getKeyClaims(claimant, fromBlock);
-		return claims.length > 0 ? claims[claims.length - 1]! : null;
-	};
-
 	// Check if an address has any key claims
 	const hasKeyClaim = async (
 		claimant: `0x${string}`,
 		fromBlock?: bigint,
 	): Promise<boolean> => {
-		const claims = await getKeyClaims(claimant, fromBlock);
+		const claims = await getKeyClaims(viemClient, addresses.gitIdentityRegistry, claimant, fromBlock);
 		return claims.length > 0;
 	};
 
@@ -110,8 +131,11 @@ export const makeGitIdentityRegistryClient = (
 
 	return {
 		claimKey,
-		getKeyClaims,
-		getLatestKeyClaim,
+		// Bind standalone functions to this client's viemClient and registry address
+		getKeyClaims: (claimant: `0x${string}`, fromBlock?: bigint) =>
+			getKeyClaims(viemClient, addresses.gitIdentityRegistry, claimant, fromBlock),
+		getLatestKeyClaim: (claimant: `0x${string}`, fromBlock?: bigint) =>
+			getLatestKeyClaim(viemClient, addresses.gitIdentityRegistry, claimant, fromBlock),
 		hasKeyClaim,
 		watchKeyClaimEvents,
 	};

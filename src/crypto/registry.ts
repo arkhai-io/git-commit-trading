@@ -2,7 +2,7 @@
  * Git Identity Registry utilities for fetching and verifying registered keys.
  */
 
-import type { GitKeyClaim } from "../clients/gitIdentityRegistry.js";
+import { getLatestKeyClaim } from "../clients/gitIdentityRegistry.js";
 import type { RegisteredKey } from "../test-execution/types.js";
 import { verifyGitKeyClaimSignature } from "./signatures.js";
 
@@ -10,24 +10,6 @@ import { verifyGitKeyClaimSignature } from "./signatures.js";
 interface ViemClient {
 	getLogs: (args: any) => Promise<any[]>;
 }
-
-const GIT_KEY_CLAIMED_EVENT = {
-	type: "event",
-	name: "GitKeyClaimed",
-	inputs: [
-		{ name: "claimant", type: "address", indexed: true },
-		{
-			name: "claim",
-			type: "tuple",
-			components: [
-				{ name: "keyType", type: "uint8" },
-				{ name: "nonceHash", type: "bytes32" },
-				{ name: "sig", type: "bytes" },
-				{ name: "publicKey", type: "string" },
-			],
-		},
-	],
-} as const;
 
 /**
  * Get a registered key for an address from the GitIdentityRegistry.
@@ -44,21 +26,8 @@ export async function getRegisteredKey(
 	address: `0x${string}`,
 ): Promise<RegisteredKey | null> {
 	try {
-		// Fetch key claim events for this address
-		const events = await viemClient.getLogs({
-			address: registryAddress,
-			event: GIT_KEY_CLAIMED_EVENT,
-			args: { claimant: address },
-			fromBlock: 0n,
-			toBlock: "latest",
-		});
-
-		if (events.length === 0) {
-			return null;
-		}
-
-		// Get the latest claim
-		const keyClaim = events[events.length - 1]!.args.claim as GitKeyClaim;
+		// Fetch the latest key claim
+		const keyClaim = await getLatestKeyClaim(viemClient, registryAddress, address);
 		if (!keyClaim || !keyClaim.publicKey || keyClaim.publicKey.trim() === "") {
 			return null;
 		}
