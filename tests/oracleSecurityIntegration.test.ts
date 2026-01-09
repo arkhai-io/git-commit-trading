@@ -4,7 +4,7 @@ import { setupTest } from "./utils/setup";
 import { type TestContext } from "alkahest-ts/sdks/ts/tests/utils/setup";
 import { CommitAlgo, type CommitObligationData } from "../src/clients/commitObligation";
 import { KeyType, createGitKeyClaim } from "../src/clients/gitIdentityRegistry";
-import { executeTests } from "../src/test-execution/";
+import { verifyAndRunTests } from "../src/test-execution/";
 import { extractSSHKeyMaterial } from "../src/utils/gitUtils";
 import { verifyCommitSignature, generateSigningMessage, verifyGitKeyClaimSignature, generateSSHSignature } from "../src/utils/sshSignatureUtils";
 
@@ -219,7 +219,7 @@ describe("Oracle CommitObligation Integration Tests", () => {
                         console.log("   - Running test suite");
                         console.log("   - Validating results");
 
-                        // In real scenario: GitTestExecution.executeTests(config)
+                        // In real scenario: verifyAndRunTests(config)
                         const mockTestResult = true;
 
                         console.log(`✅ Test execution result: ${mockTestResult ? 'PASSED' : 'FAILED'}`);

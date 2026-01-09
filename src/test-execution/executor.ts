@@ -327,24 +327,3 @@ export async function verifyAndRunTests(options: VerifyAndRunTestsOptions): Prom
 }
 
 // ============================================================================
-// Legacy export for backwards compatibility
-// ============================================================================
-
-/**
- * @deprecated Use verifyAndRunTests instead
- */
-export async function executeTests(options: {
-  tests: { hosts: string[]; commit: string };
-  source: { hosts: string[]; commit: string };
-  frameworks?: Framework[];
-  timeout?: number;
-  cleanup?: boolean;
-}): Promise<TestResult> {
-  return verifyAndRunTests({
-    tests: options.tests,
-    source: options.source,
-    frameworks: options.frameworks,
-    timeout: options.timeout,
-    cleanup: options.cleanup,
-  });
-}

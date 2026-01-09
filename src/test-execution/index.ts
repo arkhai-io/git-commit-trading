@@ -4,9 +4,6 @@ export { cloneRepo, runTests } from './executor.js';
 // Composition
 export { verifyAndRunTests } from './executor.js';
 
-// Legacy (deprecated)
-export { executeTests } from './executor.js';
-
 // Types
 export type {
   Framework,

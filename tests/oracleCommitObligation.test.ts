@@ -5,7 +5,7 @@ import { setupTest } from "./utils/setup";
 import { type TestContext } from "alkahest-ts/sdks/ts/tests/utils/setup";
 import { CommitAlgo, type CommitObligationData } from "../src/clients/commitObligation";
 import { KeyType } from "../src/clients/gitIdentityRegistry";
-import { executeTests } from "../src/test-execution/";
+import { verifyAndRunTests } from "../src/test-execution/";
 import { extractSSHKeyMaterial } from "../src/utils/gitUtils";
 import { verifyCommitSignature, generateSigningMessage, verifyGitKeyClaimSignature, generateSSHSignature, verifySSHSignature, generatePGPSignature, generatePGPKeyPair } from "../src/utils/sshSignatureUtils";
 import { extractPGPKeyMaterial } from "../src/utils/keyUtils";
@@ -115,7 +115,7 @@ describe("Oracle CommitObligation Tests", () => {
                     console.log("Arbitrating Python obligation:", obligation, "against demand:", demand);
                     try {
                         console.log("Starting Python test execution...");
-                        const res = await executeTests({
+                        const res = await verifyAndRunTests({
                             tests: {
                                 hosts: demand[0].hosts,
                                 commit: demand[0].testsCommitHash
@@ -218,7 +218,7 @@ describe("Oracle CommitObligation Tests", () => {
                     console.log("Arbitrating Rust obligation:", obligation, "against demand:", demand);
                     try {
                         console.log("Starting Rust test execution...");
-                        const res = await executeTests({
+                        const res = await verifyAndRunTests({
                             tests: {
                                 hosts: demand[0].hosts,
                                 commit: demand[0].testsCommitHash
@@ -385,7 +385,7 @@ describe("Oracle CommitObligation Tests", () => {
                         console.log("📦 Contract address:", gitIdentityRegistryAddress);
 
                         // Execute tests using the new simplified API
-                        const res = await executeTests({
+                        const res = await verifyAndRunTests({
                             tests: {
                                 hosts: demand[0].hosts,
                                 commit: demand[0].testsCommitHash
@@ -611,7 +611,7 @@ describe("Oracle CommitObligation Tests", () => {
                     try {
                         console.log("Starting test execution...");
 
-                        const res = await executeTests({
+                        const res = await verifyAndRunTests({
                             tests: {
                                 hosts: demand[0].hosts,
                                 commit: demand[0].testsCommitHash
@@ -794,7 +794,7 @@ describe("Oracle CommitObligation Tests", () => {
                         console.log("📝 Real PGP key registered - commit signature will be verified against it");
 
                         // Execute tests using the new simplified API
-                        const res = await executeTests({
+                        const res = await verifyAndRunTests({
                             tests: {
                                 hosts: demand[0].hosts,
                                 commit: demand[0].testsCommitHash

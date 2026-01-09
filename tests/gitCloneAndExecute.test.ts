@@ -1,12 +1,12 @@
 import { describe, test, expect } from 'bun:test';
-import { executeTests } from '../src/test-execution/index.js';
+import { verifyAndRunTests } from '../src/test-execution/index.js';
 import path from 'path';
 import { tmpdir } from 'os';
 
 describe('Git Clone Tests', () => {
   test('Should clone GitHub repository with .git suffix', async () => {
     console.log('Testing git clone with .git URLs...');
-    const result = await executeTests({
+    const result = await verifyAndRunTests({
       tests: {
         hosts: ['https://github.com/thinhnx-var/testcase-repo-alice.git'],
         commit: 'ab940eceae6702e05b9c03765b7407a054ea84c9'
@@ -25,7 +25,7 @@ describe('Git Clone Tests', () => {
 
   test('Should handle git URLs without .git suffix', async () => {
     console.log('Testing git clone with URLs without .git suffix...');
-    const result = await executeTests({
+    const result = await verifyAndRunTests({
       tests: {
         hosts: ['https://github.com/thinhnx-var/testcase-repo-alice'],
         commit: 'ab940eceae6702e05b9c03765b7407a054ea84c9'
@@ -45,7 +45,7 @@ describe('Git Clone Tests', () => {
   test('Should handle git clone errors gracefully', async () => {
     console.log('Testing git clone error handling...');
 
-    const result = await executeTests({
+    const result = await verifyAndRunTests({
       tests: {
         hosts: ['https://github.com/thinhnx-var/testcase-repo-alice.git'],
         commit: 'ab940eceae6702e05b9c03765b7407a054ea84c9'
