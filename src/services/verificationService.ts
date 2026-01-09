@@ -1,14 +1,14 @@
 import chalk from 'chalk';
 import { createHash } from 'crypto';
 import type { GitKeyClaim } from '../clients/gitIdentityRegistry.js';
-import { GitCommitVerifier, type GitVerificationResult, type GitVerificationConfig } from '../utils/gitVerification.js';
-import { 
-  importSSHKeyToServer, 
-  importGPGKeyToServer, 
-  isSSHKeyImported, 
+import { verifyCommitSignature, type GitVerificationResult, type GitVerificationConfig } from '../utils/gitVerification.js';
+import {
+  importSSHKeyToServer,
+  importGPGKeyToServer,
+  isSSHKeyImported,
   isGPGKeyImported,
   initializeServerGitEnvironment,
-  getServerGitCapabilities 
+  getServerGitCapabilities
 } from '../utils/keyUtils.js';
 
 export interface VerificationServiceConfig extends GitVerificationConfig {
@@ -24,7 +24,6 @@ export interface CachedVerificationResult {
 }
 
 export class GitVerificationService {
-  private verifier: GitCommitVerifier;
   private config: Required<VerificationServiceConfig>;
   private verificationCache: Map<string, CachedVerificationResult> = new Map();
   private keyImportCache: Map<string, boolean> = new Map();
@@ -42,8 +41,6 @@ export class GitVerificationService {
       enableCaching: config.enableCaching ?? true,
       cacheExpiryMs: config.cacheExpiryMs || 3600000, // 1 hour
     };
-
-    this.verifier = new GitCommitVerifier(this.config);
   }
 
   /**
@@ -144,10 +141,11 @@ export class GitVerificationService {
 
     try {
       // Perform verification
-      const result = await this.verifier.verifyCommitSignature(
+      const result = await verifyCommitSignature(
         repositoryUrl,
         commitHash,
-        registeredKeys
+        registeredKeys,
+        this.config
       );
 
       // Cache the result
