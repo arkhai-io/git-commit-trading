@@ -1,11 +1,10 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import type { Framework } from './types.js';
-import { defaultFrameworks } from './frameworks.js';
+import { defaultFrameworks, readCustomDockerfile } from './frameworks/index.js';
 
 export interface FrameworkDetectionResult {
   framework: Framework;
-  dockerfilePath: string;
   dockerfileContent: string;
 }
 
@@ -15,7 +14,7 @@ export interface FrameworkDetectionResult {
  *
  * @param testsPath - Path to the test repository
  * @param frameworks - Optional array of frameworks to check (defaults to defaultFrameworks)
- * @returns Detection result with matched framework and dockerfile info
+ * @returns Detection result with matched framework and dockerfile content
  */
 export async function detectFramework(
   testsPath: string,
@@ -33,21 +32,17 @@ export async function detectFramework(
     if (matches) {
       console.log(`[Framework Detection] Matched: ${framework.name}`);
 
-      const dockerfilePath = path.join(testsPath, 'arkhai_tests.dockerfile');
-
       // For custom dockerfile framework, read the existing file
       if (framework.name === 'custom') {
-        const content = await fs.readFile(dockerfilePath, 'utf-8');
+        const content = await readCustomDockerfile(testsPath);
         return {
           framework,
-          dockerfilePath,
           dockerfileContent: content,
         };
       }
 
       return {
         framework,
-        dockerfilePath,
         dockerfileContent: framework.dockerfile,
       };
     }

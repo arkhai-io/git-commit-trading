@@ -2,18 +2,9 @@ import { spawn, type SpawnOptions } from 'child_process';
 import { promises as fs } from 'fs';
 import path from 'path';
 import chalk from 'chalk';
-import type { Config } from './types.js';
 import { exec } from 'child_process';
 
 
-export async function loadConfig(configPath: string): Promise<Config> {
-  try {
-    const configContent = await fs.readFile(configPath, 'utf-8');
-    return JSON.parse(configContent);
-  } catch (error) {
-    throw new Error(`Failed to load config from ${configPath}: ${error}`);
-  }
-}
 
 export class Logger {
   static info(message: string) {

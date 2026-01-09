@@ -4,7 +4,7 @@ import { setupTest } from "./utils/setup";
 import { type TestContext } from "alkahest-ts/sdks/ts/tests/utils/setup";
 import { CommitAlgo, type CommitObligationData } from "../src/clients/commitObligation";
 import { KeyType, createGitKeyClaim } from "../src/clients/gitIdentityRegistry";
-import { GitTestExecution } from "../src/test-execution/";
+import { executeTests } from "../src/test-execution/";
 import { extractSSHKeyMaterial } from "../src/utils/gitUtils";
 import { verifyCommitSignature, generateSigningMessage, verifyGitKeyClaimSignature, generateSSHSignature } from "../src/utils/sshSignatureUtils";
 

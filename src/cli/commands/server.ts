@@ -1,7 +1,7 @@
 import chalk from 'chalk';
 import { parseAbiParameters } from 'viem';
 import { createClientFromEnv, requireEnvFile } from '../utils/envLoader.js';
-import { GitTestExecution } from '../../test-execution/index.js';
+import { executeTests } from '../../test-execution/index.js';
 import { verifyGitKeyClaimSignature } from '../../utils/sshSignatureUtils.js';
 import { getGitVerificationService } from '../../services/verificationService.js';
 
@@ -74,32 +74,7 @@ export async function serverCommand(options: ServerOptions) {
     console.log(chalk.gray(`  Test Timeout: ${timeout}ms`));
     console.log(chalk.gray(`  Cleanup: ${cleanup}`));
     console.log(chalk.gray(`  Git Verify Commit: ${useGitVerifyCommit ? 'Enabled' : 'Disabled'}`));
-    console.log(chalk.gray(`  Container Execution: Enabled (framework-based)`));
-
-    // Initialize container pool manager (no pre-warming, containers built on-demand)
-    console.log(chalk.cyan('Initializing container pool manager...'));
-    const containerPoolConfig = {
-      repositories: {
-        source: { url: '', commitHash: '' },
-        testcase: { url: '', commitHash: '' }
-      },
-      execution: {
-        timeout,
-        cleanupAfterExecution: cleanup,
-        isolatedEnvironment: true,
-        tempDirectory: './temp',
-        containerPool: {
-          enabled: true,
-          poolSize: 5, // Not used for pre-warming, just for tracking
-          containerPrefix: 'test-executor',
-          resetStrategy: 'cleanup' as const
-        }
-      }
-    };
-    
-    await GitTestExecution.initializeContainerPool(containerPoolConfig);
-    console.log(chalk.green(`✓ Container pool manager ready`));
-    console.log(chalk.gray(`   Containers will be built on-demand based on detected framework`));
+    console.log(chalk.gray(`  Docker Execution: Enabled (framework-based)`));
 
     // Check for .env file and load client
     requireEnvFile();
@@ -126,15 +101,15 @@ export async function serverCommand(options: ServerOptions) {
     // Initialize Git verification service if enabled
     let gitVerificationService = null;
     if (!options.skipKeyVerification && hasGitIdentityRegistry && useGitVerifyCommit) {
-      
+
       gitVerificationService = getGitVerificationService({
         timeoutMs: timeout,
         cleanupAfterVerification: cleanup,
       });
-      
+
       const initialized = await gitVerificationService.initialize();
       if (initialized) {
-        
+
         // Log service capabilities
         const stats = gitVerificationService.getStats();
         console.log(chalk.gray('  Git verification capabilities:'));
@@ -153,13 +128,13 @@ export async function serverCommand(options: ServerOptions) {
     const arbitrate = async (attestation: any) => {
       console.log(chalk.green('=============== Received new fulfillment to be arbitrated ==============='));
       console.log("Arbitrating attestation:", attestation);
-      
+
       // Decode the obligation data from the attestation
       const obligationData = client.extractObligationData(
         parseAbiParameters("(string commitHash,uint8 commitAlgo,string[] hosts,address sender)"),
         attestation
       );
-      
+
       // Get the escrow attestation and decode demand data
       const escrowAttestation = await client.getEscrowAttestation(attestation);
       const demandData = client.extractDemandData(
@@ -187,7 +162,7 @@ export async function serverCommand(options: ServerOptions) {
               console.log('   Fulfillment rejected: sender must register their Git SSH or PGP key first');
               return false;
             }
-            
+
             console.log(`✅ Found latest registered Git key for sender`);
             console.log(`   Key type: ${latestKeyClaim.keyType === 0 ? 'PGP' : latestKeyClaim.keyType === 1 ? 'SSH-Ed25519' : latestKeyClaim.keyType === 2 ? 'SSH-Secp256k1' : 'X509'}`);
           } catch (error) {
@@ -255,104 +230,46 @@ export async function serverCommand(options: ServerOptions) {
       // Step 2: Run the tests to verify the solution
       console.log('\n🧪 Running test execution...');
       try {
-        const testConfig = GitTestExecution.initConfig();
-
         // Extract demand data
         const demand = demandData[0];
 
-        // If test command doesn't include installation (no && or ;), auto-detect install command
-        // This allows users to submit just "poetry run pytest" and have "poetry install --with dev" run automatically
-        const hasInstallInCommand = /&&|;/.test(demand.testsCommand);
-        if (!hasInstallInCommand) {
-          console.log('🔍 Test command does not include install step, will auto-detect install command from testcase repo');
-        }
+        console.log('📁 Repository configuration:');
+        console.log(`   Test repo hosts: ${demand.hosts.join(', ')}`);
+        console.log(`   Test commit: ${demand.testsCommitHash}`);
+        console.log(`   Solution repo hosts: ${obligation.hosts.join(', ')}`);
+        console.log(`   Solution commit: ${obligation.commitHash}`);
 
-        // Set execution parameters
-        testConfig.execution.timeout = timeout;
-        testConfig.execution.cleanupAfterExecution = cleanup;
-        testConfig.repositories.testcase.commitHash = demand.testsCommitHash;
-        testConfig.repositories.testcase.testCommand = demand.testsCommand;
-        testConfig.repositories.source.commitHash = obligation.commitHash;
+        // Execute tests using the new simplified API
+        // Host fallback is handled internally by executeTests
+        const result = await executeTests({
+          tests: {
+            hosts: demand.hosts,
+            commit: demand.testsCommitHash
+          },
+          source: {
+            hosts: obligation.hosts,
+            commit: obligation.commitHash
+          },
+          timeout,
+          cleanup
+        });
 
-        // Try each host for testcase repo, then each host for source repo
-        let result: Awaited<ReturnType<typeof GitTestExecution.executeTests>> | null = null;
-        let workingTestcaseHost: string | null = null;
-        let workingSourceHost: string | null = null;
+        console.log(`\n🎯 Test execution result: ${result.success ? 'PASSED ✅' : 'FAILED ❌'}`);
+        console.log(`   Framework used: ${result.frameworkUsed}`);
+        console.log(`   Duration: ${result.duration}ms`);
 
-        // First: find a working testcase host
-        for (const testcaseHost of demand.hosts) {
-          testConfig.repositories.testcase.url = testcaseHost;
-          testConfig.repositories.source.url = obligation.hosts[0]; // Use first source host for initial attempt
-
-          console.log('📁 Trying testcase host:');
-          console.log(`   Test repo: ${testcaseHost}`);
-
-          result = await GitTestExecution.executeTests(testConfig, {
-            onProgress: (step) => console.log(`  → ${step}`)
-          });
-
-          if (result.testcaseCloned) {
-            workingTestcaseHost = testcaseHost;
-            if (result.sourceCloned) {
-              workingSourceHost = obligation.hosts[0];
-            }
-            break;
-          }
-          console.log(chalk.yellow(`  ⚠️ Failed to clone testcase from ${testcaseHost}. Trying next host...`));
-        }
-
-        if (!workingTestcaseHost) {
-          console.log(chalk.red(`❌ Failed to clone testcase repository from any host`));
-          return false;
-        }
-
-        // Second: if source clone failed, try other source hosts
-        if (!workingSourceHost && obligation.hosts.length > 1) {
-          for (let i = 1; i < obligation.hosts.length; i++) {
-            const sourceHost = obligation.hosts[i];
-            testConfig.repositories.source.url = sourceHost;
-
-            console.log('📁 Trying source host:');
-            console.log(`   Solution repo: ${sourceHost}`);
-
-            result = await GitTestExecution.executeTests(testConfig, {
-              onProgress: (step) => console.log(`  → ${step}`)
-            });
-
-            if (result.sourceCloned) {
-              workingSourceHost = sourceHost;
-              break;
-            }
-            console.log(chalk.yellow(`  ⚠️ Failed to clone source from ${sourceHost}. Trying next host...`));
-          }
-        }
-
-        if (!result || !workingSourceHost) {
-          console.log(chalk.red(`❌ Failed to clone source repository from any host`));
-          return false;
-        }
-
-        console.log('📁 Final repository configuration:');
-        console.log(`   Test repo: ${workingTestcaseHost}`);
-        console.log(`   Test commit: ${testConfig.repositories.testcase.commitHash}`);
-        console.log(`   Solution repo: ${workingSourceHost}`);
-        console.log(`   Solution commit: ${testConfig.repositories.source.commitHash}`);
-
-        console.log(`\n🎯 Test execution result: ${result.testResult.success ? 'PASSED ✅' : 'FAILED ❌'}`);
-        console.log(`   Duration: ${result.testResult.duration}ms`);
-        
-        if (!result.testResult.success) {
+        if (!result.success) {
           console.log('\n❌ Test Failure Details:');
-          
-          if (result.testResult.error) {
-            console.log('   Error:', result.testResult.error);
+
+          if (result.error) {
+            console.log('   Error:', result.error);
           }
-          
-          if (result.testResult.output && result.testResult.output.trim()) {
+
+          if (result.output && result.output.trim()) {
             console.log('\n   Test Output:');
             console.log('   ' + '─'.repeat(70));
             // Print last 100 lines of output to avoid overwhelming logs
-            const outputLines = result.testResult.output.split('\n');
+            const outputLines = result.output.split('\n');
             const linesToShow = outputLines.slice(-100);
             if (outputLines.length > 100) {
               console.log(`   ... (showing last 100 of ${outputLines.length} lines)`);
@@ -362,21 +279,9 @@ export async function serverCommand(options: ServerOptions) {
           } else {
             console.log('   (No output captured from test execution)');
           }
-          
-          // Log execution status for debugging
-          console.log('\n   Execution Status:');
-          console.log(`   - Source cloned: ${result.sourceCloned ? '✓' : '✗'}`);
-          console.log(`   - Testcase cloned: ${result.testcaseCloned ? '✓' : '✗'}`);
-          console.log(`   - Dependencies installed: ${result.dependenciesInstalled ? '✓' : '✗'}`);
-          console.log(`   - Tests executed: ${result.testsExecuted ? '✓' : '✗'}`);
-          
-          // If working directory still exists, suggest manual inspection
-          if (result.workingDirectory) {
-            console.log(`\n   💡 For debugging, inspect: ${result.workingDirectory}`);
-          }
         }
 
-        return result.testResult.success;
+        return result.success;
       } catch (error) {
         console.error('❌ Error during test execution:', error);
         return false;
@@ -409,15 +314,15 @@ export async function serverCommand(options: ServerOptions) {
 
       // Setup graceful shutdown before starting
       let unwatchFn: (() => void) | null = null;
-      
+
       process.on('SIGINT', async () => {
         console.log(chalk.yellow('\nShutting down server...'));
         if (unwatchFn) {
           unwatchFn();
         }
-        
+
         console.log(chalk.green('✓ Server shutdown complete'));
-        
+
         process.exit(0);
       });
 

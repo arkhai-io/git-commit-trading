@@ -6,7 +6,7 @@ import { setupTest } from "./utils/setup";
 import { type TestContext } from "alkahest-ts/sdks/ts/tests/utils/setup";
 import { CommitAlgo, type CommitObligationData } from "../src/clients/commitObligation";
 import { KeyType, createGitKeyClaim } from "../src/clients/gitIdentityRegistry";
-import { GitTestExecution } from "../src/test-execution/";
+import { executeTests } from "../src/test-execution/";
 import { extractSSHKeyMaterial } from "../src/utils/gitUtils";
 import { GitVerificationService } from "../src/services/verificationService";
 import { 
@@ -621,36 +621,27 @@ async function performCompleteArbitration(
 
 async function executeRealTests(obligation: any, demand: any, config: IntegrationConfig) {
   try {
-    const testConfig = GitTestExecution.initConfig();
+    console.log(chalk.gray(`      📁 Test repo: ${demand[0].hosts[0]}`));
+    console.log(chalk.gray(`      📁 Test commit: ${demand[0].testsCommitHash}`));
+    console.log(chalk.gray(`      📁 Solution repo: ${obligation[0].hosts[0]}`));
+    console.log(chalk.gray(`      📁 Solution commit: ${obligation[0].commitHash}`));
 
-    // Configure with real repositories and commits
-    testConfig.repositories.testcase.url = demand[0].hosts[0];
-    testConfig.repositories.testcase.commitHash = demand[0].testsCommitHash;
-    
-    testConfig.repositories.source.url = obligation[0].hosts[0];
-    testConfig.repositories.source.commitHash = obligation[0].commitHash;
-
-    testConfig.execution.timeout = config.server.timeout;
-    testConfig.execution.cleanupAfterExecution = config.test.cleanupAfterTest;
-    // Note: Unlike the original integration test, the server does NOT disable signature verification
-    // The server does verification separately before test execution, but allows test execution to also verify if needed
-
-    console.log(chalk.gray(`      📁 Test repo: ${testConfig.repositories.testcase.url}`));
-    console.log(chalk.gray(`      📁 Test commit: ${testConfig.repositories.testcase.commitHash}`));
-    console.log(chalk.gray(`      📁 Solution repo: ${testConfig.repositories.source.url}`));
-    console.log(chalk.gray(`      📁 Solution commit: ${testConfig.repositories.source.commitHash}`));
-
-    const result = await GitTestExecution.executeTests(testConfig, {
-      onProgress: (step) => {
-        if (config.test.enableDetailedLogs) {
-          console.log(chalk.gray(`      → ${step}`));
-        }
-      }
+    const result = await executeTests({
+      tests: {
+        hosts: demand[0].hosts,
+        commit: demand[0].testsCommitHash
+      },
+      source: {
+        hosts: obligation[0].hosts,
+        commit: obligation[0].commitHash
+      },
+      timeout: config.server.timeout,
+      cleanup: config.test.cleanupAfterTest
     });
 
     return {
-      success: result.testResult.success,
-      error: result.testResult.error,
+      success: result.success,
+      error: result.error,
       details: result
     };
 

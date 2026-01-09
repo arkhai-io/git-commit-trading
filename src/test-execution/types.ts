@@ -40,63 +40,44 @@ export interface Framework {
   parseTests: (output: string, exitCode: number) => boolean;
 }
 
-
-export interface RepositoryConfig {
-  url: string; // Git repository URL (e.g. https://github.com/user/repo.git)
-  branch?: string; // Optional, only used for fallback scenarios
-  commitHash: string; // Required for git checkout to specific commit
-  commitAlgo?: 'sha256' | 'md5' | 'sha1'; // Algorithm used for commit hash format validation
-  language?: ProjectLanguage; // Explicit language specification, if not provided, will be auto-detected
-  buildCommand?: string; // Full command like "npm run build", "cargo build", "python -m build"
-  testCommand?: string; // Full command like "npm run test", "cargo test", "pytest"
-  testDirectory?: string;
-  installCommand?: string; // Full command like "npm install", "cargo build", "pip install -r requirements.txt"
-  verifySignature?: boolean; // Whether to verify commit signature
-  allowedSigners?: string[]; // Allowed signer identities (email addresses)
+/**
+ * Reference to a git repository with multiple host fallbacks.
+ */
+export interface RepoRef {
+  /** Git URLs to try in order (first success wins) */
+  hosts: string[];
+  /** Commit hash to checkout */
+  commit: string;
 }
 
-export interface ContainerPoolConfig {
-  enabled: boolean; // Whether to use container pool
-  poolSize: number; // Number of pre-warmed containers (not used for framework-based)
-  imageName?: string; // Docker image name (optional, auto-generated for framework-based)
-  containerPrefix: string; // Prefix for container names
-  resetStrategy: 'restart' | 'cleanup'; // How to reset containers
+/**
+ * Options for executing tests.
+ */
+export interface ExecuteTestsOptions {
+  /** Test repository reference */
+  tests: RepoRef;
+  /** Source/solution repository reference */
+  source: RepoRef;
+  /** Frameworks to try for detection (defaults to all built-in frameworks) */
+  frameworks?: Framework[];
+  /** Docker run timeout in milliseconds (default: 300000) */
+  timeout?: number;
+  /** Remove cloned repos and containers after execution (default: true) */
+  cleanup?: boolean;
 }
 
-export interface ExecutionConfig {
-  timeout: number;
-  cleanupAfterExecution: boolean;
-  isolatedEnvironment: boolean;
-  tempDirectory: string;
-  verifyCommitSignatures?: boolean; // Enable signature verification
-  contractAddress?: string; // GitIdentityRegistry contract address
-  containerPool?: ContainerPoolConfig; // Container pool configuration
-}
-
-export interface Config {
-  repositories: {
-    source: RepositoryConfig;      // Bob's solution repository
-    testcase: RepositoryConfig;    // Alice's test repository
-  };
-  execution: ExecutionConfig;
-}
-
-export interface TestResult {
+/**
+ * Result of test execution.
+ */
+export interface ExecuteTestsResult {
+  /** Whether all tests passed */
   success: boolean;
+  /** Combined stdout/stderr output from test execution */
   output: string;
+  /** Error message if tests failed */
   error?: string;
+  /** Name of the framework that was used */
+  frameworkUsed: string;
+  /** Total execution duration in milliseconds */
   duration: number;
-  timestamp: Date;
-}
-
-export interface ExecutionResult {
-  sourceCloned: boolean;
-  testcaseCloned: boolean;
-  sourceSignatureVerified?: boolean;
-  testcaseSignatureVerified?: boolean;
-  dependenciesInstalled: boolean;
-  testsExecuted: boolean;
-  testResult: TestResult;
-  cleanup: boolean;
-  workingDirectory?: string;
 }

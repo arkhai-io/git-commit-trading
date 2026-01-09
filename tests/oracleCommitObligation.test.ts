@@ -5,7 +5,7 @@ import { setupTest } from "./utils/setup";
 import { type TestContext } from "alkahest-ts/sdks/ts/tests/utils/setup";
 import { CommitAlgo, type CommitObligationData } from "../src/clients/commitObligation";
 import { KeyType } from "../src/clients/gitIdentityRegistry";
-import { GitTestExecution } from "../src/test-execution/";
+import { executeTests } from "../src/test-execution/";
 import { extractSSHKeyMaterial } from "../src/utils/gitUtils";
 import { verifyCommitSignature, generateSigningMessage, verifyGitKeyClaimSignature, generateSSHSignature, verifySSHSignature, generatePGPSignature, generatePGPKeyPair } from "../src/utils/sshSignatureUtils";
 import { extractPGPKeyMaterial } from "../src/utils/keyUtils";
@@ -114,29 +114,25 @@ describe("Oracle CommitObligation Tests", () => {
                 arbitrate: async (obligation: any, demand: any) => {
                     console.log("Arbitrating Python obligation:", obligation, "against demand:", demand);
                     try {
-                        const config = GitTestExecution.initConfig();
-
-                        // Configure Python test repository (Alice's tests)
-                        config.repositories.testcase.url = demand[0].hosts[0];
-                        config.repositories.testcase.commitHash = demand[0].testsCommitHash;
-
-                        // Configure Python solution repository (Bob's solution)
-                        config.repositories.source.url = obligation[0].hosts[0];
-                        config.repositories.source.commitHash = obligation[0].commitHash;
-
-                        config.execution.timeout = 60000; // 60 seconds for Python setup
-                        config.execution.cleanupAfterExecution = true;
-
                         console.log("Starting Python test execution...");
-                        const res = await GitTestExecution.executeTests(config, {
-                            onProgress: (step) => console.log(`  → ${step}`)
+                        const res = await executeTests({
+                            tests: {
+                                hosts: demand[0].hosts,
+                                commit: demand[0].testsCommitHash
+                            },
+                            source: {
+                                hosts: obligation[0].hosts,
+                                commit: obligation[0].commitHash
+                            },
+                            timeout: 60000, // 60 seconds for Python setup
+                            cleanup: true
                         });
 
-                        console.log(`Python execution result: ${res.testResult.success ? 'PASSED' : 'FAILED'}`);
-                        if (!res.testResult.success && res.testResult.error) {
-                            console.log("Error details:", res.testResult.error);
+                        console.log(`Python execution result: ${res.success ? 'PASSED' : 'FAILED'}`);
+                        if (!res.success && res.error) {
+                            console.log("Error details:", res.error);
                         }
-                        return res.testResult.success;
+                        return res.success;
                     } catch (error) {
                         console.error("Error during Python test execution:", error);
                         return false;
@@ -221,31 +217,25 @@ describe("Oracle CommitObligation Tests", () => {
                 arbitrate: async (obligation: any, demand: any) => {
                     console.log("Arbitrating Rust obligation:", obligation, "against demand:", demand);
                     try {
-                        const config = GitTestExecution.initConfig();
-
-                        // Configure Rust test repository (Alice's tests)
-                        config.repositories.testcase.url = demand[0].hosts[0];
-                        config.repositories.testcase.commitHash = demand[0].testsCommitHash;
-                        // config.repositories.testcase.language = "rust";
-
-                        // Configure Rust solution repository (Bob's solution)
-                        config.repositories.source.url = obligation[0].hosts[0];
-                        config.repositories.source.commitHash = obligation[0].commitHash;
-                        // config.repositories.source.language = "rust";
-
-                        config.execution.timeout = 45000; // 45 seconds for Rust compilation
-                        config.execution.cleanupAfterExecution = true;
-
                         console.log("Starting Rust test execution...");
-                        const res = await GitTestExecution.executeTests(config, {
-                            onProgress: (step) => console.log(`  → ${step}`)
+                        const res = await executeTests({
+                            tests: {
+                                hosts: demand[0].hosts,
+                                commit: demand[0].testsCommitHash
+                            },
+                            source: {
+                                hosts: obligation[0].hosts,
+                                commit: obligation[0].commitHash
+                            },
+                            timeout: 45000, // 45 seconds for Rust compilation
+                            cleanup: true
                         });
 
-                        console.log(`Rust execution result: ${res.testResult.success ? 'PASSED' : 'FAILED'}`);
-                        if (!res.testResult.success && res.testResult.error) {
-                            console.log("Error details:", res.testResult.error);
+                        console.log(`Rust execution result: ${res.success ? 'PASSED' : 'FAILED'}`);
+                        if (!res.success && res.error) {
+                            console.log("Error details:", res.error);
                         }
-                        return res.testResult.success;
+                        return res.success;
                     } catch (error) {
                         console.error("Error during Rust test execution:", error);
                         return false;
@@ -390,62 +380,36 @@ describe("Oracle CommitObligation Tests", () => {
                             return false;
                         }
 
-                        // Configure test execution with INTEGRATED signature verification
-                        const config = GitTestExecution.initConfig();
-                        
-                        // Configure testcase repository (Alice's tests)
-                        config.repositories.testcase.url = demand[0].hosts[0];
-                        config.repositories.testcase.commitHash = demand[0].testsCommitHash;
-                        config.repositories.testcase.verifySignature = false; // Optional for testcase
-                        
-                        // Configure source repository (Bob's solution) - SIGNATURE VERIFICATION REQUIRED
-                        config.repositories.source.url = obligation[0].hosts[0];
-                        config.repositories.source.commitHash = obligation[0].commitHash;
-                        config.repositories.source.verifySignature = true; // Required for solution
-                        config.repositories.source.allowedSigners = [senderAddress]; // Only allow registered sender
-                        
-                        // Enable integrated signature verification
-                        config.execution.verifyCommitSignatures = true;
-                        config.execution.contractAddress = gitIdentityRegistryAddress;
-                        config.execution.timeout = 45000;
-                        config.execution.cleanupAfterExecution = true;
-
                         console.log("\n🚀 Starting Test Execution with Integrated Signature Verification");
-                        console.log("🔐 Signature verification: ENABLED");
-                        console.log("📦 Contract address:", config.execution.contractAddress);
-                        console.log("🔒 Fallback to GitHub: DISABLED");
-                        
-                        // Execute tests with integrated signature verification
-                        const res = await GitTestExecution.executeTests(config, {
-                            onProgress: (step) => console.log(`  📝 ${step}`)
+                        console.log("🔐 Signature verification: Done separately before test execution");
+                        console.log("📦 Contract address:", gitIdentityRegistryAddress);
+
+                        // Execute tests using the new simplified API
+                        const res = await executeTests({
+                            tests: {
+                                hosts: demand[0].hosts,
+                                commit: demand[0].testsCommitHash
+                            },
+                            source: {
+                                hosts: obligation[0].hosts,
+                                commit: obligation[0].commitHash
+                            },
+                            timeout: 45000,
+                            cleanup: true
                         });
 
                         // Log detailed results
                         console.log("\n📊 Execution Results:");
-                        console.log(`   🔄 Source cloned: ${res.sourceCloned}`);
-                        console.log(`   🔄 Testcase cloned: ${res.testcaseCloned}`);
-                        console.log(`   🔐 Source signature verified: ${res.sourceSignatureVerified}`);
-                        console.log(`   🔐 Testcase signature verified: ${res.testcaseSignatureVerified}`);
-                        console.log(`   📦 Dependencies installed: ${res.dependenciesInstalled}`);
-                        console.log(`   🧪 Tests executed: ${res.testsExecuted}`);
-                        console.log(`   ✅ Test result: ${res.testResult.success ? 'PASSED' : 'FAILED'}`);
-                        
-                        if (!res.testResult.success && res.testResult.error) {
-                            console.log(`   ❌ Error: ${res.testResult.error}`);
+                        console.log(`   🔧 Framework used: ${res.frameworkUsed}`);
+                        console.log(`   ⏱️ Duration: ${res.duration}ms`);
+                        console.log(`   ✅ Test result: ${res.success ? 'PASSED' : 'FAILED'}`);
+
+                        if (!res.success && res.error) {
+                            console.log(`   ❌ Error: ${res.error}`);
                         }
 
-                        // Additional verification that signature was actually checked
-                        if (config.execution.verifyCommitSignatures) {
-                            if (res.sourceSignatureVerified === false) {
-                                console.log("❌ SECURITY: Source commit signature verification FAILED");
-                                return false;
-                            } else if (res.sourceSignatureVerified === true) {
-                                console.log("✅ SECURITY: Source commit signature verification PASSED");
-                            }
-                        }
-
-                        console.log(`\n🎯 Final Decision: ${res.testResult.success ? 'APPROVE' : 'REJECT'}`);
-                        return res.testResult.success;
+                        console.log(`\n🎯 Final Decision: ${res.success ? 'APPROVE' : 'REJECT'}`);
+                        return res.success;
                         
                     } catch (error) {
                         console.error("❌ Error during integrated verification and test execution:", error);
@@ -645,31 +609,22 @@ describe("Oracle CommitObligation Tests", () => {
                     //After Bob writes a commit that makes the test suite pass,
                     //Clone the repository, run the tests, and check if they pass
                     try {
-                        // TODO: Change the hardcoded of buildCommand & testCommand to follow the package.json ( if the project is node base)
-                        const config = GitTestExecution.initConfig();
-                        // rewrite config with data from obligation and demand
-                        config.repositories.testcase.url = demand[0].hosts[0];
-                        config.repositories.testcase.commitHash = demand[0].testsCommitHash;
-                        config.repositories.testcase.buildCommand = "npm run build";
-                        config.repositories.testcase.testCommand = demand[0].testsCommand;
-                        config.repositories.testcase.testCommand = "bun test";
+                        console.log("Starting test execution...");
 
-                        config.repositories.source.url = obligation[0].hosts[0];
-                        config.repositories.source.commitHash = obligation[0].commitHash;
-                        config.repositories.source.testCommand = "npm run test";
-                        config.repositories.source.installCommand = "npm install";
-
-                        console.log("Starting test execution with config:", config);
-
-                        // Set a shorter timeout for the execution to prevent hanging
-                        config.execution.timeout = 45000; // 45 seconds
-                        config.execution.cleanupAfterExecution = true;
-
-                        const res = await GitTestExecution.executeTests(config, {
-                            onProgress: (step) => console.log(`  → ${step}`)
+                        const res = await executeTests({
+                            tests: {
+                                hosts: demand[0].hosts,
+                                commit: demand[0].testsCommitHash
+                            },
+                            source: {
+                                hosts: obligation[0].hosts,
+                                commit: obligation[0].commitHash
+                            },
+                            timeout: 45000, // 45 seconds
+                            cleanup: true
                         });
-                        console.log("Execution result: ", res.testResult.success);
-                        return res.testResult.success;
+                        console.log("Execution result: ", res.success);
+                        return res.success;
                     } catch (error) {
                         console.error("Error during test execution:", error);
                         return false; // Return false instead of throwing to allow test to continue
@@ -833,70 +788,41 @@ describe("Oracle CommitObligation Tests", () => {
                             return false;
                         }
 
-                        // Configure test execution with INTEGRATED PGP signature verification
-                        const config = GitTestExecution.initConfig();
-                        
-                        // Configure testcase repository (Alice's tests)
-                        config.repositories.testcase.url = demand[0].hosts[0];
-                        config.repositories.testcase.commitHash = demand[0].testsCommitHash;
-                        config.repositories.testcase.verifySignature = false; // Optional for testcase
-                        
-                        // Configure source repository (Bob's solution) - PGP SIGNATURE VERIFICATION REQUIRED
-                        config.repositories.source.url = obligation[0].hosts[0];
-                        config.repositories.source.commitHash = obligation[0].commitHash;
-                        config.repositories.source.verifySignature = true; // Required for solution
-                        config.repositories.source.allowedSigners = [senderAddress]; // Only allow registered sender
-                        
-                        // Enable integrated PGP signature verification
-                        config.execution.verifyCommitSignatures = true;
-                        config.execution.contractAddress = gitIdentityRegistryAddress;
-                        config.execution.timeout = 45000;
-                        config.execution.cleanupAfterExecution = true;
-
                         console.log("\n🚀 Starting Test Execution with PGP Key Registration Test");
-                        console.log("🔐 PGP signature verification: ENABLED (testing real signature verification)");
-                        console.log("📦 Contract address:", config.execution.contractAddress);
+                        console.log("🔐 PGP signature verification: Done separately before test execution");
+                        console.log("📦 Contract address:", gitIdentityRegistryAddress);
                         console.log("📝 Real PGP key registered - commit signature will be verified against it");
-                        
-                        // Execute tests with integrated PGP signature verification
-                        const res = await GitTestExecution.executeTests(config, {
-                            onProgress: (step) => console.log(`  📝 ${step}`)
+
+                        // Execute tests using the new simplified API
+                        const res = await executeTests({
+                            tests: {
+                                hosts: demand[0].hosts,
+                                commit: demand[0].testsCommitHash
+                            },
+                            source: {
+                                hosts: obligation[0].hosts,
+                                commit: obligation[0].commitHash
+                            },
+                            timeout: 45000,
+                            cleanup: true
                         });
 
                         // Log detailed results
                         console.log("\n📊 PGP Verification Execution Results:");
-                        console.log(`   🔄 Source cloned: ${res.sourceCloned}`);
-                        console.log(`   🔄 Testcase cloned: ${res.testcaseCloned}`);
-                        console.log(`   🔐 Source PGP signature verified: ${res.sourceSignatureVerified}`);
-                        console.log(`   🔐 Testcase signature verified: ${res.testcaseSignatureVerified}`);
-                        console.log(`   📦 Dependencies installed: ${res.dependenciesInstalled}`);
-                        console.log(`   🧪 Tests executed: ${res.testsExecuted}`);
-                        console.log(`   ✅ Test result: ${res.testResult.success ? 'PASSED' : 'FAILED'}`);
-                        
-                        if (!res.testResult.success && res.testResult.error) {
-                            console.log(`   ❌ Error: ${res.testResult.error}`);
-                        }
+                        console.log(`   🔧 Framework used: ${res.frameworkUsed}`);
+                        console.log(`   ⏱️ Duration: ${res.duration}ms`);
+                        console.log(`   ✅ Test result: ${res.success ? 'PASSED' : 'FAILED'}`);
 
-                        // PGP-specific verification logging
-                        if (config.execution.verifyCommitSignatures) {
-                            if (res.sourceSignatureVerified === false) {
-                                console.log("❌ SECURITY: PGP commit signature verification FAILED");
-                                console.log("   This commit was not signed with the registered PGP key");
-                                return false;
-                            } else if (res.sourceSignatureVerified === true) {
-                                console.log("✅ SECURITY: PGP commit signature verification PASSED");
-                                console.log("   This commit was signed with the registered PGP key");
-                            } else {
-                                console.log("⚠️  PGP signature verification was not performed");
-                            }
+                        if (!res.success && res.error) {
+                            console.log(`   ❌ Error: ${res.error}`);
                         }
 
                         console.log("✅ VERIFICATION: PGP key registration and signature verification flow tested");
                         console.log("✅ VERIFICATION: PGP key successfully retrieved from contract");
                         console.log("✅ VERIFICATION: Commit signature verification demonstrates real cryptographic security");
 
-                        console.log(`\n🎯 Final PGP Verification Decision: ${res.testResult.success ? 'APPROVE' : 'REJECT'}`);
-                        return res.testResult.success;
+                        console.log(`\n🎯 Final PGP Verification Decision: ${res.success ? 'APPROVE' : 'REJECT'}`);
+                        return res.success;
                         
                     } catch (error) {
                         console.error("❌ Error during integrated PGP verification and test execution:", error);

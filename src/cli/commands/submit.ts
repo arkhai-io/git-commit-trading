@@ -38,36 +38,29 @@ export async function submitCommand(options: SubmitOptions) {
     try {
       await cloneGitRepository(options.testsRepo, testRepoPath, options.testsCommit);
       
-      let dockerfilePath: string;
       let isCustom = false;
       
       // Priority 1: Check if arkhai_tests.dockerfile exists in the test repo
       const repoDockerfilePath = path.join(testRepoPath, 'arkhai_tests.dockerfile');
+      let dockerfileContent: string;
+      let frameworkName: string;
+
       try {
         await fs.access(repoDockerfilePath);
-        dockerfilePath = repoDockerfilePath;
         isCustom = true;
+        dockerfileContent = await fs.readFile(repoDockerfilePath, 'utf-8');
+        frameworkName = 'custom';
         console.log(chalk.cyan('Found arkhai_tests.dockerfile in repository'));
       } catch (error) {
         // Priority 2: Detect framework and use default dockerfile content
         console.log(chalk.cyan('No custom dockerfile found, detecting project framework...'));
         const frameworkResult = await detectFramework(testRepoPath);
-        dockerfilePath = frameworkResult.dockerfilePath;
-        console.log(chalk.green(`\nYour repo was detected as a ${chalk.bold(frameworkResult.framework)} project.`));
+        dockerfileContent = frameworkResult.dockerfileContent;
+        frameworkName = frameworkResult.framework.name;
+        console.log(chalk.green(`\nYour repo was detected as a ${chalk.bold(frameworkName)} project.`));
       }
-      
+
       console.log(chalk.white(`\nTests will be run via:\n`));
-      
-      // Read and display dockerfile
-      let dockerfileContent: string;
-      if (isCustom) {
-        // Read custom dockerfile from file
-        dockerfileContent = await fs.readFile(dockerfilePath, 'utf-8');
-      } else {
-        // Use hardcoded default dockerfile content
-        const frameworkResult = await detectFramework(testRepoPath);
-        dockerfileContent = frameworkResult.dockerfileContent || '';
-      }
       console.log(chalk.gray('---'));
       console.log(chalk.cyan(dockerfileContent));
       console.log(chalk.gray('---\n'));
