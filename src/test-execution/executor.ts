@@ -4,7 +4,8 @@ import { promises as fs } from "fs";
 import path from "path";
 import { promisify } from "util";
 import { verifyRepo } from "../utils/gitVerification.js";
-import { defaultFrameworks, readCustomDockerfile } from "./frameworks/index.js";
+import { detectFramework } from "./frameworkDetection.js";
+import { defaultFrameworks } from "./frameworks/index.js";
 import type {
 	Framework,
 	RunTestsOptions,
@@ -99,24 +100,12 @@ export async function runTests(
 	try {
 		// Detect framework from test repo
 		console.log(chalk.cyan("Detecting framework..."));
-		const sortedFrameworks = [...frameworks].sort(
-			(a, b) => a.detectionPriority - b.detectionPriority,
+		const { framework, dockerfileContent } = await detectFramework(
+			testsDir,
+			frameworks,
 		);
-
-		for (const framework of sortedFrameworks) {
-			const matches = await framework.detect(testsDir);
-			if (matches) {
-				detectedFramework = framework;
-				console.log(chalk.green(`✅ Detected framework: ${framework.name}`));
-				break;
-			}
-		}
-
-		if (!detectedFramework) {
-			throw new Error(
-				"Could not detect framework. Please add a lock file or arkhai_tests.dockerfile to the test repository.",
-			);
-		}
+		detectedFramework = framework;
+		console.log(chalk.green(`✅ Detected framework: ${framework.name}`));
 
 		// Create temp work directory for Docker build
 		const workDir = `/tmp/git-test-${Date.now()}`;
@@ -125,14 +114,6 @@ export async function runTests(
 		// Copy repos to work directory (Docker needs them in build context)
 		await execAsync(`cp -r "${testsDir}" "${workDir}/test-repo"`);
 		await execAsync(`cp -r "${sourceDir}" "${workDir}/source-repo"`);
-
-		// Get dockerfile content
-		let dockerfileContent: string;
-		if (detectedFramework.name === "custom") {
-			dockerfileContent = await readCustomDockerfile(testsDir);
-		} else {
-			dockerfileContent = detectedFramework.dockerfile;
-		}
 
 		const dockerfilePath = path.join(workDir, "Dockerfile");
 		await fs.writeFile(dockerfilePath, dockerfileContent);
