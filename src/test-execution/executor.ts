@@ -3,46 +3,86 @@ import { promisify } from 'util';
 import { promises as fs } from 'fs';
 import path from 'path';
 import chalk from 'chalk';
-import type { ExecuteTestsOptions, ExecuteTestsResult, Framework, RepoRef } from './types.js';
-import { cloneGitRepository, removeDirectory, ensureDirectory, Logger } from './utils.js';
+import type { Framework, RunTestsOptions, TestResult, VerifyAndRunTestsOptions } from './types.js';
+import { removeDirectory, ensureDirectory } from './utils.js';
 import { defaultFrameworks, readCustomDockerfile } from './frameworks/index.js';
+import { verifyRepo } from '../utils/gitVerification.js';
 
 const execAsync = promisify(exec);
 
+// ============================================================================
+// Primitive: cloneRepo
+// ============================================================================
+
 /**
- * Execute tests by cloning repositories, detecting framework, and running in Docker.
+ * Clone a git repository, trying multiple hosts in order.
  *
- * @param options - Test execution options
+ * @param hosts - Git URLs to try in order (first success wins)
+ * @param commit - Commit hash to checkout
+ * @param targetDir - Directory to clone into (generates temp dir if not provided)
+ * @returns Path to the cloned repository
+ */
+export async function cloneRepo(
+  hosts: string[],
+  commit: string,
+  targetDir?: string
+): Promise<string> {
+  const dir = targetDir || `/tmp/git-clone-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  let lastError: Error | null = null;
+
+  for (let i = 0; i < hosts.length; i++) {
+    const host = hosts[i]!;
+    try {
+      console.log(chalk.gray(`  Trying host ${i + 1}/${hosts.length}: ${host}`));
+      await cloneGitRepository(host, dir, commit);
+      console.log(chalk.green(`  ✅ Cloned from ${host}`));
+      return dir;
+    } catch (e) {
+      lastError = e as Error;
+      console.log(chalk.yellow(`  ⚠️ Failed: ${lastError.message}`));
+      await removeDirectory(dir);
+    }
+  }
+
+  throw new Error(`Failed to clone from all ${hosts.length} hosts: ${lastError?.message}`);
+}
+
+async function cloneGitRepository(url: string, targetDir: string, commit: string): Promise<void> {
+  await ensureDirectory(path.dirname(targetDir));
+
+  // Clone with depth for efficiency, but enough to include the commit
+  const cloneCmd = `git clone --depth 50 "${url}" "${targetDir}"`;
+  await execAsync(cloneCmd, { timeout: 120000, maxBuffer: 50 * 1024 * 1024 });
+
+  // Checkout specific commit
+  const checkoutCmd = `git checkout ${commit}`;
+  await execAsync(checkoutCmd, { cwd: targetDir, timeout: 30000 });
+}
+
+// ============================================================================
+// Primitive: runTests
+// ============================================================================
+
+/**
+ * Run tests given already-cloned test and source directories.
+ * Detects framework, builds Docker container, and executes tests.
+ *
+ * @param testsDir - Path to cloned test repository
+ * @param sourceDir - Path to cloned source repository
+ * @param options - Optional configuration
  * @returns Test execution result
  */
-export async function executeTests(options: ExecuteTestsOptions): Promise<ExecuteTestsResult> {
-  const {
-    tests,
-    source,
-    frameworks = defaultFrameworks,
-    timeout = 300000,
-    cleanup = true
-  } = options;
-
-  const workDir = `/tmp/git-test-${Date.now()}`;
-  const testsDir = path.join(workDir, 'test-repo');
-  const sourceDir = path.join(workDir, 'source-repo');
+export async function runTests(
+  testsDir: string,
+  sourceDir: string,
+  options: RunTestsOptions = {}
+): Promise<TestResult> {
+  const { frameworks = defaultFrameworks, timeout = 300000 } = options;
   const startTime = Date.now();
-
   let detectedFramework: Framework | null = null;
 
   try {
-    await ensureDirectory(workDir);
-
-    // Step 1: Clone test repo (try hosts in order)
-    console.log(chalk.cyan('Cloning test repo...'));
-    await cloneWithFallback(tests, testsDir, 'test');
-
-    // Step 2: Clone source repo (try hosts in order)
-    console.log(chalk.cyan('Cloning source repo...'));
-    await cloneWithFallback(source, sourceDir, 'source');
-
-    // Step 3: Detect framework from test repo
+    // Detect framework from test repo
     console.log(chalk.cyan('Detecting framework...'));
     const sortedFrameworks = [...frameworks].sort(
       (a, b) => a.detectionPriority - b.detectionPriority
@@ -63,10 +103,15 @@ export async function executeTests(options: ExecuteTestsOptions): Promise<Execut
       );
     }
 
-    // Step 4: Write dockerfile and build/run container
-    console.log(chalk.cyan('Building and running Docker container...'));
+    // Create temp work directory for Docker build
+    const workDir = `/tmp/git-test-${Date.now()}`;
+    await ensureDirectory(workDir);
 
-    // Get dockerfile content (special handling for custom dockerfile)
+    // Copy repos to work directory (Docker needs them in build context)
+    await execAsync(`cp -r "${testsDir}" "${workDir}/test-repo"`);
+    await execAsync(`cp -r "${sourceDir}" "${workDir}/source-repo"`);
+
+    // Get dockerfile content
     let dockerfileContent: string;
     if (detectedFramework.name === 'custom') {
       dockerfileContent = await readCustomDockerfile(testsDir);
@@ -77,10 +122,15 @@ export async function executeTests(options: ExecuteTestsOptions): Promise<Execut
     const dockerfilePath = path.join(workDir, 'Dockerfile');
     await fs.writeFile(dockerfilePath, dockerfileContent);
 
+    // Build and run
+    console.log(chalk.cyan('Building and running Docker container...'));
     const { stdout, stderr, exitCode } = await buildAndRunDocker(workDir, timeout);
     const duration = Date.now() - startTime;
 
-    // Step 5: Parse test output
+    // Cleanup work directory
+    await removeDirectory(workDir);
+
+    // Parse test output
     const combinedOutput = stdout + '\n' + stderr;
     const success = detectedFramework.parseTests(combinedOutput, exitCode);
 
@@ -109,44 +159,9 @@ export async function executeTests(options: ExecuteTestsOptions): Promise<Execut
       frameworkUsed: detectedFramework?.name || 'unknown',
       duration,
     };
-  } finally {
-    // Step 6: Cleanup
-    if (cleanup) {
-      console.log(chalk.cyan('Cleaning up...'));
-      await removeDirectory(workDir);
-    } else {
-      console.log(chalk.gray(`Working directory preserved at: ${workDir}`));
-    }
   }
 }
 
-/**
- * Clone a repository, trying each host in order until one succeeds.
- */
-async function cloneWithFallback(repo: RepoRef, targetDir: string, label: string): Promise<void> {
-  let lastError: Error | null = null;
-
-  for (let i = 0; i < repo.hosts.length; i++) {
-    const host = repo.hosts[i]!;
-    try {
-      console.log(chalk.gray(`  Trying ${label} host ${i + 1}/${repo.hosts.length}: ${host}`));
-      await cloneGitRepository(host, targetDir, repo.commit);
-      console.log(chalk.green(`  ✅ Cloned ${label} repo from ${host}`));
-      return;
-    } catch (e) {
-      lastError = e as Error;
-      console.log(chalk.yellow(`  ⚠️ Failed to clone from ${host}: ${lastError.message}`));
-      // Clean up failed clone attempt before trying next host
-      await removeDirectory(targetDir);
-    }
-  }
-
-  throw new Error(`Failed to clone ${label} repo from all ${repo.hosts.length} hosts: ${lastError?.message}`);
-}
-
-/**
- * Build a Docker image from the work directory and run tests.
- */
 async function buildAndRunDocker(
   contextDir: string,
   timeout: number
@@ -171,13 +186,10 @@ async function buildAndRunDocker(
     console.log(chalk.gray(`  Running container: ${containerName}`));
 
     try {
-      // Run container with timeout
       const runCmd = `timeout ${Math.floor(timeout / 1000)} docker run --name ${containerName} ${imageName}`;
-      await execAsync(runCmd, { maxBuffer: 50 * 1024 * 1024 }).catch(() => {
-        // Container might exit with non-zero, that's expected for failed tests
-      });
+      await execAsync(runCmd, { maxBuffer: 50 * 1024 * 1024 }).catch(() => {});
     } catch {
-      // Ignore run errors - we'll get the exit code from inspect
+      // Ignore - we'll get exit code from inspect
     }
 
     // Get logs
@@ -201,14 +213,14 @@ async function buildAndRunDocker(
       );
       exitCode = parseInt(exitCodeStr.trim(), 10);
     } catch {
-      // Default to 1 if we can't get exit code
+      // Default to 1
     }
 
     console.log(chalk.gray(`  Container exited with code: ${exitCode}`));
 
     return { stdout, stderr, exitCode };
   } finally {
-    // Cleanup container and image
+    // Cleanup
     try {
       await execAsync(`docker rm -f ${containerName}`).catch(() => {});
       await execAsync(`docker rmi -f ${imageName}`).catch(() => {});
@@ -216,4 +228,123 @@ async function buildAndRunDocker(
       // Ignore cleanup errors
     }
   }
+}
+
+// ============================================================================
+// Composition: verifyAndRunTests
+// ============================================================================
+
+/**
+ * High-level function that composes cloning, verification, and test execution.
+ * Handles cleanup automatically.
+ *
+ * @param options - Full options including repos, verification, and execution config
+ * @returns Test execution result
+ */
+export async function verifyAndRunTests(options: VerifyAndRunTestsOptions): Promise<TestResult> {
+  const {
+    tests,
+    source,
+    getRegisteredKey,
+    frameworks,
+    timeout,
+    cleanup = true
+  } = options;
+
+  const clonedDirs: string[] = [];
+  const startTime = Date.now();
+
+  try {
+    // Clone test repo
+    console.log(chalk.cyan('Cloning test repo...'));
+    const testsDir = await cloneRepo(tests.hosts, tests.commit);
+    clonedDirs.push(testsDir);
+
+    // Clone source repo
+    console.log(chalk.cyan('Cloning source repo...'));
+    const sourceDir = await cloneRepo(source.hosts, source.commit);
+    clonedDirs.push(sourceDir);
+
+    // Verify test repo if author specified
+    if (tests.author) {
+      console.log(chalk.cyan(`Verifying test repo author: ${tests.author}`));
+      if (!getRegisteredKey) {
+        throw new Error('getRegisteredKey callback required when author is specified');
+      }
+      const key = await getRegisteredKey(tests.author);
+      if (!key) {
+        throw new Error(`No valid registered key for test repo author: ${tests.author}`);
+      }
+      const isValid = await verifyRepo(testsDir, tests.commit, key.keyType, key.publicKey);
+      if (!isValid) {
+        throw new Error(`Test repo commit not signed by registered key for: ${tests.author}`);
+      }
+      console.log(chalk.green('✅ Test repo signature verified'));
+    }
+
+    // Verify source repo if author specified
+    if (source.author) {
+      console.log(chalk.cyan(`Verifying source repo author: ${source.author}`));
+      if (!getRegisteredKey) {
+        throw new Error('getRegisteredKey callback required when author is specified');
+      }
+      const key = await getRegisteredKey(source.author);
+      if (!key) {
+        throw new Error(`No valid registered key for source repo author: ${source.author}`);
+      }
+      const isValid = await verifyRepo(sourceDir, source.commit, key.keyType, key.publicKey);
+      if (!isValid) {
+        throw new Error(`Source repo commit not signed by registered key for: ${source.author}`);
+      }
+      console.log(chalk.green('✅ Source repo signature verified'));
+    }
+
+    // Run tests
+    return await runTests(testsDir, sourceDir, { frameworks, timeout });
+
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    return {
+      success: false,
+      output: '',
+      error: errorMessage,
+      frameworkUsed: 'unknown',
+      duration,
+    };
+  } finally {
+    // Cleanup cloned directories
+    if (cleanup) {
+      console.log(chalk.cyan('Cleaning up...'));
+      for (const dir of clonedDirs) {
+        await removeDirectory(dir);
+      }
+    } else {
+      console.log(chalk.gray(`Cloned directories preserved: ${clonedDirs.join(', ')}`));
+    }
+  }
+}
+
+// ============================================================================
+// Legacy export for backwards compatibility
+// ============================================================================
+
+/**
+ * @deprecated Use verifyAndRunTests instead
+ */
+export async function executeTests(options: {
+  tests: { hosts: string[]; commit: string };
+  source: { hosts: string[]; commit: string };
+  frameworks?: Framework[];
+  timeout?: number;
+  cleanup?: boolean;
+}): Promise<TestResult> {
+  return verifyAndRunTests({
+    tests: options.tests,
+    source: options.source,
+    frameworks: options.frameworks,
+    timeout: options.timeout,
+    cleanup: options.cleanup,
+  });
 }

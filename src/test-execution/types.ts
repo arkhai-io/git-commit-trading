@@ -2,10 +2,6 @@ export type ProjectLanguage = 'typescript' | 'rust' | 'python';
 
 /**
  * Unified Framework interface for test execution.
- *
- * This interface allows frameworks to be easily extended - users can provide
- * custom frameworks as an entire arkhaiFramework.ts file, enabling support
- * for arbitrary test formats and parsing logic.
  */
 export interface Framework {
   /** Unique identifier for the framework */
@@ -41,35 +37,29 @@ export interface Framework {
 }
 
 /**
- * Reference to a git repository with multiple host fallbacks.
+ * Registered key info for verification.
  */
-export interface RepoRef {
-  /** Git URLs to try in order (first success wins) */
-  hosts: string[];
-  /** Commit hash to checkout */
-  commit: string;
+export interface RegisteredKey {
+  /** Type of the key (0=PGP, 1=SSHEd25519, 2=SSHSecp256k1, 3=X509) */
+  keyType: number;
+  /** Public key material */
+  publicKey: string;
 }
 
 /**
- * Options for executing tests.
+ * Options for runTests (docker execution only).
  */
-export interface ExecuteTestsOptions {
-  /** Test repository reference */
-  tests: RepoRef;
-  /** Source/solution repository reference */
-  source: RepoRef;
+export interface RunTestsOptions {
   /** Frameworks to try for detection (defaults to all built-in frameworks) */
   frameworks?: Framework[];
   /** Docker run timeout in milliseconds (default: 300000) */
   timeout?: number;
-  /** Remove cloned repos and containers after execution (default: true) */
-  cleanup?: boolean;
 }
 
 /**
  * Result of test execution.
  */
-export interface ExecuteTestsResult {
+export interface TestResult {
   /** Whether all tests passed */
   success: boolean;
   /** Combined stdout/stderr output from test execution */
@@ -80,4 +70,38 @@ export interface ExecuteTestsResult {
   frameworkUsed: string;
   /** Total execution duration in milliseconds */
   duration: number;
+}
+
+/**
+ * Repository specification for verifyAndRunTests.
+ */
+export interface RepoSpec {
+  /** Git URLs to try in order (first success wins) */
+  hosts: string[];
+  /** Commit hash to checkout */
+  commit: string;
+  /** Address that should have authored/signed this commit (optional) */
+  author?: `0x${string}`;
+}
+
+/**
+ * Options for the high-level verifyAndRunTests composition.
+ */
+export interface VerifyAndRunTestsOptions {
+  /** Test repository specification */
+  tests: RepoSpec;
+  /** Source/solution repository specification */
+  source: RepoSpec;
+  /**
+   * Callback to fetch a registered key for an address.
+   * Required if any RepoSpec has an author field.
+   * Should return null if no valid registered key exists.
+   */
+  getRegisteredKey?: (address: `0x${string}`) => Promise<RegisteredKey | null>;
+  /** Frameworks to try for detection (defaults to all built-in frameworks) */
+  frameworks?: Framework[];
+  /** Docker run timeout in milliseconds (default: 300000) */
+  timeout?: number;
+  /** Remove cloned repos and containers after execution (default: true) */
+  cleanup?: boolean;
 }

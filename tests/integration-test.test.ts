@@ -6,9 +6,9 @@ import { setupTest } from "./utils/setup";
 import { type TestContext } from "alkahest-ts/sdks/ts/tests/utils/setup";
 import { CommitAlgo, type CommitObligationData } from "../src/clients/commitObligation";
 import { KeyType, createGitKeyClaim } from "../src/clients/gitIdentityRegistry";
-import { executeTests } from "../src/test-execution/";
+import { verifyAndRunTests, cloneRepo } from "../src/test-execution/";
 import { extractSSHKeyMaterial } from "../src/utils/gitUtils";
-import { GitVerificationService } from "../src/services/verificationService";
+import { verifyRepo } from "../src/utils/gitVerification";
 import { 
   verifyCommitSignature, 
   generateSigningMessage, 
@@ -551,52 +551,48 @@ async function performCompleteArbitration(
     console.log(chalk.gray(`      Verifying commit: ${solutionCommitHash}`));
     console.log(chalk.gray(`      From repository: ${solutionRepoUrl}`));
     
-    // Create a map of registered keys for the verifier
-    const registeredKeys = new Map();
-    registeredKeys.set(senderAddress, senderKeyClaim);
-    
-    // Use GitVerificationService like the server does (skip GitKeyClaim signature verification for testing)
-    const gitVerificationService = new GitVerificationService({
-      tempDirectory: './temp/git-verification',
-      timeoutMs: config.server.timeout,
-      enableSSH: true,
-      enableGPG: true,
-      enableX509: true,
-      cleanupAfterVerification: true,
-      autoImportKeys: true,
-    });
-    
-    let verificationResult;
+    // Clone and verify the solution repo
+    const tempDir = `./temp/git-verification-${Date.now()}`;
+    let repoDir: string | null = null;
+
     try {
-      console.log('🔐 Verifying commit signature using git verify-commit...');
-      verificationResult = await gitVerificationService.verifyCommit(
-        solutionRepoUrl,
+      console.log('🔐 Cloning and verifying commit signature...');
+
+      // Clone the repo
+      repoDir = await cloneRepo([solutionRepoUrl], solutionCommitHash, tempDir);
+      console.log(chalk.gray(`      Cloned to: ${repoDir}`));
+
+      // Verify the commit signature
+      const isValid = await verifyRepo(
+        repoDir,
         solutionCommitHash,
-        registeredKeys
+        senderKeyClaim.keyType,
+        senderKeyClaim.publicKey,
+        config.server.timeout
       );
-      
-      if (!verificationResult.isValid) {
+
+      if (!isValid) {
         console.log(chalk.red("   ❌ Commit signature verification FAILED"));
-        console.log(chalk.red(`      Method: ${verificationResult.verificationDetails.method}`));
-        console.log(chalk.red(`      Reason: ${verificationResult.error || 'Invalid signature'}`));
         console.log(chalk.red("   🚨 SECURITY VIOLATION: Solution commit not signed by registered key"));
         return false;
       }
-      
+
       console.log(chalk.green("   ✅ Commit signature verification PASSED"));
-      console.log(chalk.gray(`      Verified signature type: ${verificationResult.signatureType}`));
-      if (verificationResult.keyFingerprint) {
-        console.log(chalk.gray(`      Key fingerprint: ${verificationResult.keyFingerprint}`));
-      }
-      if (verificationResult.registeredAddress) {
-        console.log(chalk.gray(`      Matched registered address: ${verificationResult.registeredAddress}`));
-      }
-      
+      console.log(chalk.gray(`      Verified against registered key for: ${senderAddress}`));
+
     } catch (verificationError) {
       console.log(chalk.red("   ❌ Error during commit verification"));
       console.log(chalk.red(`      Error: ${verificationError instanceof Error ? verificationError.message : String(verificationError)}`));
       console.log(chalk.red("   🚨 SECURITY VIOLATION: Could not verify commit signature"));
       return false;
+    } finally {
+      // Cleanup cloned repo
+      if (repoDir) {
+        try {
+          const { rm } = await import('fs/promises');
+          await rm(tempDir, { recursive: true, force: true });
+        } catch {}
+      }
     }
 
     // Step 3: Execute real tests (only if signature verification passed)
@@ -626,7 +622,7 @@ async function executeRealTests(obligation: any, demand: any, config: Integratio
     console.log(chalk.gray(`      📁 Solution repo: ${obligation[0].hosts[0]}`));
     console.log(chalk.gray(`      📁 Solution commit: ${obligation[0].commitHash}`));
 
-    const result = await executeTests({
+    const result = await verifyAndRunTests({
       tests: {
         hosts: demand[0].hosts,
         commit: demand[0].testsCommitHash

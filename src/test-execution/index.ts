@@ -1,12 +1,20 @@
-// Main executor function
+// Primitives
+export { cloneRepo, runTests } from './executor.js';
+
+// Composition
+export { verifyAndRunTests } from './executor.js';
+
+// Legacy (deprecated)
 export { executeTests } from './executor.js';
 
 // Types
 export type {
   Framework,
-  RepoRef,
-  ExecuteTestsOptions,
-  ExecuteTestsResult,
+  RegisteredKey,
+  RunTestsOptions,
+  TestResult,
+  RepoSpec,
+  VerifyAndRunTestsOptions,
   ProjectLanguage,
 } from './types.js';
 
@@ -29,4 +37,4 @@ export {
 export { detectFramework, type FrameworkDetectionResult } from './frameworkDetection.js';
 
 // Default export
-export { executeTests as default } from './executor.js';
+export { verifyAndRunTests as default } from './executor.js';

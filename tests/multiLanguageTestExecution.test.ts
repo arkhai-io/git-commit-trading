@@ -1,12 +1,12 @@
 import { describe, test, expect } from "bun:test";
-import { executeTests, defaultFrameworks } from "../src/test-execution/index.js";
-import type { ExecuteTestsOptions, ExecuteTestsResult } from "../src/test-execution/types.js";
+import { verifyAndRunTests, defaultFrameworks } from "../src/test-execution/index.js";
+import type { VerifyAndRunTestsOptions, TestResult } from "../src/test-execution/types.js";
 
 describe("Enhanced Test Execution with Security", () => {
-    test("Should validate executeTests options structure", () => {
-        console.log("🧪 Testing executeTests configuration structure");
+    test("Should validate verifyAndRunTests options structure", () => {
+        console.log("🧪 Testing verifyAndRunTests configuration structure");
 
-        const options: ExecuteTestsOptions = {
+        const options: VerifyAndRunTestsOptions = {
             tests: {
                 hosts: ['https://github.com/alice/tests.git'],
                 commit: 'abc123'
@@ -27,7 +27,7 @@ describe("Enhanced Test Execution with Security", () => {
         expect(options.source.hosts).toBeDefined();
         expect(options.source.commit).toBeDefined();
 
-        console.log("✅ ExecuteTests options structure validated");
+        console.log("✅ VerifyAndRunTests options structure validated");
         console.log("   - Test repository configuration available");
         console.log("   - Source repository configuration available");
         console.log("   - Execution settings configurable");
@@ -36,7 +36,7 @@ describe("Enhanced Test Execution with Security", () => {
     test("Should support multiple hosts for fallback", () => {
         console.log("\n🔧 Testing multiple hosts configuration");
 
-        const options: ExecuteTestsOptions = {
+        const options: VerifyAndRunTestsOptions = {
             tests: {
                 hosts: [
                     'https://github.com/alice/tests.git',
@@ -62,6 +62,32 @@ describe("Enhanced Test Execution with Security", () => {
         console.log(`   - Source repo hosts: ${options.source.hosts.length}`);
     });
 
+    test("Should support author verification", () => {
+        console.log("\n🔐 Testing author verification configuration");
+
+        const options: VerifyAndRunTestsOptions = {
+            tests: {
+                hosts: ['https://github.com/alice/tests.git'],
+                commit: 'abc123',
+                // Test repo doesn't need author verification
+            },
+            source: {
+                hosts: ['https://github.com/bob/solution.git'],
+                commit: 'def456',
+                author: '0x1234567890123456789012345678901234567890',
+            },
+            getRegisteredKey: async (address) => {
+                // Mock callback - would fetch from contract
+                return { keyType: 1, publicKey: 'mock-public-key' };
+            },
+        };
+
+        expect(options.source.author).toBeDefined();
+        expect(options.getRegisteredKey).toBeDefined();
+
+        console.log("✅ Author verification configuration validated");
+    });
+
     test("Should support different programming languages via frameworks", () => {
         console.log("\n🌐 Testing multi-language support via frameworks");
 
@@ -84,70 +110,9 @@ describe("Enhanced Test Execution with Security", () => {
         console.log("🎯 Multi-language support validated via frameworks");
     });
 
-    test("Should validate enhanced security integration points", () => {
-        console.log("\n🔐 Testing enhanced security integration with executeTests");
-
-        // Mock enhanced arbitration flow
-        const enhancedArbitrationFlow = async (obligation: any, demand: any): Promise<boolean> => {
-            console.log("  🔍 Enhanced arbitration steps:");
-
-            // Step 1: Git Key Verification
-            console.log("    1. ✅ Git key registration verified");
-
-            // Step 2: Commit Signature Verification
-            console.log("    2. ✅ Commit signature validated");
-
-            // Step 3: GitKeyClaim Validation
-            console.log("    3. ✅ GitKeyClaim signature verified");
-
-            // Step 4: Test Execution (would call executeTests)
-            console.log("    4. 🧪 executeTests would be called here...");
-
-            const options: ExecuteTestsOptions = {
-                tests: {
-                    hosts: demand[0].hosts,
-                    commit: demand[0].testsCommitHash
-                },
-                source: {
-                    hosts: obligation[0].hosts,
-                    commit: obligation[0].commitHash
-                },
-                timeout: 45000,
-                cleanup: true
-            };
-
-            // Validate the options structure is correct
-            expect(options.tests.hosts).toBeDefined();
-            expect(options.source.hosts).toBeDefined();
-
-            console.log("       ✅ Test execution options prepared correctly");
-            return true;
-        };
-
-        // Test the enhanced flow
-        const mockObligation = [{
-            commitHash: "enhanced_commit_123",
-            commitAlgo: 1,
-            hosts: ["https://github.com/bob/solution.git"],
-            sender: "0xBobAddress"
-        }];
-
-        const mockDemand = [{
-            testsCommitHash: "test_commit_456",
-            testsCommitAlgo: 1,
-            hosts: ["https://github.com/alice/tests.git"]
-        }];
-
-        const result = enhancedArbitrationFlow(mockObligation, mockDemand);
-        expect(result).toBeTruthy();
-
-        console.log("✅ Enhanced security integration validated");
-    });
-
     test("Should handle timeout and cleanup options properly", () => {
         console.log("\n⏱️ Testing timeout and cleanup options");
 
-        // Test different timeout configurations
         const timeoutConfigurations = [
             { language: "TypeScript", timeout: 45000 },
             { language: "Python", timeout: 60000 },
@@ -156,7 +121,7 @@ describe("Enhanced Test Execution with Security", () => {
         ];
 
         timeoutConfigurations.forEach(config => {
-            const options: ExecuteTestsOptions = {
+            const options: VerifyAndRunTestsOptions = {
                 tests: { hosts: ['url'], commit: 'abc' },
                 source: { hosts: ['url'], commit: 'def' },
                 timeout: config.timeout,
@@ -178,7 +143,7 @@ describe("Enhanced Test Execution with Security", () => {
         const errorScenarios = [
             {
                 name: "Missing Git Key Registration",
-                expectedError: "No registered Git key found",
+                expectedError: "No valid registered key",
                 shouldReject: true
             },
             {
@@ -199,7 +164,7 @@ describe("Enhanced Test Execution with Security", () => {
         ];
 
         const handleError = (errorMessage: string): boolean => {
-            if (errorMessage.includes("No registered Git key")) return false;
+            if (errorMessage.includes("No valid registered key")) return false;
             if (errorMessage.includes("not signed by registered key")) return false;
             if (errorMessage.includes("Tests failed")) return false;
             if (errorMessage.includes("Failed to clone")) return false;
