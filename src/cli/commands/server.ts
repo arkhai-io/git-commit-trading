@@ -136,9 +136,13 @@ export async function serverCommand(options: ServerOptions) {
 
 			// Look up registered keys if verification is enabled
 			let sourceKey = null;
-			if (shouldVerify && client.gitIdentityRegistry) {
+			if (shouldVerify && config.gitIdentityRegistryAddress) {
 				console.log(chalk.cyan(`Looking up registered key for ${senderAddress}...`));
-				sourceKey = await getRegisteredKey(client.gitIdentityRegistry, senderAddress);
+				sourceKey = await getRegisteredKey(
+					client.viemClient,
+					config.gitIdentityRegistryAddress as `0x${string}`,
+					senderAddress,
+				);
 				if (sourceKey) {
 					console.log(chalk.green(`✅ Found registered key for sender`));
 				} else {
