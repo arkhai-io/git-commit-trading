@@ -1,4 +1,5 @@
 import type { ViemClient } from "alkahest-ts";
+import type { PublicClient } from "viem";
 import { abi as gitIdentityRegistryAbi } from "../contracts/GitIdentityRegistry";
 
 // Enum for KeyType from the contract
@@ -21,10 +22,8 @@ export type GitIdentityRegistryAddresses = {
 	gitIdentityRegistry: `0x${string}`;
 };
 
-// Minimal viem client interface for standalone functions
-interface MinimalViemClient {
-	getLogs: (args: any) => Promise<any[]>;
-}
+// Minimal viem client interface for standalone functions - just needs getLogs
+export type MinimalViemClient = Pick<PublicClient, "getLogs">;
 
 const GIT_KEY_CLAIMED_EVENT = {
 	type: "event",

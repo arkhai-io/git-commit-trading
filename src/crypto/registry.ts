@@ -2,14 +2,12 @@
  * Git Identity Registry utilities for fetching and verifying registered keys.
  */
 
-import { getLatestKeyClaim } from "../clients/gitIdentityRegistry.js";
+import {
+	getLatestKeyClaim,
+	type MinimalViemClient,
+} from "../clients/gitIdentityRegistry.js";
 import type { RegisteredKey } from "../test-execution/types.js";
 import { verifyGitKeyClaimSignature } from "./signatures.js";
-
-// Minimal viem client interface needed for getLogs
-interface ViemClient {
-	getLogs: (args: any) => Promise<any[]>;
-}
 
 /**
  * Get a registered key for an address from the GitIdentityRegistry.
@@ -21,7 +19,7 @@ interface ViemClient {
  * @returns RegisteredKey if valid key exists, null otherwise
  */
 export async function getRegisteredKey(
-	viemClient: ViemClient,
+	viemClient: MinimalViemClient,
 	registryAddress: `0x${string}`,
 	address: `0x${string}`,
 ): Promise<RegisteredKey | null> {
