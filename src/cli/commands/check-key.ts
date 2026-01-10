@@ -19,10 +19,10 @@ export async function checkKeyCommand(options: CheckKeyOptions) {
 		validateGitKeyEnv();
 
 		console.log(chalk.gray("Setting up blockchain client..."));
-		const { client, config, hasGitIdentityRegistry } =
+		const { gitIdentityRegistryClient, config, hasGitIdentityRegistry } =
 			await createClientFromEnv();
 
-		if (!hasGitIdentityRegistry) {
+		if (!hasGitIdentityRegistry || !gitIdentityRegistryClient) {
 			throw new Error(
 				"GIT_IDENTITY_REGISTRY_ADDRESS is required in .env file for this command",
 			);
@@ -36,7 +36,7 @@ export async function checkKeyCommand(options: CheckKeyOptions) {
 
 		try {
 			const latestKeyClaim =
-				await client.gitIdentityRegistry.getLatestKeyClaim(addressToCheck);
+				await gitIdentityRegistryClient.getLatestKeyClaim(addressToCheck);
 
 			if (
 				!latestKeyClaim ||

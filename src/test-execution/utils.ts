@@ -50,11 +50,11 @@ export async function executeCommand(
 		let stdout = "";
 		let stderr = "";
 
-		child.stdout?.on("data", (data: any) => {
+		child.stdout?.on("data", (data: Buffer) => {
 			stdout += data.toString();
 		});
 
-		child.stderr?.on("data", (data: any) => {
+		child.stderr?.on("data", (data: Buffer) => {
 			stderr += data.toString();
 		});
 

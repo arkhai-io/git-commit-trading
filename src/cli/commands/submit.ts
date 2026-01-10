@@ -127,9 +127,9 @@ export async function submitCommand(options: SubmitOptions) {
 		}
 
 		// Normalize addresses to lowercase to avoid checksum case mismatches
-		const arbiterAddress = options.arbiter.toLowerCase();
-		const oracleAddress = options.oracle.toLowerCase();
-		const tokenAddress = options.token.toLowerCase();
+		const arbiterAddress = options.arbiter.toLowerCase() as `0x${string}`;
+		const oracleAddress = options.oracle.toLowerCase() as `0x${string}`;
+		const tokenAddress = options.token.toLowerCase() as `0x${string}`;
 
 		// Encode the demand data
 		const encodeCommitTestsDemand = (demand: {
@@ -164,7 +164,7 @@ export async function submitCommand(options: SubmitOptions) {
 		);
 
 		// Create the trusted oracle demand
-		const demand = client.arbiters.encodeTrustedOracleDemand({
+		const demand = client.arbiters.general.trustedOracle.encodeDemand({
 			oracle: oracleAddress,
 			data: commitTestsData,
 		});
@@ -178,7 +178,7 @@ export async function submitCommand(options: SubmitOptions) {
 		try {
 			// Try with permit first (EIP-2612)
 			console.log(chalk.gray("Attempting to use EIP-2612 permit..."));
-			const result = await client.erc20.permitAndBuyWithErc20(
+			const result = await client.erc20.escrow.nonTierable.permitAndCreate(
 				{
 					address: tokenAddress,
 					value: rewardAmount,
@@ -188,118 +188,17 @@ export async function submitCommand(options: SubmitOptions) {
 			);
 			escrow = result.attested;
 			console.log(chalk.green("✓ Used EIP-2612 permit"));
-		} catch (permitError: any) {
-			// If permit fails, fallback to approve + transfer
+		} catch {
+			// If permit fails, fallback to approve + create (handles approval internally)
 			console.log(
 				chalk.yellow(
 					"EIP-2612 permit not supported, falling back to approve + transfer",
 				),
 			);
 
-			// Check current allowance to avoid unnecessary approval
-			console.log(chalk.gray("Checking current token allowance..."));
-			// The spender is the ERC20EscrowObligation contract, not the CommitObligation contract
-			const escrowAddress = client.contractAddresses.erc20EscrowObligation;
-			if (!escrowAddress) {
-				throw new Error("ERC20EscrowObligation address not found in client");
-			}
-
-			console.log(chalk.gray(`  Owner: ${config.address}`));
-			console.log(
-				chalk.gray(`  Spender (ERC20EscrowObligation): ${escrowAddress}`),
-			);
-
-			const currentAllowance = await client.viemClient.readContract({
-				address: tokenAddress as `0x${string}`,
-				abi: [
-					{
-						name: "allowance",
-						type: "function",
-						stateMutability: "view",
-						inputs: [
-							{ name: "owner", type: "address" },
-							{ name: "spender", type: "address" },
-						],
-						outputs: [{ type: "uint256" }],
-					},
-				],
-				functionName: "allowance",
-				args: [config.address as `0x${string}`, escrowAddress as `0x${string}`],
-			});
-
-			let approveHash;
-			if (currentAllowance >= rewardAmount) {
-				console.log(
-					chalk.green(
-						`✓ Sufficient allowance already exists (${currentAllowance} >= ${rewardAmount})`,
-					),
-				);
-				console.log(chalk.gray("Skipping approval step..."));
-			} else {
-				console.log(
-					chalk.gray(
-						`Current allowance: ${currentAllowance}, approving ${rewardAmount}...`,
-					),
-				);
-
-				// First approve the tokens
-				approveHash = await client.erc20.approve(
-					{
-						address: tokenAddress,
-						value: rewardAmount,
-					},
-					"escrow",
-				);
-
-				console.log(chalk.gray(`Approval tx: ${approveHash}`));
-
-				// Debug: Get transaction details to see what nonce was used
-				try {
-					const tx = await client.viemClient.getTransaction({
-						hash: approveHash,
-					});
-					console.log(chalk.yellow(`Transaction nonce used: ${tx.nonce}`));
-				} catch (txError) {
-					console.log(
-						chalk.yellow(
-							`Could not fetch transaction details: ${txError instanceof Error ? txError.message : String(txError)}`,
-						),
-					);
-				}
-
-				console.log(chalk.gray("Confirming approval..."));
-
-				try {
-					// Wait for the approval transaction to be confirmed with longer timeout for Base Sepolia
-					await client.viemClient.waitForTransactionReceipt({
-						hash: approveHash,
-						timeout: 180_000, // 3 minutes timeout for Base Sepolia
-					});
-					console.log(chalk.green("✓ Approval confirmed"));
-				} catch (error) {
-					// If approval confirmation times out or fails, we MUST NOT proceed
-					// because the buyWithErc20 will fail without approval
-					console.log(chalk.red("❌ Approval transaction failed or timed out"));
-					console.log(
-						chalk.yellow(
-							"Cannot proceed with escrow creation without confirmed approval",
-						),
-					);
-					console.log(
-						chalk.gray(`Check transaction status: with tx ${approveHash}`),
-					);
-					throw new Error(
-						"Approval transaction failed or timed out. Please check BaseScan and retry.",
-					);
-				}
-			}
-
-			// Now create the escrow
-			// TODO: Remove this workaround when migrating to new SDK with permitAnd_ functions
-			await new Promise((resolve) => setTimeout(resolve, 5000));
-			console.log(chalk.gray("Creating escrow..."));
+			console.log(chalk.gray("Creating escrow with approval..."));
 			try {
-				const result = await client.erc20.buyWithErc20(
+				const result = await client.erc20.escrow.nonTierable.approveAndCreate(
 					{
 						address: tokenAddress,
 						value: rewardAmount,
@@ -309,7 +208,7 @@ export async function submitCommand(options: SubmitOptions) {
 				);
 				escrow = result.attested;
 				console.log(chalk.green("✓ Used approve + transfer"));
-			} catch (buyError: any) {
+			} catch (buyError) {
 				console.log(chalk.red("❌ Failed to create escrow"));
 				console.log(chalk.yellow("Error details:"));
 				console.log(
@@ -319,7 +218,8 @@ export async function submitCommand(options: SubmitOptions) {
 				);
 
 				// Check if it's a contract revert error
-				if (buyError.message?.includes("ERC20TransferFailed")) {
+				const errorMessage = buyError instanceof Error ? buyError.message : String(buyError);
+				if (errorMessage.includes("ERC20TransferFailed")) {
 					console.log(chalk.yellow("\nPossible causes:"));
 					console.log(chalk.gray("  1. Insufficient token balance"));
 					console.log(

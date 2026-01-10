@@ -120,10 +120,10 @@ export const makeGitIdentityRegistryClient = (
 			eventName: "GitKeyClaimed",
 			args: claimant ? { claimant } : undefined,
 			onLogs: (logs) => {
-				logs.forEach((log: any) => {
-					const { claimant, claim } = log.args;
-					onEvent(claimant as `0x${string}`, claim as GitKeyClaim);
-				});
+				for (const log of logs) {
+					const typedLog = log as unknown as { args: { claimant: `0x${string}`; claim: GitKeyClaim } };
+					onEvent(typedLog.args.claimant, typedLog.args.claim);
+				}
 			},
 		});
 	};

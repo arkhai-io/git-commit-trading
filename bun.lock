@@ -9,7 +9,7 @@
         "@peculiar/x509": "^1.13.0",
         "@types/openpgp": "^5.0.0",
         "@viem/anvil": "^0.0.10",
-        "alkahest-ts": "github:arkhai-io/alkahest#91bc004bc2c32b11aad2e0a2a0e4bf6124d5ebcb",
+        "alkahest-ts": "github:arkhai-io/alkahest#96cc1662a7347dab6339d1d78169d1d647d44749",
         "chalk": "^5.6.0",
         "commander": "^12.1.0",
         "simple-git": "^3.28.0",
@@ -203,7 +203,7 @@
 
     "acorn": ["acorn@8.15.0", "", { "bin": { "acorn": "bin/acorn" } }, "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg=="],
 
-    "alkahest-ts": ["alkahest-ts@github:arkhai-io/alkahest#91bc004", {}, "arkhai-io-alkahest-91bc004"],
+    "alkahest-ts": ["alkahest-ts@github:arkhai-io/alkahest#96cc166", {}, "arkhai-io-alkahest-96cc166"],
 
     "ansi-regex": ["ansi-regex@6.2.2", "", {}, "sha512-Bq3SmSpyFHaWjPk8If9yc6svM8c56dB5BAtW4Qbw5jHTwwXXcTLoRMkpDJp6VL0XzlWaCHTXrkFURMYmD0sLqg=="],
 

@@ -30,7 +30,7 @@ export async function collectCommand(options: CollectOptions) {
 		console.log(chalk.gray("Submitting collection transaction..."));
 
 		// Collect the escrow reward
-		const collectionHash = await client.erc20.collectEscrow(
+		const collectionHash = await client.erc20.escrow.nonTierable.collect(
 			options.escrowUid as `0x${string}`,
 			options.fulfillmentUid as `0x${string}`,
 		);

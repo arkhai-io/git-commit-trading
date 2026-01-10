@@ -49,21 +49,27 @@ export async function fulfillCommand(options: FulfillOptions) {
 		requireEnvFile();
 
 		console.log(chalk.gray("Setting up blockchain client..."));
-		const { client, config, hasCommitObligation, hasGitIdentityRegistry } =
-			await createClientFromEnv();
+		const {
+			client,
+			commitObligationClient,
+			gitIdentityRegistryClient,
+			config,
+			hasCommitObligation,
+			hasGitIdentityRegistry,
+		} = await createClientFromEnv();
 
-		if (!hasCommitObligation) {
+		if (!hasCommitObligation || !commitObligationClient) {
 			throw new Error(
 				"COMMIT_OBLIGATION_ADDRESS is required in .env file for this command",
 			);
 		}
 
 		// Verify git key registration if requested
-		if (options.verifyKey !== false && hasGitIdentityRegistry) {
+		if (options.verifyKey !== false && hasGitIdentityRegistry && gitIdentityRegistryClient) {
 			console.log(chalk.gray("Verifying registered Git key..."));
 			try {
 				const latestKeyClaim =
-					await client.gitIdentityRegistry.getLatestKeyClaim(
+					await gitIdentityRegistryClient.getLatestKeyClaim(
 						config.address as `0x${string}`,
 					);
 				if (
@@ -132,7 +138,7 @@ export async function fulfillCommand(options: FulfillOptions) {
 
 		// Submit the fulfillment
 		const { attested: fulfillment } =
-			await client.commitObligation.doObligation(
+			await commitObligationClient.doObligation(
 				obligationData,
 				options.escrowUid as `0x${string}`,
 			);
@@ -172,9 +178,10 @@ export async function fulfillCommand(options: FulfillOptions) {
 
 			// Request arbitration
 			await new Promise((resolve) => setTimeout(resolve, 2000));
-			const arbitrationTx = await client.oracle.requestArbitration(
+			const arbitrationTx = await client.arbiters.general.trustedOracle.requestArbitration(
 				fulfillment.uid,
 				oracleAddress,
+				demandBytes,
 			);
 			console.log(chalk.green("Arbitration requested successfully!"));
 			console.log(

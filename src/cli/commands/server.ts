@@ -91,7 +91,8 @@ export async function serverCommand(options: ServerOptions) {
 		}
 
 		// Define the arbitration logic
-		const arbitrate = async (attestation: any) => {
+		// Callback receives AttestationWithDemand { attestation, demand }
+		const arbitrate = async ({ attestation }: { attestation: { data: `0x${string}`; refUID: `0x${string}` }; demand: `0x${string}` }) => {
 			console.log(
 				chalk.green(
 					"=============== Received new fulfillment to be arbitrated ===============",
@@ -152,11 +153,11 @@ export async function serverCommand(options: ServerOptions) {
 
 			const result = await verifyAndRunTests({
 				tests: {
-					hosts: demand.hosts,
+					hosts: [...demand.hosts],
 					commit: demand.testsCommitHash,
 				},
 				source: {
-					hosts: obligation.hosts,
+					hosts: [...obligation.hosts],
 					commit: obligation.commitHash,
 					verifyWith: sourceKey ?? undefined,
 				},
@@ -194,20 +195,22 @@ export async function serverCommand(options: ServerOptions) {
 		if (options.past) {
 			console.log(chalk.yellow("Arbitrating past obligations..."));
 
-			const decisions = await client.oracle.arbitratePast(arbitrate, {
-				skipAlreadyArbitrated: true,
-				onAfterArbitrate: async (decision: any) => {
-					console.log(
-						chalk.green(
-							`✓ Arbitration completed: ${decision.decision ? "PASSED" : "FAILED"}`,
-						),
-					);
-					console.log(chalk.gray(`  Transaction Hash: ${decision.hash}`));
-					console.log(
-						chalk.gray(`  Attestation UID: ${decision.attestation.uid}`),
-					);
-				},
+			const decisions = await client.arbiters.general.trustedOracle.arbitratePast(arbitrate, {
+				mode: "unarbitrated",
 			});
+
+			// Log each decision
+			for (const decision of decisions) {
+				console.log(
+					chalk.green(
+						`✓ Arbitration completed: ${decision.decision ? "PASSED" : "FAILED"}`,
+					),
+				);
+				console.log(chalk.gray(`  Transaction Hash: ${decision.hash}`));
+				console.log(
+					chalk.gray(`  Attestation UID: ${decision.attestation.uid}`),
+				);
+			}
 
 			console.log(
 				chalk.green(
@@ -251,11 +254,11 @@ export async function serverCommand(options: ServerOptions) {
 				console.error(chalk.red("❌ Unhandled rejection:"), reason);
 			});
 
-			const { unwatch, decisions } = await client.oracle.listenAndArbitrate(
+			const { unwatch, decisions } = await client.arbiters.general.trustedOracle.listenAndArbitrate(
 				arbitrate,
 				{
-					skipAlreadyArbitrated: true,
-					onAfterArbitrate: async (decision: any) => {
+					mode: "unarbitrated",
+					onAfterArbitrate: async (decision: { decision: boolean; hash: string; attestation: { uid: string } }) => {
 						console.log(
 							chalk.green(
 								`✓ Arbitration completed: ${decision.decision ? "PASSED" : "FAILED"}`,

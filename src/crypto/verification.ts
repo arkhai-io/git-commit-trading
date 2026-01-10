@@ -211,11 +211,12 @@ async function runGitVerifyCommit(
 			},
 		);
 		return { success: true, rawOutput: stdout, stderr };
-	} catch (error: any) {
+	} catch (error) {
+		const execError = error as { stdout?: string; stderr?: string; message?: string };
 		return {
 			success: false,
-			rawOutput: error.stdout || "",
-			stderr: error.stderr || error.message,
+			rawOutput: execError.stdout || "",
+			stderr: execError.stderr || execError.message || String(error),
 		};
 	}
 }

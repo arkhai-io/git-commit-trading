@@ -127,14 +127,21 @@ export async function listCommand(options: ListOptions) {
 				toBlock: currentBlock,
 			});
 
+			type EscrowCollectedLog = {
+					args: {
+						escrow: `0x${string}`;
+						fulfillment: `0x${string}`;
+						fulfiller: `0x${string}`;
+					};
+				};
 			const collectedEscrows = new Map(
-				collectedLogs.map((log: any) => [
+				(collectedLogs as unknown as EscrowCollectedLog[]).map((log) => [
 					log.args.escrow,
 					{
 						fulfillmentUid: log.args.fulfillment,
 						fulfiller: log.args.fulfiller,
 					},
-				]),
+				] as const),
 			);
 
 			console.log(
@@ -146,8 +153,16 @@ export async function listCommand(options: ListOptions) {
 				try {
 					const { recipient, uid } = log.args;
 
+					// Skip if uid or recipient is undefined
+					if (!uid || !recipient) {
+						if (verbose) {
+							console.log(chalk.gray("  Skipping log with missing uid or recipient"));
+						}
+						continue;
+					}
+
 					// Get the full attestation data from EAS
-					const attestation = await client.getAttestation(uid as `0x${string}`);
+					const attestation = await client.getAttestation(uid);
 
 					// Check if attestation data looks valid (should be longer than just the selector)
 					if (

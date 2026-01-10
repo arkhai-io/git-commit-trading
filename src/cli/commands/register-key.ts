@@ -235,7 +235,7 @@ export async function registerKeyCommand(options: RegisterKeyOptions) {
 		validateGitKeyEnv();
 
 		console.log(chalk.gray("Setting up blockchain client..."));
-		const { client, config } = await createClientFromEnv();
+		const { gitIdentityRegistryClient, config } = await createClientFromEnv();
 
 		// Read and detect cryptographic key
 		console.log(chalk.gray("Reading cryptographic key..."));
@@ -346,15 +346,15 @@ export async function registerKeyCommand(options: RegisterKeyOptions) {
 
 		console.log(chalk.gray("Submitting key registration to blockchain..."));
 
-		// Check if client has gitIdentityRegistry
-		if (!client.gitIdentityRegistry) {
+		// Check if gitIdentityRegistryClient is available
+		if (!gitIdentityRegistryClient) {
 			throw new Error(
 				"GitIdentityRegistry is not available. Please ensure GIT_IDENTITY_REGISTRY_ADDRESS is set in .env",
 			);
 		}
 
 		// Submit the key claim to blockchain
-		const result = await client.gitIdentityRegistry.claimKey(gitKeyClaim);
+		const result = await gitIdentityRegistryClient.claimKey(gitKeyClaim);
 
 		console.log(chalk.green("✅ Cryptographic key registered successfully!"));
 		console.log(chalk.blue("Registration Details:"));

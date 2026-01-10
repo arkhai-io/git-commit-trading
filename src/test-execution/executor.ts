@@ -175,9 +175,10 @@ async function buildAndRunDocker(
 
 		try {
 			await execAsync(buildCmd, { maxBuffer: 50 * 1024 * 1024 });
-		} catch (buildError: any) {
+		} catch (buildError) {
+			const execError = buildError as { stderr?: string; message?: string };
 			throw new Error(
-				`Docker build failed: ${buildError.stderr || buildError.message}`,
+				`Docker build failed: ${execError.stderr || execError.message || String(buildError)}`,
 			);
 		}
 
@@ -201,9 +202,10 @@ async function buildAndRunDocker(
 				maxBuffer: 50 * 1024 * 1024,
 			});
 			stdout = logsResult.stdout;
-		} catch (logsError: any) {
-			stdout = logsError.stdout || "";
-			stderr = logsError.stderr || "";
+		} catch (logsError) {
+			const execError = logsError as { stdout?: string; stderr?: string };
+			stdout = execError.stdout || "";
+			stderr = execError.stderr || "";
 		}
 
 		// Get exit code

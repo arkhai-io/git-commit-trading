@@ -1,7 +1,16 @@
 import { makeClient } from "alkahest-ts";
 import chalk from "chalk";
 import { existsSync, readFileSync } from "fs";
-import { createWalletClient, http, publicActions, webSocket } from "viem";
+import {
+	type Account,
+	type Chain,
+	type Transport,
+	type WalletClient,
+	createWalletClient,
+	http,
+	publicActions,
+	webSocket,
+} from "viem";
 import { nonceManager, privateKeyToAccount } from "viem/accounts";
 import { baseSepolia, foundry, mainnet, sepolia } from "viem/chains";
 import {
@@ -162,7 +171,7 @@ export async function createClientFromEnv(
 	};
 
 	// Create wallet client based on network
-	let walletClient;
+	let walletClient: WalletClient<Transport, Chain, Account>;
 	let rpcUrl = config.rpcUrl;
 
 	switch (network.toLowerCase()) {
@@ -217,70 +226,39 @@ export async function createClientFromEnv(
 	console.log(chalk.gray(`  RPC URL: ${rpcUrl?.substring(0, 40)}...`));
 
 	// Create alkahest client
-	const alkahestClient = makeClient(walletClient as any);
+	const alkahestClient = makeClient(walletClient);
 
-	// Build extensions object for the client
-	const extensions: any = {};
-	let hasExtensions = false;
+	// Create optional domain-specific clients
+	let commitObligationClient: ReturnType<typeof makeCommitObligationClient> | null = null;
+	let gitIdentityRegistryClient: ReturnType<typeof makeGitIdentityRegistryClient> | null = null;
 
-	// Add CommitObligation if available
 	if (config.commitObligationAddress) {
 		console.log(
 			chalk.gray(`  Commit Obligation: ${config.commitObligationAddress}`),
 		);
-
-		const commitObligationAddresses: CommitObligationAddresses = {
+		commitObligationClient = makeCommitObligationClient(alkahestClient.viemClient, {
 			commitObligation: config.commitObligationAddress as `0x${string}`,
-		};
-
-		extensions.commitObligation = (client: any) =>
-			makeCommitObligationClient(client.viemClient, commitObligationAddresses);
-		hasExtensions = true;
+		});
 	}
 
-	// Add GitIdentityRegistry if available
 	if (config.gitIdentityRegistryAddress) {
 		console.log(
 			chalk.gray(
 				`  Git Identity Registry: ${config.gitIdentityRegistryAddress}`,
 			),
 		);
-
-		const gitIdentityRegistryAddresses: GitIdentityRegistryAddresses = {
+		gitIdentityRegistryClient = makeGitIdentityRegistryClient(alkahestClient.viemClient, {
 			gitIdentityRegistry: config.gitIdentityRegistryAddress as `0x${string}`,
-		};
-
-		extensions.gitIdentityRegistry = (client: any) =>
-			makeGitIdentityRegistryClient(
-				client.viemClient,
-				gitIdentityRegistryAddresses,
-			);
-		hasExtensions = true;
-	}
-
-	// Extend client if we have any extensions
-	if (hasExtensions) {
-		const extendedClient = alkahestClient.extend((client: any) => {
-			const result: any = {};
-			Object.keys(extensions).forEach((key) => {
-				result[key] = extensions[key](client);
-			});
-			return result;
 		});
-
-		return {
-			client: extendedClient,
-			config,
-			hasCommitObligation: !!config.commitObligationAddress,
-			hasGitIdentityRegistry: !!config.gitIdentityRegistryAddress,
-		};
 	}
 
 	return {
 		client: alkahestClient,
+		commitObligationClient,
+		gitIdentityRegistryClient,
 		config,
-		hasCommitObligation: false,
-		hasGitIdentityRegistry: false,
+		hasCommitObligation: !!config.commitObligationAddress,
+		hasGitIdentityRegistry: !!config.gitIdentityRegistryAddress,
 	};
 }
 
