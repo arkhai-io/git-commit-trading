@@ -1,29 +1,6 @@
-import chalk from "chalk";
 import { exec, type SpawnOptions, spawn } from "child_process";
 import { promises as fs } from "fs";
 import path from "path";
-
-export class Logger {
-	static info(message: string) {
-		console.log(chalk.blue("ℹ"), message);
-	}
-
-	static success(message: string) {
-		console.log(chalk.green("✓"), message);
-	}
-
-	static error(message: string) {
-		console.log(chalk.red("✗"), message);
-	}
-
-	static warning(message: string) {
-		console.log(chalk.yellow("⚠"), message);
-	}
-
-	static step(message: string) {
-		console.log(chalk.cyan("→"), message);
-	}
-}
 
 export async function executeCommand(
 	command: string,
@@ -118,7 +95,7 @@ export async function removeDirectory(dirPath: string): Promise<void> {
 	try {
 		await fs.rm(dirPath, { recursive: true, force: true });
 	} catch (error) {
-		Logger.warning(`Failed to remove directory ${dirPath}: ${error}`);
+		console.error(`Failed to remove directory ${dirPath}: ${error}`);
 	}
 }
 
