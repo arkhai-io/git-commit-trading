@@ -3,6 +3,7 @@ import {
 	setupTestEnvironment,
 	type TestContext,
 } from "alkahest-ts/sdks/ts/tests/utils/setup";
+import type { AlkahestClient } from "alkahest-ts/sdks/ts/src/index";
 import {
 	type CommitObligationAddresses,
 	makeCommitObligationClient,
@@ -12,6 +13,15 @@ import {
 	makeGitIdentityRegistryClient,
 } from "../../src/clients/gitIdentityRegistry";
 import GitIdentityRegistry from "../../src/contracts/GitIdentityRegistry.json";
+
+// Extension type for the git-commit-trading specific clients
+type GitCommitTradingExtension = {
+	commitObligation: ReturnType<typeof makeCommitObligationClient>;
+	gitIdentityRegistry: ReturnType<typeof makeGitIdentityRegistryClient>;
+};
+
+// Extended client type with git-commit-trading extensions
+export type ExtendedClient = AlkahestClient & GitCommitTradingExtension;
 
 export async function setupTest() {
 	const testContext: TestContext = await setupTestEnvironment();
@@ -32,7 +42,7 @@ export async function setupTest() {
 	};
 
 	// New SDK structure: testContext.alice.client instead of testContext.aliceClient
-	const aliceClient = testContext.alice.client.extend((client: any) => ({
+	const aliceClient = testContext.alice.client.extend((client: AlkahestClient) => ({
 		commitObligation: makeCommitObligationClient(
 			client.viemClient,
 			commitObligationAddresses,
@@ -43,7 +53,7 @@ export async function setupTest() {
 		),
 	}));
 
-	const bobClient = testContext.bob.client.extend((client: any) => ({
+	const bobClient = testContext.bob.client.extend((client: AlkahestClient) => ({
 		commitObligation: makeCommitObligationClient(
 			client.viemClient,
 			commitObligationAddresses,
@@ -54,7 +64,7 @@ export async function setupTest() {
 		),
 	}));
 
-	const charlieClient = testContext.charlie.client.extend((client: any) => ({
+	const charlieClient = testContext.charlie.client.extend((client: AlkahestClient) => ({
 		commitObligation: makeCommitObligationClient(
 			client.viemClient,
 			commitObligationAddresses,

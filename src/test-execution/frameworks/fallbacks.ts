@@ -52,6 +52,7 @@ export const nodeFallback: Framework = {
 			// Only match if no lock files present
 			const hasLockFile =
 				files.includes("bun.lockb") ||
+				files.includes("bun.lock") ||
 				files.includes("pnpm-lock.yaml") ||
 				files.includes("package-lock.json");
 			return !hasLockFile;

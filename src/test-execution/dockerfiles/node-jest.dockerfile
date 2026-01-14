@@ -9,12 +9,23 @@ COPY source-repo /workspace/source-repo
 COPY test-repo /workspace/test-repo
 
 # Create merged project structure
-# Start with test repo as base (has correct package.json, jest config and test structure)
-RUN cp -r test-repo project
+# Start with source repo as base (has package.json, jest config and src/)
+RUN cp -r source-repo project
 
-# Override src/ with solution from source repo
-RUN rm -rf project/src && \
-    cp -r source-repo/src project/src
+# Copy tests from test repo (supports multiple conventions)
+# Priority: __tests__/, tests/, test/, src/**/*.test.ts, src/**/*.spec.ts
+RUN if [ -d test-repo/__tests__ ]; then \
+        cp -r test-repo/__tests__ project/__tests__; \
+    elif [ -d test-repo/tests ]; then \
+        cp -r test-repo/tests project/tests; \
+    elif [ -d test-repo/test ]; then \
+        cp -r test-repo/test project/test; \
+    else \
+        find test-repo -name "*.test.ts" -o -name "*.test.js" -o -name "*.spec.ts" -o -name "*.spec.js" | while read f; do \
+            mkdir -p "project/$(dirname "${f#test-repo/}")"; \
+            cp "$f" "project/${f#test-repo/}"; \
+        done; \
+    fi
 
 # Set working directory to the merged project
 WORKDIR /workspace/project

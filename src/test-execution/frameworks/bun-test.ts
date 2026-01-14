@@ -14,7 +14,8 @@ export const bunTest: Framework = {
 	async detect(testsPath: string): Promise<boolean> {
 		try {
 			const files = await fs.readdir(testsPath);
-			if (!files.includes("bun.lockb")) return false;
+			// Check for bun.lockb (binary, older) or bun.lock (text, newer)
+			if (!files.includes("bun.lockb") && !files.includes("bun.lock")) return false;
 			// Check that it's NOT using Jest
 			const hasJest = await checkForJest(testsPath, files);
 			return !hasJest;

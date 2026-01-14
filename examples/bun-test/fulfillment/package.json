@@ -1,0 +1,11 @@
+{
+	"name": "bun-test-fulfillment",
+	"version": "1.0.0",
+	"type": "module",
+	"scripts": {
+		"test": "bun test"
+	},
+	"devDependencies": {
+		"@types/bun": "latest"
+	}
+}

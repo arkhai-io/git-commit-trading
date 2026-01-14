@@ -17,6 +17,28 @@ import { ensureDirectory, removeDirectory } from "./utils.js";
 
 const execAsync = promisify(exec);
 
+// Container runtime detection (supports docker and podman)
+let containerRuntime: string | null = null;
+
+async function getContainerRuntime(): Promise<string> {
+	if (containerRuntime) return containerRuntime;
+
+	// Try docker first, then podman
+	for (const runtime of ["docker", "podman"]) {
+		try {
+			await execAsync(`${runtime} --version`);
+			containerRuntime = runtime;
+			return runtime;
+		} catch {
+			// Continue to next runtime
+		}
+	}
+
+	throw new Error(
+		"No container runtime found. Please install docker or podman.",
+	);
+}
+
 // ============================================================================
 // Primitive: cloneRepo
 // ============================================================================
@@ -99,12 +121,31 @@ export async function runTests(
 	let detectedFramework: Framework | null = null;
 
 	try {
-		// Detect framework from test repo
+		// Detect framework
+		// First check for custom dockerfile in test repo (highest priority)
+		// Then detect from source repo (has config files and lock files)
 		console.log(chalk.cyan("Detecting framework..."));
-		const { framework, dockerfileContent } = await detectFramework(
-			testsDir,
-			frameworks,
-		);
+		let framework: Framework;
+		let dockerfileContent: string;
+
+		// Try to detect custom dockerfile in testsDir first
+		try {
+			const customResult = await detectFramework(testsDir, frameworks);
+			if (customResult.framework.name === "custom") {
+				framework = customResult.framework;
+				dockerfileContent = customResult.dockerfileContent;
+			} else {
+				// Not custom, detect from sourceDir
+				const result = await detectFramework(sourceDir, frameworks);
+				framework = result.framework;
+				dockerfileContent = result.dockerfileContent;
+			}
+		} catch {
+			// No custom dockerfile found, detect from sourceDir
+			const result = await detectFramework(sourceDir, frameworks);
+			framework = result.framework;
+			dockerfileContent = result.dockerfileContent;
+		}
 		detectedFramework = framework;
 		console.log(chalk.green(`✅ Detected framework: ${framework.name}`));
 
@@ -165,40 +206,47 @@ async function buildAndRunDocker(
 	contextDir: string,
 	timeout: number,
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+	const runtime = await getContainerRuntime();
 	const imageName = `git-test:${Date.now()}`;
 	const containerName = `git-test-${Date.now()}`;
 
 	try {
 		// Build image
-		console.log(chalk.gray(`  Building image: ${imageName}`));
-		const buildCmd = `docker build -t ${imageName} ${contextDir}`;
+		console.log(chalk.gray(`  Building image: ${imageName} (using ${runtime})`));
+		const buildCmd = `${runtime} build -t ${imageName} ${contextDir}`;
 
 		try {
 			await execAsync(buildCmd, { maxBuffer: 50 * 1024 * 1024 });
 		} catch (buildError) {
 			const execError = buildError as { stderr?: string; message?: string };
 			throw new Error(
-				`Docker build failed: ${execError.stderr || execError.message || String(buildError)}`,
+				`Container build failed: ${execError.stderr || execError.message || String(buildError)}`,
 			);
 		}
 
 		console.log(chalk.green("  ✅ Image built successfully"));
 
-		// Run container
+		// Run container with Node-based timeout
 		console.log(chalk.gray(`  Running container: ${containerName}`));
 
 		try {
-			const runCmd = `timeout ${Math.floor(timeout / 1000)} docker run --name ${containerName} ${imageName}`;
-			await execAsync(runCmd, { maxBuffer: 50 * 1024 * 1024 }).catch(() => {});
-		} catch {
-			// Ignore - we'll get exit code from inspect
+			const runCmd = `${runtime} run --name ${containerName} ${imageName}`;
+			await execAsync(runCmd, { maxBuffer: 50 * 1024 * 1024, timeout });
+		} catch (runError) {
+			// If timeout, kill the container
+			const err = runError as { killed?: boolean };
+			if (err.killed) {
+				console.log(chalk.yellow("  ⚠️ Container timed out, killing..."));
+				await execAsync(`${runtime} kill ${containerName}`).catch(() => {});
+			}
+			// Ignore other errors - we'll get exit code from inspect
 		}
 
 		// Get logs
 		let stdout = "";
 		let stderr = "";
 		try {
-			const logsResult = await execAsync(`docker logs ${containerName} 2>&1`, {
+			const logsResult = await execAsync(`${runtime} logs ${containerName} 2>&1`, {
 				maxBuffer: 50 * 1024 * 1024,
 			});
 			stdout = logsResult.stdout;
@@ -212,7 +260,7 @@ async function buildAndRunDocker(
 		let exitCode = 1;
 		try {
 			const { stdout: exitCodeStr } = await execAsync(
-				`docker inspect --format='{{.State.ExitCode}}' ${containerName}`,
+				`${runtime} inspect --format='{{.State.ExitCode}}' ${containerName}`,
 			);
 			exitCode = parseInt(exitCodeStr.trim(), 10);
 		} catch {
@@ -225,8 +273,8 @@ async function buildAndRunDocker(
 	} finally {
 		// Cleanup
 		try {
-			await execAsync(`docker rm -f ${containerName}`).catch(() => {});
-			await execAsync(`docker rmi -f ${imageName}`).catch(() => {});
+			await execAsync(`${runtime} rm -f ${containerName}`).catch(() => {});
+			await execAsync(`${runtime} rmi -f ${imageName}`).catch(() => {});
 		} catch {
 			// Ignore cleanup errors
 		}

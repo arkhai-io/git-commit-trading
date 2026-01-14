@@ -9,12 +9,14 @@ COPY source-repo /workspace/source-repo
 COPY test-repo /workspace/test-repo
 
 # Create merged project structure
-# Start with test repo as base (has correct Cargo.toml and test structure)
-RUN cp -r test-repo project
+# Start with source repo as base (has Cargo.toml and src/)
+RUN cp -r source-repo project
 
-# Override src/ with solution from source repo
-RUN rm -rf project/src && \
-    cp -r source-repo/src project/src
+# Copy tests from test repo
+# Rust tests can be in tests/ directory or as #[cfg(test)] in src/
+RUN if [ -d test-repo/tests ]; then \
+        rm -rf project/tests && cp -r test-repo/tests project/tests; \
+    fi
 
 # Set working directory to the merged project
 WORKDIR /workspace/project

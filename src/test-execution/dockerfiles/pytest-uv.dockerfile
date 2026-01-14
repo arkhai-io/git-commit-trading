@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y \
 
 # Install uv
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.cargo/bin:${PATH}"
+ENV PATH="/root/.local/bin:${PATH}"
 
 # Set working directory
 WORKDIR /workspace
@@ -18,15 +18,17 @@ COPY source-repo /workspace/source-repo
 COPY test-repo /workspace/test-repo
 
 # Create merged project structure
-# Start with test repo as base (has correct pyproject.toml and test structure)
-RUN cp -r test-repo project
+# Start with source repo as base (has pyproject.toml and src/)
+RUN cp -r source-repo project
 
-# Override source files with solution from source repo
-# Python projects may have src/ directory or .py files at root
-RUN if [ -d source-repo/src ]; then \
-        rm -rf project/src && cp -r source-repo/src project/src; \
+# Copy tests from test repo (supports multiple conventions)
+# Priority: tests/, test/, *_test.py, test_*.py
+RUN if [ -d test-repo/tests ]; then \
+        rm -rf project/tests && cp -r test-repo/tests project/tests; \
+    elif [ -d test-repo/test ]; then \
+        rm -rf project/test && cp -r test-repo/test project/test; \
     else \
-        find source-repo -maxdepth 1 -name "*.py" -exec cp {} project/ \;; \
+        find test-repo -maxdepth 1 \( -name "*_test.py" -o -name "test_*.py" \) -exec cp {} project/ \;; \
     fi
 
 # Set working directory to the merged project
