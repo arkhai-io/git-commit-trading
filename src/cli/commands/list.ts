@@ -33,7 +33,6 @@ interface EscrowData {
 	expirationTime: number;
 	testsRepo?: string;
 	testsCommit?: string;
-	testsCommand?: string;
 	fulfillmentUid?: string;
 	fulfillmentRepo?: string;
 	fulfillmentCommit?: string;
@@ -209,7 +208,6 @@ export async function listCommand(options: ListOptions) {
 					// Try to decode the demand to extract test repo and commit info
 					let testsRepo: string | undefined;
 					let testsCommit: string | undefined;
-					let testsCommand: string | undefined;
 					let oracle: string | undefined;
 
 					try {
@@ -221,9 +219,9 @@ export async function listCommand(options: ListOptions) {
 						oracle = decodedDemand[0].oracle as Address;
 						const oracleData = decodedDemand[0].data as `0x${string}`;
 
-						// Oracle data structure: (string testsCommitHash, string testsCommand, uint8 testsCommitAlgo, string[] hosts)
+						// Oracle data structure: (string testsCommitHash, uint8 testsCommitAlgo, string[] hosts)
 						const oracleDataAbi = parseAbiParameters(
-							"(string testsCommitHash, string testsCommand, uint8 testsCommitAlgo, string[] hosts)",
+							"(string testsCommitHash, uint8 testsCommitAlgo, string[] hosts)",
 						);
 						const decodedOracleData = decodeAbiParameters(
 							oracleDataAbi,
@@ -231,7 +229,6 @@ export async function listCommand(options: ListOptions) {
 						);
 
 						testsCommit = decodedOracleData[0].testsCommitHash;
-						testsCommand = decodedOracleData[0].testsCommand;
 						const hosts = decodedOracleData[0].hosts;
 						testsRepo = hosts.length > 0 ? hosts[0] : undefined;
 					} catch (demandError) {
@@ -271,9 +268,9 @@ export async function listCommand(options: ListOptions) {
 									fulfillmentAttestation.data !== "0x" &&
 									fulfillmentAttestation.data.length > 10
 								) {
-									// Decode fulfillment data: CommitObligation schema (string commitHash, uint8 commitAlgo, string[] hosts, address sender)
+									// Decode fulfillment data: CommitObligation schema (string commitHash, uint8 commitAlgo, string[] hosts)
 									const fulfillmentAbi = parseAbiParameters(
-										"(string commitHash, uint8 commitAlgo, string[] hosts, address sender)",
+										"(string commitHash, uint8 commitAlgo, string[] hosts)",
 									);
 									const decodedFulfillment = decodeAbiParameters(
 										fulfillmentAbi,
@@ -338,7 +335,6 @@ export async function listCommand(options: ListOptions) {
 						expirationTime: Number(attestation.expirationTime),
 						testsRepo,
 						testsCommit,
-						testsCommand,
 						fulfillmentUid,
 						fulfillmentRepo,
 						fulfillmentCommit,
@@ -400,11 +396,11 @@ export async function listCommand(options: ListOptions) {
 
 		if (format === "csv") {
 			console.log(
-				"uid,status,buyer,recipient,amount,token,arbiter,oracle,testsRepo,testsCommit,testsCommand,fulfiller,fulfillmentRepo,fulfillmentCommit,created,expirationTime,txHash,blockNumber",
+				"uid,status,buyer,recipient,amount,token,arbiter,oracle,testsRepo,testsCommit,fulfiller,fulfillmentRepo,fulfillmentCommit,created,expirationTime,txHash,blockNumber",
 			);
 			limitedEscrows.forEach((escrow) => {
 				console.log(
-					`${escrow.uid},${escrow.status},${escrow.buyer},${escrow.recipient},${escrow.amount},${escrow.token},${escrow.arbiter},${escrow.oracle || ""},${escrow.testsRepo || ""},${escrow.testsCommit || ""},${escrow.testsCommand || ""},${escrow.fulfiller || ""},${escrow.fulfillmentRepo || ""},${escrow.fulfillmentCommit || ""},${escrow.created},${escrow.expirationTime},${escrow.txHash},${escrow.blockNumber}`,
+					`${escrow.uid},${escrow.status},${escrow.buyer},${escrow.recipient},${escrow.amount},${escrow.token},${escrow.arbiter},${escrow.oracle || ""},${escrow.testsRepo || ""},${escrow.testsCommit || ""},${escrow.fulfiller || ""},${escrow.fulfillmentRepo || ""},${escrow.fulfillmentCommit || ""},${escrow.created},${escrow.expirationTime},${escrow.txHash},${escrow.blockNumber}`,
 				);
 			});
 			return;
@@ -444,9 +440,6 @@ export async function listCommand(options: ListOptions) {
 					),
 				);
 			}
-			// if (escrow.testsCommand) {
-			//   console.log(chalk.grey(`   Test Command: ${escrow.testsCommand}`));
-			// }
 
 			// Show fulfillment info for fulfilled escrows
 			if (escrow.status === "fulfilled") {

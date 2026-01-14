@@ -13,19 +13,11 @@ export enum CommitAlgo {
 	MD5 = 1,
 }
 
-// Type for the CommitObligation data structure (input to doObligation - without sender)
+// Type for the CommitObligation data structure
 export type CommitObligationData = {
 	commitHash: string;
 	commitAlgo: CommitAlgo;
 	hosts: string[];
-};
-
-// Type for the full obligation data (includes sender - what's stored on-chain)
-export type CommitObligationDataWithSender = {
-	commitHash: string;
-	commitAlgo: CommitAlgo;
-	hosts: string[];
-	sender: `0x${string}`;
 };
 
 export type CommitObligationAddresses = {
@@ -39,10 +31,10 @@ export const makeCommitObligationClient = (
 	const decode = (obligationData: `0x${string}`) => {
 		return decodeAbiParameters(
 			parseAbiParameters(
-				"(string commitHash,uint8 commitAlgo,string[] hosts,address sender)",
+				"(string commitHash,uint8 commitAlgo,string[] hosts)",
 			),
 			obligationData,
-		)[0] as CommitObligationDataWithSender;
+		)[0] as CommitObligationData;
 	};
 
 	const doObligation = async (
@@ -75,7 +67,7 @@ export const makeCommitObligationClient = (
 			abi: commitObligationAbi.abi,
 			functionName: "getObligationData",
 			args: [uid],
-		})) as CommitObligationDataWithSender;
+		})) as CommitObligationData;
 	};
 
 	return {

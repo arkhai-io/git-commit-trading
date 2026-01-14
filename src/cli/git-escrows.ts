@@ -114,7 +114,6 @@ program
 	)
 	.requiredOption("--tests-commit <hash>", "Commit hash of the test cases")
 	.requiredOption("--reward <amount>", "Reward amount in tokens")
-	.option("--tests-command <cmd>", "Command to run tests", "npm test")
 	.option("--tests-algo <algo>", "Commit hash algorithm", "sha1")
 	.option("--arbiter <address>", "Arbiter contract address")
 	.option("--oracle <address>", "Oracle address for arbitration")

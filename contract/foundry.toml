@@ -7,6 +7,7 @@ fs_permissions = [{ access = "read-write", path = "./deployments" }, { access = 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
 
 remappings = [
-  "alkahest-mocks/=lib/alkahest-mocks/src/",
-  "@eas/=lib/alkahest-mocks/lib/eas-contracts/contracts/"
+  "alkahest/=lib/alkahest/contracts/src/",
+  "@eas/=lib/alkahest/contracts/lib/eas-contracts/contracts/",
+  "@openzeppelin/contracts/=lib/alkahest/contracts/lib/openzeppelin-contracts/contracts/"
 ]

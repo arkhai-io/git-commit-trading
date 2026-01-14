@@ -2,7 +2,6 @@ import chalk from "chalk";
 import { promises as fs } from "fs";
 import os from "os";
 import path from "path";
-import * as readline from "readline/promises";
 import { encodeAbiParameters, parseAbiParameters } from "viem";
 import { CommitAlgo } from "../../clients/commitObligation.js";
 import { detectFramework } from "../../test-execution/frameworkDetection.js";
@@ -13,7 +12,6 @@ interface SubmitOptions {
 	testsRepo: string;
 	testsCommit: string;
 	reward: string;
-	testsCommand?: string;
 	testsAlgo?: string;
 	arbiter?: string;
 	oracle?: string;
@@ -134,13 +132,12 @@ export async function submitCommand(options: SubmitOptions) {
 		// Encode the demand data
 		const encodeCommitTestsDemand = (demand: {
 			testsCommitHash: string;
-			testsCommand: string;
 			testsCommitAlgo: number;
 			hosts: string[];
 		}) => {
 			return encodeAbiParameters(
 				parseAbiParameters(
-					"(string testsCommitHash, string testsCommand, uint8 testsCommitAlgo, string[] hosts)",
+					"(string testsCommitHash, uint8 testsCommitAlgo, string[] hosts)",
 				),
 				[demand],
 			);
@@ -148,7 +145,6 @@ export async function submitCommand(options: SubmitOptions) {
 
 		const commitTestsData = encodeCommitTestsDemand({
 			testsCommitHash: options.testsCommit,
-			testsCommand: options.testsCommand || "npm test",
 			testsCommitAlgo: testsAlgo,
 			hosts: [options.testsRepo],
 		});
@@ -156,9 +152,6 @@ export async function submitCommand(options: SubmitOptions) {
 		console.log(chalk.gray("Encoding demand with data:"));
 		console.log(chalk.gray(`  Tests Repo: ${options.testsRepo}`));
 		console.log(chalk.gray(`  Tests Commit: ${options.testsCommit}`));
-		console.log(
-			chalk.gray(`  Tests Command: ${options.testsCommand || "npm test"}`),
-		);
 		console.log(
 			chalk.gray(`  Commit Algorithm: ${options.testsAlgo || "sha1"}`),
 		);

@@ -103,7 +103,7 @@ export async function serverCommand(options: ServerOptions) {
 		const arbitrate = async ({
 			attestation,
 		}: {
-			attestation: { data: `0x${string}`; refUID: `0x${string}` };
+			attestation: { data: `0x${string}`; refUID: `0x${string}`; recipient: `0x${string}` };
 			demand: `0x${string}`;
 		}) => {
 			console.log(
@@ -116,7 +116,7 @@ export async function serverCommand(options: ServerOptions) {
 			// Decode the obligation data from the attestation
 			const obligationData = client.extractObligationData(
 				parseAbiParameters(
-					"(string commitHash,uint8 commitAlgo,string[] hosts,address sender)",
+					"(string commitHash,uint8 commitAlgo,string[] hosts)",
 				),
 				attestation,
 			);
@@ -125,7 +125,7 @@ export async function serverCommand(options: ServerOptions) {
 			const escrowAttestation = await client.getEscrowAttestation(attestation);
 			const demandData = client.extractDemandData(
 				parseAbiParameters(
-					"(string testsCommitHash, string testsCommand, uint8 testsCommitAlgo, string[] hosts)",
+					"(string testsCommitHash, uint8 testsCommitAlgo, string[] hosts)",
 				),
 				escrowAttestation,
 			);
@@ -133,7 +133,7 @@ export async function serverCommand(options: ServerOptions) {
 			// Extract data
 			const obligation = obligationData[0];
 			const demand = demandData[0];
-			const senderAddress = obligation.sender.toLowerCase() as `0x${string}`;
+			const senderAddress = attestation.recipient.toLowerCase() as `0x${string}`;
 
 			console.log(`🔍 Fulfillment submitted by: ${senderAddress}`);
 			console.log("📁 Repository configuration:");

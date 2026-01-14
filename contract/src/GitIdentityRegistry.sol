@@ -22,8 +22,6 @@ contract GitIdentityRegistry {
     function claimKey(GitKeyClaim memory claim) external {
         require(bytes(claim.publicKey).length > 0, "Missing public key");
 
-        // ⚠️ Signature verification would go here in a production system
-
         emit GitKeyClaimed(msg.sender, claim);
     }
 }
