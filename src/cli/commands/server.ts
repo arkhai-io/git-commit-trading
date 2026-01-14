@@ -9,9 +9,8 @@ interface ServerOptions {
 	pollingInterval?: string;
 	timeout?: string;
 	cleanup?: boolean;
-	past?: boolean;
-	listen?: boolean;
-	skipKeyVerification?: boolean;
+	mode?: "past" | "pastUnarbitrated" | "allUnarbitrated" | "all" | "future";
+	verifyKey?: boolean;
 	transport?: "http" | "websocket";
 }
 
@@ -20,14 +19,19 @@ export async function serverCommand(options: ServerOptions) {
 		console.log(chalk.blue("Starting Git Escrows Arbiter Server..."));
 
 		// Validate mode options
-		if (options.past && options.listen) {
+		const mode = options.mode || "allUnarbitrated";
+		if (
+			![
+				"past",
+				"pastUnarbitrated",
+				"allUnarbitrated",
+				"all",
+				"future",
+			].includes(mode)
+		) {
 			throw new Error(
-				"Cannot use both --past and --listen options at the same time",
+				"Mode must be one of: past, pastUnarbitrated, allUnarbitrated, all, future",
 			);
-		}
-
-		if (!options.past && !options.listen) {
-			throw new Error("Must specify either --past or --listen mode");
 		}
 
 		const pollingInterval = parseInt(options.pollingInterval || "1000");
@@ -35,12 +39,16 @@ export async function serverCommand(options: ServerOptions) {
 		const cleanup = options.cleanup !== false;
 		const transport = options.transport || "http";
 
+		const modeLabels = {
+			past: "Arbitrate All Past Only",
+			pastUnarbitrated: "Arbitrate Unarbitrated Past Only",
+			allUnarbitrated: "Arbitrate Unarbitrated Past + Listen for New",
+			all: "Arbitrate All Past + Listen for New",
+			future: "Listen for New Only",
+		};
+
 		console.log(chalk.gray("Server configuration:"));
-		console.log(
-			chalk.gray(
-				`  Mode: ${options.past ? "Arbitrate Past" : "Listen and Arbitrate"}`,
-			),
-		);
+		console.log(chalk.gray(`  Mode: ${modeLabels[mode]}`));
 		console.log(chalk.gray(`  Transport: ${transport.toUpperCase()}`));
 		console.log(chalk.gray(`  Polling Interval: ${pollingInterval}ms`));
 		console.log(chalk.gray(`  Test Timeout: ${timeout}ms`));
@@ -92,7 +100,12 @@ export async function serverCommand(options: ServerOptions) {
 
 		// Define the arbitration logic
 		// Callback receives AttestationWithDemand { attestation, demand }
-		const arbitrate = async ({ attestation }: { attestation: { data: `0x${string}`; refUID: `0x${string}` }; demand: `0x${string}` }) => {
+		const arbitrate = async ({
+			attestation,
+		}: {
+			attestation: { data: `0x${string}`; refUID: `0x${string}` };
+			demand: `0x${string}`;
+		}) => {
 			console.log(
 				chalk.green(
 					"=============== Received new fulfillment to be arbitrated ===============",
@@ -132,13 +145,14 @@ export async function serverCommand(options: ServerOptions) {
 			// Run verification and tests
 			console.log("\n🧪 Running verification and test execution...");
 
-			const shouldVerify =
-				!options.skipKeyVerification && hasGitIdentityRegistry;
+			const shouldVerify = options.verifyKey && hasGitIdentityRegistry;
 
 			// Look up registered keys if verification is enabled
 			let sourceKey = null;
 			if (shouldVerify && config.gitIdentityRegistryAddress) {
-				console.log(chalk.cyan(`Looking up registered key for ${senderAddress}...`));
+				console.log(
+					chalk.cyan(`Looking up registered key for ${senderAddress}...`),
+				);
 				sourceKey = await getRegisteredKey(
 					client.viemClient,
 					config.gitIdentityRegistryAddress as `0x${string}`,
@@ -147,7 +161,9 @@ export async function serverCommand(options: ServerOptions) {
 				if (sourceKey) {
 					console.log(chalk.green(`✅ Found registered key for sender`));
 				} else {
-					console.log(chalk.yellow(`⚠️ No valid registered key found for sender`));
+					console.log(
+						chalk.yellow(`⚠️ No valid registered key found for sender`),
+					);
 				}
 			}
 
@@ -192,40 +208,26 @@ export async function serverCommand(options: ServerOptions) {
 			return result.success;
 		};
 
-		if (options.past) {
-			console.log(chalk.yellow("Arbitrating past obligations..."));
+		// Determine if this mode listens for new events
+		const isListeningMode =
+			mode === "all" || mode === "allUnarbitrated" || mode === "future";
 
-			const decisions = await client.arbiters.general.trustedOracle.arbitratePast(arbitrate, {
-				mode: "unarbitrated",
-			});
-
-			// Log each decision
-			for (const decision of decisions) {
-				console.log(
-					chalk.green(
-						`✓ Arbitration completed: ${decision.decision ? "PASSED" : "FAILED"}`,
-					),
-				);
-				console.log(chalk.gray(`  Transaction Hash: ${decision.hash}`));
-				console.log(
-					chalk.gray(`  Attestation UID: ${decision.attestation.uid}`),
-				);
-			}
-
+		if (isListeningMode) {
 			console.log(
-				chalk.green(
-					`✓ Arbitration completed for ${decisions.length} past obligations`,
+				chalk.yellow(
+					mode === "future"
+						? "Listening for new obligations..."
+						: "Arbitrating past obligations and listening for new...",
 				),
 			);
-			process.exit(0);
-		} else {
-			console.log(
-				chalk.yellow("Listening for new obligations and arbitrating..."),
-			);
 			console.log(chalk.gray("Press Ctrl+C to stop the server\n"));
+		} else {
+			console.log(chalk.yellow("Arbitrating past obligations..."));
+		}
 
-			let unwatchFn: (() => void) | null = null;
+		let unwatchFn: (() => void) | null = null;
 
+		if (isListeningMode) {
 			process.on("SIGINT", async () => {
 				console.log(chalk.yellow("\nShutting down server..."));
 				if (unwatchFn) unwatchFn();
@@ -253,45 +255,69 @@ export async function serverCommand(options: ServerOptions) {
 			process.on("unhandledRejection", (reason, promise) => {
 				console.error(chalk.red("❌ Unhandled rejection:"), reason);
 			});
+		}
 
-			const { unwatch, decisions } = await client.arbiters.general.trustedOracle.listenAndArbitrate(
-				arbitrate,
-				{
-					mode: "unarbitrated",
-					onAfterArbitrate: async (decision: { decision: boolean; hash: string; attestation: { uid: string } }) => {
-						console.log(
-							chalk.green(
-								`✓ Arbitration completed: ${decision.decision ? "PASSED" : "FAILED"}`,
-							),
-						);
-						console.log(chalk.gray(`  Transaction Hash: ${decision.hash}`));
-						console.log(
-							chalk.gray(`  Attestation UID: ${decision.attestation.uid}`),
-						);
-					},
-					pollingInterval,
+		const { unwatch, decisions } =
+			await client.arbiters.general.trustedOracle.arbitrateMany(arbitrate, {
+				mode,
+				onAfterArbitrate: async (decision: {
+					decision: boolean;
+					hash: string;
+					attestation: { uid: string };
+				}) => {
+					console.log(
+						chalk.green(
+							`✓ Arbitration completed: ${decision.decision ? "PASSED" : "FAILED"}`,
+						),
+					);
+					console.log(chalk.gray(`  Transaction Hash: ${decision.hash}`));
+					console.log(
+						chalk.gray(`  Attestation UID: ${decision.attestation.uid}`),
+					);
 				},
-			);
+				pollingInterval,
+			});
 
-			unwatchFn = unwatch;
+		unwatchFn = unwatch;
 
-			if (decisions.length > 0) {
+		// Log past decisions for non-listening modes
+		if (!isListeningMode) {
+			for (const decision of decisions) {
 				console.log(
 					chalk.green(
-						`✓ Processed ${decisions.length} past arbitration requests`,
+						`✓ Arbitration completed: ${decision.decision ? "PASSED" : "FAILED"}`,
 					),
 				);
-			} else {
+				console.log(chalk.gray(`  Transaction Hash: ${decision.hash}`));
 				console.log(
-					chalk.gray("No past requests found. Waiting for new requests..."),
+					chalk.gray(`  Attestation UID: ${decision.attestation.uid}`),
 				);
 			}
 
-			console.log(chalk.green("✓ Server is now listening..."));
-
-			// Keep alive
-			await new Promise<void>(() => {});
+			console.log(
+				chalk.green(
+					`✓ Arbitration completed for ${decisions.length} past obligations`,
+				),
+			);
+			process.exit(0);
 		}
+
+		if (decisions.length > 0) {
+			console.log(
+				chalk.green(
+					`✓ Processed ${decisions.length} past arbitration requests`,
+				),
+			);
+		} else if (mode === "all" || mode === "allUnarbitrated") {
+			console.log(
+				chalk.gray("No past requests found. Waiting for new requests..."),
+			);
+		}
+
+		console.log(chalk.green("✓ Server is now listening..."));
+
+		// Keep alive
+		await new Promise<void>(() => {});
 	} catch (error) {
 		console.error(chalk.red("Failed to start server:"));
 		console.error(

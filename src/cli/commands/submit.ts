@@ -218,7 +218,8 @@ export async function submitCommand(options: SubmitOptions) {
 				);
 
 				// Check if it's a contract revert error
-				const errorMessage = buyError instanceof Error ? buyError.message : String(buyError);
+				const errorMessage =
+					buyError instanceof Error ? buyError.message : String(buyError);
 				if (errorMessage.includes("ERC20TransferFailed")) {
 					console.log(chalk.yellow("\nPossible causes:"));
 					console.log(chalk.gray("  1. Insufficient token balance"));

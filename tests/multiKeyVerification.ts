@@ -160,7 +160,6 @@ MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1234567890abcdef
 			);
 		});
 	});
-
 });
 
 describe("Implementation Status", () => {

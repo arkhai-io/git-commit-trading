@@ -9,7 +9,6 @@ import {
 	type CommitObligationData,
 } from "../src/clients/commitObligation";
 import { createGitKeyClaim, KeyType } from "../src/clients/gitIdentityRegistry";
-import { cloneRepo, verifyAndRunTests } from "../src/test-execution/";
 import {
 	extractSSHKeyMaterial,
 	generatePGPSignature,
@@ -18,6 +17,7 @@ import {
 	verifyGitKeyClaimSignature,
 	verifyRepo,
 } from "../src/crypto/index";
+import { cloneRepo, verifyAndRunTests } from "../src/test-execution/";
 import IntegrationTestHelpers from "./utils/integration-helpers";
 import { setupTest } from "./utils/setup";
 
@@ -519,7 +519,9 @@ async function loadRealKeys(config: IntegrationConfig) {
 		const pgpPublicKey = readFileSync(pgpPublicKeyPath, "utf-8").trim();
 
 		// For blockchain registration, extract base64 content using the new utility
-		const { extractPGPKeyMaterial: extractPGP } = await import("../src/crypto/index");
+		const { extractPGPKeyMaterial: extractPGP } = await import(
+			"../src/crypto/index"
+		);
 		const publicKeyMaterial = await extractPGP(pgpPublicKey);
 
 		return {

@@ -17,7 +17,17 @@ export {
 
 // Registry key lookup and verification
 export { getRegisteredKey } from "./registry.js";
-
+// Git server key management
+export {
+	getServerGitCapabilities,
+	importGPGKeyToServer,
+	importSSHKeyToServer,
+	initializeServerGitEnvironment,
+	isGPGKeyImported,
+	isSSHKeyImported,
+	removeGPGKeyFromServer,
+	removeSSHKeyFromServer,
+} from "./server.js";
 // Signature generation and verification
 export {
 	generatePGPKeyPair,
@@ -30,9 +40,6 @@ export {
 	verifySSHSignature,
 } from "./signatures.js";
 
-// Git commit signature verification
-export { verifyRepo } from "./verification.js";
-
 // Key validation
 export {
 	validateKeyForGitSigning,
@@ -40,15 +47,5 @@ export {
 	validatePGPKeyRegistration,
 	validateX509Certificate,
 } from "./validation.js";
-
-// Git server key management
-export {
-	getServerGitCapabilities,
-	importGPGKeyToServer,
-	importSSHKeyToServer,
-	initializeServerGitEnvironment,
-	isGPGKeyImported,
-	isSSHKeyImported,
-	removeGPGKeyFromServer,
-	removeSSHKeyFromServer,
-} from "./server.js";
+// Git commit signature verification
+export { verifyRepo } from "./verification.js";

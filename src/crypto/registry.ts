@@ -25,7 +25,11 @@ export async function getRegisteredKey(
 ): Promise<RegisteredKey | null> {
 	try {
 		// Fetch the latest key claim
-		const keyClaim = await getLatestKeyClaim(viemClient, registryAddress, address);
+		const keyClaim = await getLatestKeyClaim(
+			viemClient,
+			registryAddress,
+			address,
+		);
 		if (!keyClaim || !keyClaim.publicKey || keyClaim.publicKey.trim() === "") {
 			return null;
 		}

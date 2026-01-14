@@ -116,7 +116,9 @@ export function verifySSHSignature(
 				return result;
 			} catch (ed25519Error) {
 				if (isDebugMode) {
-					console.log(`  [${traceId}] Ed25519 verification failed: ${ed25519Error}`);
+					console.log(
+						`  [${traceId}] Ed25519 verification failed: ${ed25519Error}`,
+					);
 				}
 				return false;
 			}
@@ -137,7 +139,9 @@ export function verifySSHSignature(
 			return verifier.verify(signatureObj);
 		} catch (fallbackError) {
 			if (isDebugMode) {
-				console.log(`  [${traceId}] Fallback verification failed: ${fallbackError}`);
+				console.log(
+					`  [${traceId}] Fallback verification failed: ${fallbackError}`,
+				);
 			}
 			return false;
 		}
@@ -172,9 +176,7 @@ export async function generatePGPSignature(
 					passphrase,
 				});
 			} else {
-				console.log(
-					"⚠️  Private key is encrypted but no passphrase provided",
-				);
+				console.log("⚠️  Private key is encrypted but no passphrase provided");
 				return Buffer.from(`mock_pgp_sig_${Date.now()}`)
 					.toString("hex")
 					.padStart(128, "0")
@@ -490,4 +492,3 @@ export async function preparePGPKeyForRegistration(
 		throw new Error(`Failed to prepare PGP key for registration: ${error}`);
 	}
 }
-

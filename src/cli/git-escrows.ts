@@ -160,8 +160,11 @@ program
 program
 	.command("server")
 	.description("Run the arbiter server to listen and arbitrate escrows")
-	.option("--past", "Arbitrate past obligations and exit")
-	.option("--listen", "Listen for new obligations and arbitrate continuously")
+	.option(
+		"--mode <mode>",
+		"Arbitration mode: past, pastUnarbitrated, allUnarbitrated (default), all, future",
+		"allUnarbitrated",
+	)
 	.option(
 		"--transport <type>",
 		"Transport type: http or websocket (default: http)",
@@ -175,16 +178,8 @@ program
 	)
 	.option("--timeout <ms>", "Test execution timeout (ms)", "300000")
 	.option("--cleanup", "Cleanup temporary directories after execution", true)
-	.option(
-		"--skip-key-verification",
-		"Skip Git key verification (not recommended)",
-		false,
-	)
-	.option(
-		"--use-git-verify-commit",
-		"Use local git verify-commit for signature verification",
-		true,
-	)
+	.option("--verify-key", "Verify Git key registration (default: true)", true)
+	.option("--no-verify-key", "Skip Git key verification (not recommended)")
 	.action(serverCommand);
 
 // Global error handling

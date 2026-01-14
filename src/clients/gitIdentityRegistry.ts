@@ -76,7 +76,12 @@ export async function getLatestKeyClaim(
 	claimant: `0x${string}`,
 	fromBlock?: bigint,
 ): Promise<GitKeyClaim | null> {
-	const claims = await getKeyClaims(viemClient, registryAddress, claimant, fromBlock);
+	const claims = await getKeyClaims(
+		viemClient,
+		registryAddress,
+		claimant,
+		fromBlock,
+	);
 	return claims.length > 0 ? claims[claims.length - 1]! : null;
 }
 
@@ -105,7 +110,12 @@ export const makeGitIdentityRegistryClient = (
 		claimant: `0x${string}`,
 		fromBlock?: bigint,
 	): Promise<boolean> => {
-		const claims = await getKeyClaims(viemClient, addresses.gitIdentityRegistry, claimant, fromBlock);
+		const claims = await getKeyClaims(
+			viemClient,
+			addresses.gitIdentityRegistry,
+			claimant,
+			fromBlock,
+		);
 		return claims.length > 0;
 	};
 
@@ -121,7 +131,9 @@ export const makeGitIdentityRegistryClient = (
 			args: claimant ? { claimant } : undefined,
 			onLogs: (logs) => {
 				for (const log of logs) {
-					const typedLog = log as unknown as { args: { claimant: `0x${string}`; claim: GitKeyClaim } };
+					const typedLog = log as unknown as {
+						args: { claimant: `0x${string}`; claim: GitKeyClaim };
+					};
 					onEvent(typedLog.args.claimant, typedLog.args.claim);
 				}
 			},
@@ -132,9 +144,19 @@ export const makeGitIdentityRegistryClient = (
 		claimKey,
 		// Bind standalone functions to this client's viemClient and registry address
 		getKeyClaims: (claimant: `0x${string}`, fromBlock?: bigint) =>
-			getKeyClaims(viemClient, addresses.gitIdentityRegistry, claimant, fromBlock),
+			getKeyClaims(
+				viemClient,
+				addresses.gitIdentityRegistry,
+				claimant,
+				fromBlock,
+			),
 		getLatestKeyClaim: (claimant: `0x${string}`, fromBlock?: bigint) =>
-			getLatestKeyClaim(viemClient, addresses.gitIdentityRegistry, claimant, fromBlock),
+			getLatestKeyClaim(
+				viemClient,
+				addresses.gitIdentityRegistry,
+				claimant,
+				fromBlock,
+			),
 		hasKeyClaim,
 		watchKeyClaimEvents,
 	};

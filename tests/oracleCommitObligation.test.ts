@@ -18,7 +18,6 @@ import {
 	type CommitObligationData,
 } from "../src/clients/commitObligation";
 import { KeyType } from "../src/clients/gitIdentityRegistry";
-import { verifyAndRunTests } from "../src/test-execution/";
 import {
 	extractPGPKeyMaterial,
 	extractSSHKeyMaterial,
@@ -29,6 +28,7 @@ import {
 	verifyGitKeyClaimSignature,
 	verifySSHSignature,
 } from "../src/crypto/index";
+import { verifyAndRunTests } from "../src/test-execution/";
 import { setupTest } from "./utils/setup";
 
 describe("Oracle CommitObligation Tests", () => {

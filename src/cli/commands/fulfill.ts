@@ -65,7 +65,11 @@ export async function fulfillCommand(options: FulfillOptions) {
 		}
 
 		// Verify git key registration if requested
-		if (options.verifyKey !== false && hasGitIdentityRegistry && gitIdentityRegistryClient) {
+		if (
+			options.verifyKey !== false &&
+			hasGitIdentityRegistry &&
+			gitIdentityRegistryClient
+		) {
 			console.log(chalk.gray("Verifying registered Git key..."));
 			try {
 				const latestKeyClaim =
@@ -137,11 +141,10 @@ export async function fulfillCommand(options: FulfillOptions) {
 		console.log(chalk.gray("Submitting fulfillment transaction..."));
 
 		// Submit the fulfillment
-		const { attested: fulfillment } =
-			await commitObligationClient.doObligation(
-				obligationData,
-				options.escrowUid as `0x${string}`,
-			);
+		const { attested: fulfillment } = await commitObligationClient.doObligation(
+			obligationData,
+			options.escrowUid as `0x${string}`,
+		);
 
 		console.log(chalk.green("Fulfillment submitted successfully!"));
 		console.log(chalk.white("Fulfillment Details:"));
@@ -178,11 +181,12 @@ export async function fulfillCommand(options: FulfillOptions) {
 
 			// Request arbitration
 			await new Promise((resolve) => setTimeout(resolve, 2000));
-			const arbitrationTx = await client.arbiters.general.trustedOracle.requestArbitration(
-				fulfillment.uid,
-				oracleAddress,
-				demandBytes,
-			);
+			const arbitrationTx =
+				await client.arbiters.general.trustedOracle.requestArbitration(
+					fulfillment.uid,
+					oracleAddress,
+					demandBytes,
+				);
 			console.log(chalk.green("Arbitration requested successfully!"));
 			console.log(
 				chalk.gray(`  Arbitration Request Transaction: ${arbitrationTx}`),

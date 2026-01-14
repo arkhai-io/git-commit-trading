@@ -212,7 +212,11 @@ async function runGitVerifyCommit(
 		);
 		return { success: true, rawOutput: stdout, stderr };
 	} catch (error) {
-		const execError = error as { stdout?: string; stderr?: string; message?: string };
+		const execError = error as {
+			stdout?: string;
+			stderr?: string;
+			message?: string;
+		};
 		return {
 			success: false,
 			rawOutput: execError.stdout || "",

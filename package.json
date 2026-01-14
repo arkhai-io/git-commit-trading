@@ -43,7 +43,7 @@
 		"@peculiar/x509": "^1.13.0",
 		"@types/openpgp": "^5.0.0",
 		"@viem/anvil": "^0.0.10",
-		"alkahest-ts": "github:arkhai-io/alkahest#96cc1662a7347dab6339d1d78169d1d647d44749",
+		"alkahest-ts": "github:arkhai-io/alkahest#75ff1c631957e315b145f4544e5b44cbcc751b91",
 		"chalk": "^5.6.0",
 		"commander": "^12.1.0",
 		"simple-git": "^3.28.0",

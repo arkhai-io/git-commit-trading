@@ -128,20 +128,23 @@ export async function listCommand(options: ListOptions) {
 			});
 
 			type EscrowCollectedLog = {
-					args: {
-						escrow: `0x${string}`;
-						fulfillment: `0x${string}`;
-						fulfiller: `0x${string}`;
-					};
+				args: {
+					escrow: `0x${string}`;
+					fulfillment: `0x${string}`;
+					fulfiller: `0x${string}`;
 				};
+			};
 			const collectedEscrows = new Map(
-				(collectedLogs as unknown as EscrowCollectedLog[]).map((log) => [
-					log.args.escrow,
-					{
-						fulfillmentUid: log.args.fulfillment,
-						fulfiller: log.args.fulfiller,
-					},
-				] as const),
+				(collectedLogs as unknown as EscrowCollectedLog[]).map(
+					(log) =>
+						[
+							log.args.escrow,
+							{
+								fulfillmentUid: log.args.fulfillment,
+								fulfiller: log.args.fulfiller,
+							},
+						] as const,
+				),
 			);
 
 			console.log(
@@ -156,7 +159,9 @@ export async function listCommand(options: ListOptions) {
 					// Skip if uid or recipient is undefined
 					if (!uid || !recipient) {
 						if (verbose) {
-							console.log(chalk.gray("  Skipping log with missing uid or recipient"));
+							console.log(
+								chalk.gray("  Skipping log with missing uid or recipient"),
+							);
 						}
 						continue;
 					}

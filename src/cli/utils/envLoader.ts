@@ -4,11 +4,11 @@ import { existsSync, readFileSync } from "fs";
 import {
 	type Account,
 	type Chain,
-	type Transport,
-	type WalletClient,
 	createWalletClient,
 	http,
 	publicActions,
+	type Transport,
+	type WalletClient,
 	webSocket,
 } from "viem";
 import { nonceManager, privateKeyToAccount } from "viem/accounts";
@@ -229,16 +229,23 @@ export async function createClientFromEnv(
 	const alkahestClient = makeClient(walletClient);
 
 	// Create optional domain-specific clients
-	let commitObligationClient: ReturnType<typeof makeCommitObligationClient> | null = null;
-	let gitIdentityRegistryClient: ReturnType<typeof makeGitIdentityRegistryClient> | null = null;
+	let commitObligationClient: ReturnType<
+		typeof makeCommitObligationClient
+	> | null = null;
+	let gitIdentityRegistryClient: ReturnType<
+		typeof makeGitIdentityRegistryClient
+	> | null = null;
 
 	if (config.commitObligationAddress) {
 		console.log(
 			chalk.gray(`  Commit Obligation: ${config.commitObligationAddress}`),
 		);
-		commitObligationClient = makeCommitObligationClient(alkahestClient.viemClient, {
-			commitObligation: config.commitObligationAddress as `0x${string}`,
-		});
+		commitObligationClient = makeCommitObligationClient(
+			alkahestClient.viemClient,
+			{
+				commitObligation: config.commitObligationAddress as `0x${string}`,
+			},
+		);
 	}
 
 	if (config.gitIdentityRegistryAddress) {
@@ -247,9 +254,12 @@ export async function createClientFromEnv(
 				`  Git Identity Registry: ${config.gitIdentityRegistryAddress}`,
 			),
 		);
-		gitIdentityRegistryClient = makeGitIdentityRegistryClient(alkahestClient.viemClient, {
-			gitIdentityRegistry: config.gitIdentityRegistryAddress as `0x${string}`,
-		});
+		gitIdentityRegistryClient = makeGitIdentityRegistryClient(
+			alkahestClient.viemClient,
+			{
+				gitIdentityRegistry: config.gitIdentityRegistryAddress as `0x${string}`,
+			},
+		);
 	}
 
 	return {
