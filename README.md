@@ -222,9 +222,86 @@ The system auto-detects test frameworks from repository contents:
 | Node + Jest | package-lock.json + jest.config.* | `npm test` |
 | pnpm + Jest | pnpm-lock.yaml + jest.config.* | `pnpm test` |
 
-**Custom Dockerfile:**
+### Custom Dockerfile
 
 For special requirements, add `arkhai_tests.dockerfile` to your test repository. This takes priority over auto-detection.
+
+**Build Context:**
+
+The Docker build context includes two directories:
+- `source-repo/` - The fulfillment submitter's solution repository
+- `test-repo/` - Your test repository (where the Dockerfile lives)
+
+**Requirements:**
+- File must be named exactly `arkhai_tests.dockerfile`
+- Must be in the root of the test repository
+- Exit code determines pass/fail: `0` = tests passed, non-zero = tests failed
+
+**Example - Custom Node.js Setup:**
+
+```dockerfile
+# arkhai_tests.dockerfile
+FROM node:20
+
+WORKDIR /workspace
+
+# Copy repositories from build context
+COPY source-repo /workspace/source-repo
+COPY test-repo /workspace/test-repo
+
+# Merge: start with solution, add tests
+RUN cp -r source-repo project
+RUN cp -r test-repo/tests project/tests
+
+WORKDIR /workspace/project
+
+# Install and run
+RUN npm install
+CMD ["npm", "test"]
+```
+
+**Example - Rust with Custom Test Directory:**
+
+```dockerfile
+# arkhai_tests.dockerfile
+FROM rust:latest
+
+WORKDIR /workspace
+
+COPY source-repo /workspace/source-repo
+COPY test-repo /workspace/test-repo
+
+# Merge source and tests
+RUN cp -r source-repo project
+RUN cp -r test-repo/integration-tests project/tests
+
+WORKDIR /workspace/project
+
+RUN cargo build
+CMD ["cargo", "test", "--", "--nocapture"]
+```
+
+**Example - Python with Specific Dependencies:**
+
+```dockerfile
+# arkhai_tests.dockerfile
+FROM python:3.12
+
+WORKDIR /workspace
+
+COPY source-repo /workspace/source-repo
+COPY test-repo /workspace/test-repo
+
+# Merge
+RUN cp -r source-repo project
+RUN cp -r test-repo/test_*.py project/
+
+WORKDIR /workspace/project
+
+# Install from test repo requirements (may have test-specific deps)
+RUN pip install -r /workspace/test-repo/requirements.txt
+CMD ["pytest", "-v"]
+```
 
 ---
 
