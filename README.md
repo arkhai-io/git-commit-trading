@@ -71,8 +71,8 @@ Create a `.env` file or use the CLI to generate one:
   --tests-repo https://github.com/user/tests.git \
   --tests-commit abc123... \
   --reward 1000000000000000000 \
-  --tests-command "bun test" \
   --arbiter 0x... \
+  --oracle 0x... \
   --token 0x...
 ```
 
@@ -118,20 +118,21 @@ Create a `.env` file or use the CLI to generate one:
 - Buyer and arbiter addresses
 - **Test repository URL** (GitHub repo)
 - **Test commit hash**
-<!-- - Test command to run -->
+- **Framework** (auto-detected from lock files)
 - Creation timestamp and expiration time
 
 #### Fulfill Escrow (Submit Solution)
 ```bash
 ./bin/git-escrows-docker fulfill \
-  --escrow-id 1 \
+  --escrow-uid 0x1234567890abcdef... \
   --solution-repo https://github.com/dev/solution.git \
-  --solution-commit def456...
+  --solution-commit def456... \
+  --verify-key  # Optional: verify git signing key matches registered key
 ```
 
 #### Collect Rewards
 ```bash
-./bin/git-escrows-docker collect --escrow-id 1
+./bin/git-escrows-docker collect --escrow-uid 0x1234567890abcdef...
 ```
 
 ### Key Management
@@ -157,13 +158,26 @@ Create a `.env` file or use the CLI to generate one:
 ./bin/git-escrows-docker check-key --address 0x... --verbose
 ```
 
-### Development Server
+### Oracle Server
 
 Start the verification oracle server:
 
 ```bash
-./bin/git-escrows-docker server --port 3000 --config config.json
+./bin/git-escrows-docker server \
+  --port 3000 \
+  --mode past \
+  --verify-key \
+  --transport http
 ```
+
+**Server Options:**
+- `--port`: Server port (default: 3000)
+- `--polling-interval`: Interval in ms to poll for new requests (default: 5000)
+- `--timeout`: Test execution timeout in ms (default: 300000)
+- `--cleanup`: Clean up containers after execution (default: true)
+- `--mode`: Arbitration mode - `past`, `pastUnarbitrated`, `allUnarbitrated`, `all`, `future`
+- `--verify-key`: Require git signing key verification
+- `--transport`: Server transport - `http` or `websocket`
 
 ## Test Execution Architecture
 
@@ -210,18 +224,11 @@ The oracle maintains a pool of Docker containers with smart lifecycle management
 - Resource management
 - Prevents runaway container growth
 
-**Configuration:**
-```json
-{
-  "execution": {
-    "containerPoolSize": 5
-  },
-  "docker": {
-    "freshContainers": true,
-    "maxConcurrentContainers": 5,
-    "autoCleanup": true
-  }
-}
+**Configuration via CLI:**
+```bash
+./bin/git-escrows-docker server \
+  --cleanup \       # Enable auto-cleanup of containers
+  --timeout 300000  # Timeout for test execution
 ```
 
 ## Usage Scenarios
@@ -266,10 +273,12 @@ git log --oneline -n 5  # Note the commit hash you want to use
   --tests-repo https://github.com/yourorg/challenge-tests.git \
   --tests-commit a1b2c3d4e5f6... \
   --reward 1000000000000000000 \
-  --tests-command "bun test" \
   --arbiter 0xArbiterAddress... \
+  --oracle 0xOracleAddress... \
   --token 0xTokenContractAddress...
 ```
+
+The system automatically detects the framework from lock files and generates the appropriate dockerfile.
 
 **4. Monitor Your Escrow**
 ```bash
@@ -348,9 +357,10 @@ git log --oneline -n 1
 **5. Submit Your Solution**
 ```bash
 ./bin/git-escrows-docker fulfill \
-  --escrow-id 42 \
+  --escrow-uid 0x1234567890abcdef... \
   --solution-repo https://github.com/yourusername/solution-repo.git \
-  --solution-commit def456abc789...
+  --solution-commit def456abc789... \
+  --verify-key  # Verify your git signing key matches registered key
 ```
 
 **6. Wait for Verification and Collect Reward**
@@ -359,7 +369,7 @@ git log --oneline -n 1
 ./bin/git-escrows-docker list --address 0xYourAddress
 
 # Once verified and approved, collect your reward
-./bin/git-escrows-docker collect --escrow-id 42
+./bin/git-escrows-docker collect --escrow-uid 0x1234567890abcdef...
 ```
 
 ---
@@ -396,82 +406,42 @@ bun run build:binary
 ./bin/git-escrows-docker register-key --path ~/.ssh/id_rsa.pub
 ```
 
-**3. Create Oracle Configuration File**
-```json
-# Create config/oracle-config.json
-{
-  "repositories": {
-    "source": {
-      "url": "dynamic",  # Will be provided by escrow submissions
-      "branch": "main",
-      "buildCommand": "bun install",
-      "testCommand": "bun test",
-      "installCommand": "bun install"
-    },
-    "testcase": {
-      "url": "dynamic",  # Will be provided by escrow demands
-      "branch": "main",
-      "buildCommand": "bun install", 
-      "testCommand": "bun test",
-      "installCommand": "bun install"
-    }
-  },
-  "execution": {
-    "timeout": 300000,           # 5 minutes max per test
-    "cleanupAfterExecution": true,
-    "isolatedEnvironment": true,
-    "tempDirectory": "/tmp/git-escrows-docker",
-    "maxMemoryMB": 1024,
-    "allowedCommands": ["bun", "npm", "yarn", "pnpm", "cargo", "go", "python", "node"],
-    "containerPoolSize": 5       # Max concurrent Docker containers
-  },
-  "security": {
-    "enableNetworkAccess": false,    # Block network during tests
-    "restrictFileSystem": true,      # Sandbox file access
-    "timeboxExecution": true,        # Enforce strict timeouts
-    "logAllActivity": true           # Audit trail
-  },
-  "oracle": {
-    "autoVerifyEscrows": true,       # Automatically process new escrows
-    "maxConcurrentJobs": 3,          # Parallel execution limit
-    "retryFailedTests": 2,           # Retry attempts for flaky tests
-    "enableDetailedLogging": true
-  },
-  "docker": {
-    "freshContainers": true,         # Rebuild containers for each test (prevents state pollution)
-    "maxConcurrentContainers": 5,   # Limit concurrent containers
-    "autoCleanup": true              # Remove containers and images after tests
-  }
-}
-```
-
-**4. Start Oracle Server**
+**3. Start Oracle Server**
 ```bash
 # Start in production mode
 ./bin/git-escrows-docker server \
   --port 3000 \
-  --config config/oracle-config.json \
-  --log-level info
+  --mode pastUnarbitrated \
+  --verify-key \
+  --timeout 300000 \
+  --cleanup \
+  --transport http
 
 # Or with PM2 for production deployment
 pm2 start ./bin/git-escrows-docker --name "git-escrows-docker-oracle" -- \
-  server --port 3000 --config config/oracle-config.json
+  server --port 3000 --mode pastUnarbitrated --verify-key
 ```
 
-**5. Monitor Oracle Operations**
+**Server Modes:**
+- `past`: Process all past arbitration requests
+- `pastUnarbitrated`: Process only unarbitrated past requests
+- `allUnarbitrated`: Process all unarbitrated requests (past + watching)
+- `all`: Process all requests (past + future)
+- `future`: Only watch for new requests
+
+**4. Monitor Oracle Operations**
 ```bash
-# Check oracle status and logs
-./bin/git-escrows-docker server --status
+# Check server logs
 tail -f logs/oracle.log
 
 # Monitor processed escrows
-./bin/git-escrows-docker list --oracle-stats
+./bin/git-escrows-docker list
 
-# Health check endpoint
+# Health check endpoint (if using http transport)
 curl http://localhost:3000/health
 ```
 
-**6. Production Deployment Considerations**
+**5. Production Deployment Considerations**
 ```bash
 # Setup reverse proxy (nginx)
 # Configure SSL/TLS certificates
@@ -722,7 +692,7 @@ fn quicksort(arr: &mut [i32], low: usize, high: usize) {
 │ Token: ETH (Native)                                                             │
 │ Tests: https://github.com/challenges/fibonacci-optimization                     │
 │ Commit: a1b2c3d4e5f6789...                                                      │
-│ Test Command: bun test                                                          │
+│ Framework: bun-test (auto-detected)                                             │
 │ Arbiter: 0x1234567890ab...                                                     │
 │ Created: 2025-09-28 14:30:25 UTC                                               │
 ├─────────────────────────────────────────────────────────────────────────────────┤
@@ -733,7 +703,7 @@ fn quicksort(arr: &mut [i32], low: usize, high: usize) {
 │ Token: 0xa0b86991c431...                                                       │
 │ Tests: https://github.com/challenges/sorting-algorithms                         │
 │ Commit: f1e2d3c4b5a6...                                                        │
-│ Test Command: cargo test                                                        │
+│ Framework: cargo (auto-detected)                                                │
 │ Arbiter: 0xabcdef123456...                                                     │
 │ Fulfillment: 0x9876543210fe... (pending verification)                          │
 │ Created: 2025-09-29 09:15:42 UTC                                               │
@@ -807,9 +777,8 @@ Creating new escrow demand...
 │ Tests Commit: a1b2c3d4e5f6789abcdef1234567890abcdef12                          │
 │ Reward Amount: 1.5 ETH                                                         │
 │ Token: ETH (Native)                                                             │
-│ Test Command: bun test                                                          │
-│ Framework Detected: bun_test (auto-detected from bun.lockb)                    │
-│ Dockerfile: Using embedded template (included in binary)                        │
+│ Framework Detected: bun-test (auto-detected from bun.lockb)                    │
+│ Dockerfile: Using embedded template                                             │
 │ Commit Algorithm: SHA256                                                        │
 │ Arbiter: 0x1234567890abcdef... (default)                                       │
 ├─────────────────────────────────────────────────────────────────────────────────┤
@@ -838,17 +807,17 @@ Creating new escrow demand...
 ### Fulfill Command Output
 
 ```bash
-./bin/git-escrows-docker fulfill --escrow-id 42 --solution-repo https://github.com/dev/fibonacci-solution --solution-commit def456
+./bin/git-escrows-docker fulfill --escrow-uid 0x1234... --solution-repo https://github.com/dev/fibonacci-solution --solution-commit def456
 ```
 
 **Example Output:**
 ```
-Submitting solution for escrow #42...
+Submitting solution...
 
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                            SOLUTION SUBMISSION                                 │
 ├─────────────────────────────────────────────────────────────────────────────────┤
-│ Escrow ID: 42                                                                   │
+│ Escrow UID: 0x1234567890abcdef...                                                                   │
 │ Solution Repository: https://github.com/dev/fibonacci-solution                  │
 │ Solution Commit: def456abc789def456abc789def456abc789def456                     │
 │ Submitter: 0x9876543210fedcba...                                               │
@@ -879,51 +848,21 @@ Submitting solution for escrow #42...
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Server Status Output
+### Server Startup Output
 
-```bash
-./bin/git-escrows-docker server --status
+When the oracle server starts, it displays status information:
+
 ```
+Oracle server starting...
+├─ Port: 3000
+├─ Mode: pastUnarbitrated
+├─ Verify Keys: enabled
+├─ Transport: http
+├─ Timeout: 300000ms
+└─ Cleanup: enabled
 
-**Example Output:**
-```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                            ORACLE SERVER STATUS                                │
-├─────────────────────────────────────────────────────────────────────────────────┤
-│ Status: RUNNING                                                              │
-│ Uptime: 2d 14h 32m 18s                                                         │
-│ Port: 3000                                                                      │
-│ Config: config/oracle-config.json                                              │
-│ Process ID: 15432                                                               │
-│ Memory Usage: 248 MB / 1024 MB                                                 │
-│ CPU Usage: 12.3%                                                               │
-├─────────────────────────────────────────────────────────────────────────────────┤
-│ VERIFICATION STATISTICS                                                         │
-│ Total Verifications: 127                                                       │
-│ Successful: 89 (70.1%)                                                         │
-│ Failed: 31 (24.4%)                                                             │
-│ Error/Timeout: 7 (5.5%)                                                        │
-│ Average Processing Time: 43.2 seconds                                          │
-├─────────────────────────────────────────────────────────────────────────────────┤
-│ CURRENT QUEUE                                                                   │
-│ Active Jobs: 2/3                                                               │
-│ Pending: 1                                                                     │
-│                                                                                 │
-│ Job #1: Escrow 45 - fibonacci-challenge (2m 15s)                              │
-│ Job #2: Escrow 47 - sorting-algorithms (45s)                                  │
-│ Job #3: Escrow 48 - web3-integration (queued)                                 │
-├─────────────────────────────────────────────────────────────────────────────────┤
-│ NETWORK STATUS                                                                  │
-│ Blockchain: Sepolia Testnet                                                    │
-│ RPC Status: Connected                                                        │
-│ Block Height: 4,521,789                                                        │
-│ Gas Price: 15.2 gwei                                                           │
-│ Oracle Address: 0x1111222233334444...                                          │
-│ Balance: 0.245 ETH                                                             │
-└─────────────────────────────────────────────────────────────────────────────────┘
-
-Health Check: All systems operational
-Performance: Normal (avg response time: 120ms)
+Listening on http://localhost:3000
+Processing arbitration requests...
 ```
 
 ## Project Structure
@@ -961,18 +900,39 @@ bun run build:binary
 # Run all tests
 bun test
 
-# Run specific test categories
-bun test ./tests/integration-test.test.ts
-bun test ./tests/gitKeyRegistration.test.ts
-bun test ./tests/commitObligation.test.ts
+# Run unit tests only
+bun test ./tests/unit/
+
+# Run integration tests (requires SSH keys and anvil)
+bun test ./tests/integration/
+
+# Run specific test file
+bun test ./tests/unit/escrow.test.ts
+```
+
+### Test Structure
+
+```
+tests/
+├── unit/                     # Unit tests for individual components
+│   ├── escrow.test.ts       # Escrow creation and collection
+│   ├── fulfillment.test.ts  # Fulfillment submission
+│   ├── key-registration.test.ts  # SSH/PGP key registration
+│   ├── key-types.test.ts    # Key type variants (PGP, SSH, X509)
+│   ├── arbitration.test.ts  # Arbitration with/without key verification
+│   └── framework-detection.test.ts  # Framework auto-detection
+├── integration/              # End-to-end workflow tests
+│   └── full-flow.test.ts    # Complete escrow flow with real crypto
+└── utils/                    # Test utilities and setup
+    └── setup.ts             # Test context and client setup
 ```
 
 ### Test Categories
 
-- **Unit Tests**: Individual component testing
-- **Integration Tests**: End-to-end workflow validation  
-- **Security Tests**: Cryptographic verification testing
-- **Multi-language Tests**: Cross-platform execution testing
+- **Unit Tests**: Individual component testing (escrow, fulfillment, keys, arbitration)
+- **Integration Tests**: End-to-end workflow validation with real cryptographic signatures
+- **Framework Detection Tests**: All 10 supported framework variants
+- **Key Type Tests**: PGP, SSH Ed25519, SSH Secp256k1, X509 key types
 
 ## Build & Distribution
 
@@ -1030,61 +990,23 @@ GAS_PRICE=20000000000
 
 **Security Note**: Never commit `.env` files to version control. Add `.env` to your `.gitignore`.
 
-### Config File (config.json)
+### Server Configuration
 
-The `config.json` file defines **test execution and repository handling settings**. This configures how the oracle server clones, builds, and tests repositories.
-
-**Purpose**:
-- Configure repository URLs and build commands for test execution
-- Set execution timeouts and security constraints
-- Define isolated execution environment parameters
-
-**Create `config.json` with:**
-
-```json
-{
-  "repositories": {
-    "source": {
-      "url": "https://github.com/user/solution.git",
-      "branch": "main",
-      "buildCommand": "bun install",              // Command to install dependencies
-      "testCommand": "bun test",                  // Command to run tests
-      "installCommand": "bun install"             // Alternative install command
-    },
-    "testcase": {
-      "url": "https://github.com/user/tests.git",
-      "branch": "main", 
-      "buildCommand": "bun install",
-      "testCommand": "bun test",
-      "installCommand": "bun install"
-    }
-  },
-  "execution": {
-    "timeout": 300000,                            // 5 minutes timeout for test execution
-    "cleanupAfterExecution": true,                // Remove temp files after tests
-    "isolatedEnvironment": true,                  // Run in sandboxed environment
-    "tempDirectory": "./temp",                    // Directory for temporary files
-    "maxMemoryMB": 512,                          // Memory limit for test execution
-    "allowedCommands": ["bun", "npm", "yarn", "pnpm", "cargo", "go"] // Whitelist of allowed commands
-  },
-  "security": {
-    "enableNetworkAccess": false,                 // Block network access during tests
-    "restrictFileSystem": true,                   // Limit file system access
-    "timeboxExecution": true                      // Enforce strict timeouts
-  }
-}
-```
-
-### Configuration Usage Examples
+All server options are configured via CLI flags:
 
 ```bash
-# Use default config.json for oracle server
-./bin/git-escrows-docker server --port 3000
+./bin/git-escrows-docker server \
+  --port 3000 \                    # Server port
+  --polling-interval 5000 \        # Poll interval in ms
+  --timeout 300000 \               # Test execution timeout in ms
+  --cleanup \                      # Auto-cleanup containers after execution
+  --mode pastUnarbitrated \        # Arbitration mode
+  --verify-key \                   # Require git signing key verification
+  --transport http                 # Transport protocol (http or websocket)
+```
 
-# Use custom configuration file
-./bin/git-escrows-docker server --port 3000 --config ./custom-config.json
-
-# Generate .env file interactively
+**Generate .env file interactively:**
+```bash
 ./bin/git-escrows-docker new-client --privateKey 0x... --network sepolia
 ```
 
@@ -1131,9 +1053,9 @@ MIT License - see [LICENSE](LICENSE) for details.
    - Check network connection and gas fees
 
 2. **Test Execution Timeouts**
-   - Increase timeout in config.json
+   - Increase timeout via `--timeout` flag (e.g., `--timeout 600000`)
    - Check repository accessibility
-   - Verify build/test commands
+   - Verify the framework is detected correctly
 
 3. **Binary Build Issues**
    - Update Bun to latest version
