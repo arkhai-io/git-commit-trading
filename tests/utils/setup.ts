@@ -6,22 +6,23 @@ import {
 import type { AlkahestClient } from "alkahest-ts/sdks/ts/src/index";
 import {
 	type CommitObligationAddresses,
+	type CommitObligationClient,
 	makeCommitObligationClient,
 } from "../../src/clients/commitObligation";
 import {
 	type GitIdentityRegistryAddresses,
+	type GitIdentityRegistryClient,
 	makeGitIdentityRegistryClient,
 } from "../../src/clients/gitIdentityRegistry";
 import GitIdentityRegistry from "../../src/contracts/GitIdentityRegistry.json";
 
-// Extension type for the git-commit-trading specific clients
-type GitCommitTradingExtension = {
-	commitObligation: ReturnType<typeof makeCommitObligationClient>;
-	gitIdentityRegistry: ReturnType<typeof makeGitIdentityRegistryClient>;
+// Extended client type: AlkahestClient + our git-commit-trading extensions
+// Note: We declare this explicitly because TypeScript can't infer the combined
+// type from alkahest-ts's `extend()` method due to its generic type structure.
+export type ExtendedClient = AlkahestClient & {
+	commitObligation: CommitObligationClient;
+	gitIdentityRegistry: GitIdentityRegistryClient;
 };
-
-// Extended client type with git-commit-trading extensions
-export type ExtendedClient = AlkahestClient & GitCommitTradingExtension;
 
 export async function setupTest() {
 	const testContext: TestContext = await setupTestEnvironment();
@@ -41,39 +42,26 @@ export async function setupTest() {
 		gitIdentityRegistry: gitIdentityRegistryAddress,
 	};
 
+	// Helper to create extended client
+	// The return type is declared explicitly because alkahest-ts's extend()
+	// uses complex generics that TypeScript can't fully infer
+	const createExtendedClient = (baseClient: AlkahestClient): ExtendedClient => {
+		return baseClient.extend((client) => ({
+			commitObligation: makeCommitObligationClient(
+				client.viemClient,
+				commitObligationAddresses,
+			),
+			gitIdentityRegistry: makeGitIdentityRegistryClient(
+				client.viemClient,
+				gitIdentityRegistryAddresses,
+			),
+		})) as unknown as ExtendedClient;
+	};
+
 	// New SDK structure: testContext.alice.client instead of testContext.aliceClient
-	const aliceClient = testContext.alice.client.extend((client: AlkahestClient) => ({
-		commitObligation: makeCommitObligationClient(
-			client.viemClient,
-			commitObligationAddresses,
-		),
-		gitIdentityRegistry: makeGitIdentityRegistryClient(
-			client.viemClient,
-			gitIdentityRegistryAddresses,
-		),
-	}));
-
-	const bobClient = testContext.bob.client.extend((client: AlkahestClient) => ({
-		commitObligation: makeCommitObligationClient(
-			client.viemClient,
-			commitObligationAddresses,
-		),
-		gitIdentityRegistry: makeGitIdentityRegistryClient(
-			client.viemClient,
-			gitIdentityRegistryAddresses,
-		),
-	}));
-
-	const charlieClient = testContext.charlie.client.extend((client: AlkahestClient) => ({
-		commitObligation: makeCommitObligationClient(
-			client.viemClient,
-			commitObligationAddresses,
-		),
-		gitIdentityRegistry: makeGitIdentityRegistryClient(
-			client.viemClient,
-			gitIdentityRegistryAddresses,
-		),
-	}));
+	const aliceClient = createExtendedClient(testContext.alice.client);
+	const bobClient = createExtendedClient(testContext.bob.client);
+	const charlieClient = createExtendedClient(testContext.charlie.client);
 
 	return {
 		testContext,

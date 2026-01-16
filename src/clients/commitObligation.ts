@@ -24,6 +24,8 @@ export type CommitObligationAddresses = {
 	commitObligation: `0x${string}`;
 };
 
+export type CommitObligationClient = ReturnType<typeof makeCommitObligationClient>;
+
 export const makeCommitObligationClient = (
 	viemClient: ViemClient,
 	addresses: CommitObligationAddresses,

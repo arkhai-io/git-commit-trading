@@ -1,3 +1,44 @@
+/**
+ * Full Flow Integration Test
+ *
+ * Tests the complete escrow lifecycle with REAL cryptographic verification.
+ *
+ * ============================================================================
+ * SETUP INSTRUCTIONS
+ * ============================================================================
+ *
+ * 1. Generate an SSH key pair for testing (if you don't have one):
+ *
+ *    mkdir -p ~/.ssh/git-alkahest
+ *    ssh-keygen -t ed25519 -f ~/.ssh/git-alkahest/id_ed25519 -N "" -C "test@example.com"
+ *
+ * 2. Create a .env.test file in the project root with:
+ *
+ *    # Path to your SSH private key (ed25519 format)
+ *    TEST_SSH_PRIVATE_KEY_PATH=~/.ssh/git-alkahest/id_ed25519
+ *
+ *    # Path to your SSH public key
+ *    TEST_SSH_PUBLIC_KEY_PATH=~/.ssh/git-alkahest/id_ed25519.pub
+ *
+ * 3. Run the tests:
+ *
+ *    bun test tests/integration/full-flow.test.ts
+ *
+ * ============================================================================
+ * WHAT THIS TEST VERIFIES
+ * ============================================================================
+ *
+ * 1. Alice (buyer) and Bob (seller) register their SSH keys on-chain
+ * 2. Alice creates an escrow demand with test specifications
+ * 3. Bob submits a fulfillment attestation
+ * 4. Bob requests arbitration from the oracle
+ * 5. Oracle verifies Bob's registered key and runs tests
+ * 6. Oracle submits arbitration decision (pass/fail based on real test execution)
+ * 7. Bob collects escrow funds on successful arbitration
+ *
+ * All cryptographic signatures are REAL - no mocking.
+ */
+
 import {
 	afterAll,
 	beforeAll,
@@ -7,50 +48,110 @@ import {
 	test,
 } from "bun:test";
 import type { TestContext } from "alkahest-ts/sdks/ts/tests/utils/setup";
+import type { AttestationWithDemand } from "alkahest-ts/sdks/ts/src/clients/arbiters/general/trustedOracle";
 import { exec } from "child_process";
+import fs from "fs";
 import path from "path";
 import { promisify } from "util";
+import { encodeAbiParameters, parseAbiParameters } from "viem";
+import { CommitAlgo } from "../../src/clients/commitObligation";
 import {
-	encodeAbiParameters,
-	parseAbiParameters,
-} from "viem";
+	type GitKeyClaim,
+	KeyType,
+	createGitKeyClaim,
+} from "../../src/clients/gitIdentityRegistry";
 import {
-	CommitAlgo,
-} from "../../src/clients/commitObligation";
-import { KeyType } from "../../src/clients/gitIdentityRegistry";
-import {
-	extractSSHKeyMaterial,
 	generateSigningMessage,
 	generateSSHSignature,
+	getRegisteredKey,
 } from "../../src/crypto/index";
 import { runTests } from "../../src/test-execution/index";
-import { setupTest } from "../utils/setup";
+import { type ExtendedClient, setupTest } from "../utils/setup";
 
 const execAsync = promisify(exec);
 const EXAMPLES_DIR = path.resolve(__dirname, "../../examples");
 
-/**
- * Full Flow Integration Test
- *
- * Tests the complete escrow lifecycle using local examples:
- * 1. Alice creates escrow demand (buyer)
- * 2. Bob submits fulfillment (seller)
- * 3. Bob requests arbitration
- * 4. Oracle arbitrates using local test execution
- * 5. Bob collects escrow
- */
+// Load environment variables from .env.test if it exists
+function loadTestEnv(): { privateKeyPath: string; publicKeyPath: string } | null {
+	const envTestPath = path.resolve(__dirname, "../../.env.test");
+
+	// Try .env.test first, then fall back to common locations
+	let privateKeyPath: string | undefined;
+	let publicKeyPath: string | undefined;
+
+	if (fs.existsSync(envTestPath)) {
+		const content = fs.readFileSync(envTestPath, "utf8");
+		const lines = content.split("\n");
+		for (const line of lines) {
+			const [key, ...valueParts] = line.split("=");
+			const value = valueParts.join("=").trim();
+			if (key?.trim() === "TEST_SSH_PRIVATE_KEY_PATH") {
+				privateKeyPath = value.replace(/^~/, process.env.HOME || "");
+			}
+			if (key?.trim() === "TEST_SSH_PUBLIC_KEY_PATH") {
+				publicKeyPath = value.replace(/^~/, process.env.HOME || "");
+			}
+		}
+	}
+
+	// Fall back to default location if not specified
+	if (!privateKeyPath) {
+		const defaultPath = `${process.env.HOME}/.ssh/git-alkahest/id_ed25519`;
+		if (fs.existsSync(defaultPath)) {
+			privateKeyPath = defaultPath;
+			publicKeyPath = `${defaultPath}.pub`;
+		}
+	}
+
+	if (!privateKeyPath || !publicKeyPath) {
+		return null;
+	}
+
+	// Verify files exist
+	if (!fs.existsSync(privateKeyPath)) {
+		console.error(`SSH private key not found at: ${privateKeyPath}`);
+		return null;
+	}
+	if (!fs.existsSync(publicKeyPath)) {
+		console.error(`SSH public key not found at: ${publicKeyPath}`);
+		return null;
+	}
+
+	return { privateKeyPath, publicKeyPath };
+}
+
+// Parse SSH public key to extract the key material and comment
+function parseSSHPublicKey(publicKeyPath: string): {
+	keyType: string;
+	keyMaterial: string;
+	comment: string;
+} {
+	const content = fs.readFileSync(publicKeyPath, "utf8").trim();
+	const parts = content.split(" ");
+	if (parts.length < 2) {
+		throw new Error("Invalid SSH public key format");
+	}
+	return {
+		keyType: parts[0] || "",
+		keyMaterial: parts[1] || "",
+		comment: parts.slice(2).join(" ") || "",
+	};
+}
+
 describe("Full Escrow Flow Integration", () => {
-	// Test context and variables
+	// Test context and variables with proper types
 	let testContext: TestContext;
 	let alice: `0x${string}`;
 	let bob: `0x${string}`;
 	let oracle: `0x${string}`;
-	let aliceClient: any;
-	let bobClient: any;
-	let oracleClient: any;
-	let commitObligationAddress: `0x${string}`;
+	let aliceClient: ExtendedClient;
+	let bobClient: ExtendedClient;
+	let oracleClient: ExtendedClient;
 	let gitIdentityRegistryAddress: `0x${string}`;
 	let containerAvailable = false;
+	let sshKeysAvailable = false;
+	let sshPrivateKeyPath: string;
+	let sshPublicKey: { keyType: string; keyMaterial: string; comment: string };
 
 	beforeAll(async () => {
 		// Check for docker or podman
@@ -65,9 +166,38 @@ describe("Full Escrow Flow Integration", () => {
 			}
 		}
 		if (!containerAvailable) {
-			console.log("⚠️ No container runtime (docker/podman) available, skipping integration tests");
+			console.log(
+				"⚠️ No container runtime (docker/podman) available, skipping integration tests",
+			);
 			return;
 		}
+
+		// Check for SSH keys
+		const testEnv = loadTestEnv();
+		if (!testEnv) {
+			console.log(
+				"⚠️ SSH keys not configured. See test file header for setup instructions.",
+			);
+			console.log("   Expected: ~/.ssh/git-alkahest/id_ed25519 (ed25519 key)");
+			console.log("   Or create .env.test with TEST_SSH_PRIVATE_KEY_PATH");
+			return;
+		}
+
+		sshPrivateKeyPath = testEnv.privateKeyPath;
+		sshPublicKey = parseSSHPublicKey(testEnv.publicKeyPath);
+
+		// Verify it's an ed25519 key (required for this test)
+		if (!sshPublicKey.keyType.includes("ed25519")) {
+			console.log(
+				`⚠️ SSH key must be ed25519, got: ${sshPublicKey.keyType}`,
+			);
+			return;
+		}
+
+		sshKeysAvailable = true;
+		console.log(
+			`Using SSH key: ${testEnv.publicKeyPath} (${sshPublicKey.comment || "no comment"})`,
+		);
 
 		// Set up blockchain environment
 		const setup = await setupTest();
@@ -79,14 +209,13 @@ describe("Full Escrow Flow Integration", () => {
 		alice = testContext.alice.address;
 		bob = testContext.bob.address;
 		oracle = testContext.charlie.address;
-		commitObligationAddress = setup.commitObligationAddress;
 		gitIdentityRegistryAddress = setup.gitIdentityRegistryAddress;
 	});
 
 	beforeEach(async () => {
-		if (!containerAvailable) return;
+		if (!containerAvailable || !sshKeysAvailable) return;
 		// Reset to initial state before each test
-		if (testContext.anvilInitState) {
+		if (testContext?.anvilInitState) {
 			await testContext.testClient.loadState({
 				state: testContext.anvilInitState,
 			});
@@ -94,9 +223,8 @@ describe("Full Escrow Flow Integration", () => {
 	});
 
 	afterAll(async () => {
-		if (testContext?.anvil) {
-			await testContext.anvil.stop();
-		}
+		// Don't explicitly stop anvil - it causes timeout issues and will be
+		// cleaned up automatically when the process exits
 	});
 
 	// Helper to encode demand data
@@ -104,7 +232,7 @@ describe("Full Escrow Flow Integration", () => {
 		testsCommitHash: string;
 		testsCommitAlgo: number;
 		hosts: string[];
-	}) => {
+	}): `0x${string}` => {
 		return encodeAbiParameters(
 			parseAbiParameters(
 				"(string testsCommitHash, uint8 testsCommitAlgo, string[] hosts)",
@@ -113,52 +241,54 @@ describe("Full Escrow Flow Integration", () => {
 		);
 	};
 
-	// Helper to register a git key for testing
-	// In production, this would use real SSH/PGP keys with proper signatures
-	const registerTestKey = async (
-		client: any,
+	// Register a git key with REAL cryptographic signatures
+	const registerGitKey = async (
+		client: ExtendedClient,
 		userAddress: `0x${string}`,
 		label: string,
-	): Promise<void> => {
-		// Use a test SSH public key
-		const sshPublicKey =
-			"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFHxJQmkJz8of2SAQWSDaRiPXUzpoJ7NSsEFqBl0NZPy test@example.com";
-		const keyMaterial = extractSSHKeyMaterial(sshPublicKey);
+	): Promise<GitKeyClaim> => {
+		// Generate a unique nonce and hash it
+		// The nonce itself is kept secret; only the hash is stored on-chain
 		const nonce = `nonce_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
-		const nonceHash = Buffer.from(nonce).toString("hex").padStart(64, "0");
+		const crypto = await import("crypto");
+		const nonceHash = crypto.createHash("sha256").update(nonce, "utf8").digest("hex");
 
-		// Try to load private key and generate real signature, otherwise use mock hex
-		const privateKeyPath = process.env.HOME + "/.ssh/git-alkahest/id_ed25519";
-		let signature: string;
+		// Create the signing message using the nonceHash (what the verifier will use)
+		// This ensures the signature can be verified using only on-chain data
+		const signingMessage = generateSigningMessage(userAddress, nonceHash);
+		console.log(`  Signing message: "${signingMessage}"`);
 
-		try {
-			const fs = await import("fs");
-			const privateKeyPEM = fs.readFileSync(privateKeyPath, "utf8");
-			const signingMessage = generateSigningMessage(userAddress, nonce);
-			signature = generateSSHSignature(privateKeyPEM, signingMessage);
-		} catch {
-			// Use mock hex signature for testing (won't cryptographically verify but demonstrates the flow)
-			// Must be valid hex string
-			signature = "fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321";
-		}
+		// Generate REAL SSH signature using the private key
+		const privateKeyPEM = fs.readFileSync(sshPrivateKeyPath, "utf8");
+		const signature = generateSSHSignature(privateKeyPEM, signingMessage);
+		console.log(`  Generated signature: ${signature.slice(0, 32)}...`);
 
-		try {
-			const result = await client.gitIdentityRegistry.claimKey({
-				keyType: KeyType.SSHEd25519,
-				nonceHash: `0x${nonceHash}`,
-				sig: `0x${signature}`,
-				publicKey: keyMaterial,
-			});
-			console.log(`🔑 ${label}'s key registered: ${result.hash.slice(0, 18)}...`);
-		} catch (error: any) {
-			// Key might already be registered from previous test
-			console.log(`🔑 ${label}'s key registration: ${error.message?.slice(0, 50) || "skipped"}`);
-		}
+		// Create the key claim with proper types
+		const keyClaim = createGitKeyClaim(
+			KeyType.SSHEd25519,
+			nonceHash,
+			signature,
+			sshPublicKey.keyMaterial,
+		);
+
+		// Submit the key claim on-chain
+		const result = await client.gitIdentityRegistry.claimKey(keyClaim);
+		console.log(`🔑 ${label}'s key registered: ${result.hash.slice(0, 18)}...`);
+
+		// Wait for transaction confirmation
+		await testContext.testClient.waitForTransactionReceipt({ hash: result.hash });
+
+		return keyClaim;
 	};
 
-	test("Full flow: bun-test framework with key registration (local examples)", async () => {
+
+	test("Full flow: bun-test framework with REAL key registration and verification", async () => {
 		if (!containerAvailable) {
 			console.log("Skipping: No container runtime available");
+			return;
+		}
+		if (!sshKeysAvailable) {
+			console.log("Skipping: SSH keys not configured");
 			return;
 		}
 
@@ -166,10 +296,10 @@ describe("Full Escrow Flow Integration", () => {
 		const sourceDir = path.join(EXAMPLES_DIR, "bun-test/fulfillment");
 
 		console.log("\n📋 Step 1: Alice registers her git key (buyer)");
-		await registerTestKey(aliceClient, alice, "Alice");
+		const aliceKeyClaim = await registerGitKey(aliceClient, alice, "Alice");
 
 		console.log("\n📋 Step 2: Bob registers his git key (seller)");
-		await registerTestKey(bobClient, bob, "Bob");
+		const bobKeyClaim = await registerGitKey(bobClient, bob, "Bob");
 
 		console.log("\n📋 Step 3: Alice creates escrow demand");
 		const arbiter = testContext.addresses.trustedOracleArbiter;
@@ -214,37 +344,36 @@ describe("Full Escrow Flow Integration", () => {
 		console.log(`✅ Fulfillment submitted: ${fulfillment.uid.slice(0, 18)}...`);
 
 		console.log("\n📋 Step 5: Bob requests arbitration");
-		const requestHash = await bobClient.arbiters.general.trustedOracle.requestArbitration(
-			fulfillment.uid,
-			oracle,
-			demand,
-		);
+		const requestHash =
+			await bobClient.arbiters.general.trustedOracle.requestArbitration(
+				fulfillment.uid,
+				oracle,
+				demand,
+			);
 
 		// Wait for arbitration request to be confirmed
-		await testContext.testClient.waitForTransactionReceipt({ hash: requestHash });
+		await testContext.testClient.waitForTransactionReceipt({
+			hash: requestHash,
+		});
 		console.log(`✅ Arbitration requested: ${requestHash.slice(0, 18)}...`);
 
 		console.log("\n📋 Step 6: Oracle arbitrates with key verification");
-		const { decisions } = await oracleClient.arbiters.general.trustedOracle.arbitrateMany(
-			async ({ attestation }: { attestation: any }) => {
-				// Verify Bob's registered key exists
-				console.log("🔍 Verifying seller's registered key...");
-				try {
-					const bobKeyClaim = await oracleClient.gitIdentityRegistry.getLatestKeyClaim(bob);
-					if (bobKeyClaim && bobKeyClaim.publicKey) {
-						console.log(`✅ Found registered key for seller (type: ${bobKeyClaim.keyType})`);
-					} else {
-						console.log("❌ No registered key found for seller");
-						return false;
-					}
-				} catch (error) {
-					console.log(`❌ Failed to retrieve seller's key: ${error}`);
-					return false;
-				}
+		const { decisions } =
+			await oracleClient.arbiters.general.trustedOracle.arbitrateMany(
+				async ({ attestation }: AttestationWithDemand): Promise<boolean | null> => {
+					// Verify Bob's registered key exists and is cryptographically valid
+					// getRegisteredKey returns null if key doesn't exist or signature is invalid
+					console.log("🔍 Verifying Bob's registered key...");
+					const bobKey = await getRegisteredKey(
+						testContext.testClient,
+						gitIdentityRegistryAddress,
+						bob,
+					);
+					expect(bobKey).not.toBeNull();
+					console.log(`✅ Bob's key verified: ${KeyType[bobKey!.keyType]}`);
 
-				// Run tests
-				console.log("🔧 Running local test execution...");
-				try {
+					// Run tests
+					console.log("🔧 Running local test execution...");
 					const result = await runTests(testsDir, sourceDir, {
 						timeout: 120000,
 					});
@@ -252,20 +381,18 @@ describe("Full Escrow Flow Integration", () => {
 					console.log(`   Framework: ${result.frameworkUsed}`);
 					console.log(`   Duration: ${result.duration}ms`);
 					console.log(`   Success: ${result.success}`);
+					expect(result.success).toBe(true);
 
 					return result.success;
-				} catch (error) {
-					console.error("❌ Test execution failed:", error);
-					return false;
-				}
-			},
-			{ mode: "past" },
-		);
+				},
+				{ mode: "past" },
+			);
 
 		expect(decisions.length).toBeGreaterThan(0);
 		const lastDecision = decisions[decisions.length - 1];
-		expect(lastDecision.decision).toBe(true);
-		console.log(`✅ Arbitration complete: APPROVED`);
+		expect(lastDecision).toBeDefined();
+		expect(lastDecision!.decision).toBe(true);
+		console.log("✅ Arbitration complete: APPROVED");
 
 		console.log("\n📋 Step 7: Bob collects escrow");
 		const collectionHash = await bobClient.erc20.escrow.nonTierable.collect(
@@ -276,7 +403,9 @@ describe("Full Escrow Flow Integration", () => {
 		expect(collectionHash).toBeTruthy();
 		console.log(`✅ Escrow collected! Tx: ${collectionHash.slice(0, 18)}...`);
 
-		console.log("\n🎉 Full flow with key verification completed successfully!");
+		console.log(
+			"\n🎉 Full flow with REAL cryptographic verification completed!",
+		);
 	}, 300000); // 5 minute timeout
 
 	test("Full flow: cargo framework (local examples)", async () => {
@@ -284,11 +413,19 @@ describe("Full Escrow Flow Integration", () => {
 			console.log("Skipping: No container runtime available");
 			return;
 		}
+		if (!sshKeysAvailable) {
+			console.log("Skipping: SSH keys not configured");
+			return;
+		}
 
 		const testsDir = path.join(EXAMPLES_DIR, "cargo/demand");
 		const sourceDir = path.join(EXAMPLES_DIR, "cargo/fulfillment");
 
-		console.log("\n📋 Step 1: Alice creates escrow demand");
+		console.log("\n📋 Step 1: Register keys for Alice and Bob");
+		await registerGitKey(aliceClient, alice, "Alice");
+		await registerGitKey(bobClient, bob, "Bob");
+
+		console.log("\n📋 Step 2: Alice creates escrow demand");
 		const arbiter = testContext.addresses.trustedOracleArbiter;
 
 		const commitTestsData = encodeCommitTestsDemand({
@@ -315,7 +452,7 @@ describe("Full Escrow Flow Integration", () => {
 		expect(escrow.uid).toBeTruthy();
 		console.log(`✅ Escrow created: ${escrow.uid.slice(0, 18)}...`);
 
-		console.log("\n📋 Step 2: Bob submits fulfillment");
+		console.log("\n📋 Step 3: Bob submits fulfillment");
 		const { attested: fulfillment } =
 			await bobClient.commitObligation.doObligation(
 				{
@@ -329,21 +466,34 @@ describe("Full Escrow Flow Integration", () => {
 		expect(fulfillment.uid).toBeTruthy();
 		console.log(`✅ Fulfillment submitted: ${fulfillment.uid.slice(0, 18)}...`);
 
-		console.log("\n📋 Step 3: Bob requests arbitration");
-		const requestHash = await bobClient.arbiters.general.trustedOracle.requestArbitration(
-			fulfillment.uid,
-			oracle,
-			demand,
-		);
+		console.log("\n📋 Step 4: Bob requests arbitration");
+		const requestHash =
+			await bobClient.arbiters.general.trustedOracle.requestArbitration(
+				fulfillment.uid,
+				oracle,
+				demand,
+			);
 
-		await testContext.testClient.waitForTransactionReceipt({ hash: requestHash });
+		await testContext.testClient.waitForTransactionReceipt({
+			hash: requestHash,
+		});
 		console.log(`✅ Arbitration requested: ${requestHash.slice(0, 18)}...`);
 
-		console.log("\n📋 Step 4: Oracle arbitrates using local test execution");
-		const { decisions } = await oracleClient.arbiters.general.trustedOracle.arbitrateMany(
-			async ({ attestation }: { attestation: any }) => {
-				console.log("🔧 Running local Rust test execution...");
-				try {
+		console.log("\n📋 Step 5: Oracle arbitrates using local test execution");
+		const { decisions } =
+			await oracleClient.arbiters.general.trustedOracle.arbitrateMany(
+				async ({ attestation }: AttestationWithDemand): Promise<boolean | null> => {
+					// Verify seller's key
+					console.log("🔍 Verifying Bob's registered key...");
+					const bobKey = await getRegisteredKey(
+						testContext.testClient,
+						gitIdentityRegistryAddress,
+						bob,
+					);
+					expect(bobKey).not.toBeNull();
+					console.log(`✅ Bob's key verified: ${KeyType[bobKey!.keyType]}`);
+
+					console.log("🔧 Running local Rust test execution...");
 					const result = await runTests(testsDir, sourceDir, {
 						timeout: 180000, // 3 minutes for Rust compilation
 					});
@@ -351,22 +501,20 @@ describe("Full Escrow Flow Integration", () => {
 					console.log(`   Framework: ${result.frameworkUsed}`);
 					console.log(`   Duration: ${result.duration}ms`);
 					console.log(`   Success: ${result.success}`);
+					expect(result.success).toBe(true);
 
 					return result.success;
-				} catch (error) {
-					console.error("❌ Test execution failed:", error);
-					return false;
-				}
-			},
-			{ mode: "past" },
-		);
+				},
+				{ mode: "past" },
+			);
 
 		expect(decisions.length).toBeGreaterThan(0);
 		const lastDecision = decisions[decisions.length - 1];
-		expect(lastDecision.decision).toBe(true);
-		console.log(`✅ Arbitration complete: APPROVED`);
+		expect(lastDecision).toBeDefined();
+		expect(lastDecision!.decision).toBe(true);
+		console.log("✅ Arbitration complete: APPROVED");
 
-		console.log("\n📋 Step 5: Bob collects escrow");
+		console.log("\n📋 Step 6: Bob collects escrow");
 		const collectionHash = await bobClient.erc20.escrow.nonTierable.collect(
 			escrow.uid,
 			fulfillment.uid,
@@ -383,11 +531,19 @@ describe("Full Escrow Flow Integration", () => {
 			console.log("Skipping: No container runtime available");
 			return;
 		}
+		if (!sshKeysAvailable) {
+			console.log("Skipping: SSH keys not configured");
+			return;
+		}
 
 		const testsDir = path.join(EXAMPLES_DIR, "pytest-uv/demand");
 		const sourceDir = path.join(EXAMPLES_DIR, "pytest-uv/fulfillment");
 
-		console.log("\n📋 Step 1: Alice creates escrow demand");
+		console.log("\n📋 Step 1: Register keys for Alice and Bob");
+		await registerGitKey(aliceClient, alice, "Alice");
+		await registerGitKey(bobClient, bob, "Bob");
+
+		console.log("\n📋 Step 2: Alice creates escrow demand");
 		const arbiter = testContext.addresses.trustedOracleArbiter;
 
 		const commitTestsData = encodeCommitTestsDemand({
@@ -414,7 +570,7 @@ describe("Full Escrow Flow Integration", () => {
 		expect(escrow.uid).toBeTruthy();
 		console.log(`✅ Escrow created: ${escrow.uid.slice(0, 18)}...`);
 
-		console.log("\n📋 Step 2: Bob submits fulfillment");
+		console.log("\n📋 Step 3: Bob submits fulfillment");
 		const { attested: fulfillment } =
 			await bobClient.commitObligation.doObligation(
 				{
@@ -428,21 +584,34 @@ describe("Full Escrow Flow Integration", () => {
 		expect(fulfillment.uid).toBeTruthy();
 		console.log(`✅ Fulfillment submitted: ${fulfillment.uid.slice(0, 18)}...`);
 
-		console.log("\n📋 Step 3: Bob requests arbitration");
-		const requestHash = await bobClient.arbiters.general.trustedOracle.requestArbitration(
-			fulfillment.uid,
-			oracle,
-			demand,
-		);
+		console.log("\n📋 Step 4: Bob requests arbitration");
+		const requestHash =
+			await bobClient.arbiters.general.trustedOracle.requestArbitration(
+				fulfillment.uid,
+				oracle,
+				demand,
+			);
 
-		await testContext.testClient.waitForTransactionReceipt({ hash: requestHash });
+		await testContext.testClient.waitForTransactionReceipt({
+			hash: requestHash,
+		});
 		console.log(`✅ Arbitration requested: ${requestHash.slice(0, 18)}...`);
 
-		console.log("\n📋 Step 4: Oracle arbitrates using local test execution");
-		const { decisions } = await oracleClient.arbiters.general.trustedOracle.arbitrateMany(
-			async ({ attestation }: { attestation: any }) => {
-				console.log("🔧 Running local Python test execution...");
-				try {
+		console.log("\n📋 Step 5: Oracle arbitrates using local test execution");
+		const { decisions } =
+			await oracleClient.arbiters.general.trustedOracle.arbitrateMany(
+				async ({ attestation }: AttestationWithDemand): Promise<boolean | null> => {
+					// Verify seller's key
+					console.log("🔍 Verifying Bob's registered key...");
+					const bobKey = await getRegisteredKey(
+						testContext.testClient,
+						gitIdentityRegistryAddress,
+						bob,
+					);
+					expect(bobKey).not.toBeNull();
+					console.log(`✅ Bob's key verified: ${KeyType[bobKey!.keyType]}`);
+
+					console.log("🔧 Running local Python test execution...");
 					const result = await runTests(testsDir, sourceDir, {
 						timeout: 180000,
 					});
@@ -450,22 +619,20 @@ describe("Full Escrow Flow Integration", () => {
 					console.log(`   Framework: ${result.frameworkUsed}`);
 					console.log(`   Duration: ${result.duration}ms`);
 					console.log(`   Success: ${result.success}`);
+					expect(result.success).toBe(true);
 
 					return result.success;
-				} catch (error) {
-					console.error("❌ Test execution failed:", error);
-					return false;
-				}
-			},
-			{ mode: "past" },
-		);
+				},
+				{ mode: "past" },
+			);
 
 		expect(decisions.length).toBeGreaterThan(0);
 		const lastDecision = decisions[decisions.length - 1];
-		expect(lastDecision.decision).toBe(true);
-		console.log(`✅ Arbitration complete: APPROVED`);
+		expect(lastDecision).toBeDefined();
+		expect(lastDecision!.decision).toBe(true);
+		console.log("✅ Arbitration complete: APPROVED");
 
-		console.log("\n📋 Step 5: Bob collects escrow");
+		console.log("\n📋 Step 6: Bob collects escrow");
 		const collectionHash = await bobClient.erc20.escrow.nonTierable.collect(
 			escrow.uid,
 			fulfillment.uid,
@@ -482,11 +649,19 @@ describe("Full Escrow Flow Integration", () => {
 			console.log("Skipping: No container runtime available");
 			return;
 		}
+		if (!sshKeysAvailable) {
+			console.log("Skipping: SSH keys not configured");
+			return;
+		}
 
 		const testsDir = path.join(EXAMPLES_DIR, "custom-dockerfile/demand");
 		const sourceDir = path.join(EXAMPLES_DIR, "custom-dockerfile/fulfillment");
 
-		console.log("\n📋 Step 1: Alice creates escrow demand");
+		console.log("\n📋 Step 1: Register keys for Alice and Bob");
+		await registerGitKey(aliceClient, alice, "Alice");
+		await registerGitKey(bobClient, bob, "Bob");
+
+		console.log("\n📋 Step 2: Alice creates escrow demand");
 		const arbiter = testContext.addresses.trustedOracleArbiter;
 
 		const commitTestsData = encodeCommitTestsDemand({
@@ -513,7 +688,7 @@ describe("Full Escrow Flow Integration", () => {
 		expect(escrow.uid).toBeTruthy();
 		console.log(`✅ Escrow created: ${escrow.uid.slice(0, 18)}...`);
 
-		console.log("\n📋 Step 2: Bob submits fulfillment");
+		console.log("\n📋 Step 3: Bob submits fulfillment");
 		const { attested: fulfillment } =
 			await bobClient.commitObligation.doObligation(
 				{
@@ -527,21 +702,34 @@ describe("Full Escrow Flow Integration", () => {
 		expect(fulfillment.uid).toBeTruthy();
 		console.log(`✅ Fulfillment submitted: ${fulfillment.uid.slice(0, 18)}...`);
 
-		console.log("\n📋 Step 3: Bob requests arbitration");
-		const requestHash = await bobClient.arbiters.general.trustedOracle.requestArbitration(
-			fulfillment.uid,
-			oracle,
-			demand,
-		);
+		console.log("\n📋 Step 4: Bob requests arbitration");
+		const requestHash =
+			await bobClient.arbiters.general.trustedOracle.requestArbitration(
+				fulfillment.uid,
+				oracle,
+				demand,
+			);
 
-		await testContext.testClient.waitForTransactionReceipt({ hash: requestHash });
+		await testContext.testClient.waitForTransactionReceipt({
+			hash: requestHash,
+		});
 		console.log(`✅ Arbitration requested: ${requestHash.slice(0, 18)}...`);
 
-		console.log("\n📋 Step 4: Oracle arbitrates using local test execution");
-		const { decisions } = await oracleClient.arbiters.general.trustedOracle.arbitrateMany(
-			async ({ attestation }: { attestation: any }) => {
-				console.log("🔧 Running local custom dockerfile test execution...");
-				try {
+		console.log("\n📋 Step 5: Oracle arbitrates using local test execution");
+		const { decisions } =
+			await oracleClient.arbiters.general.trustedOracle.arbitrateMany(
+				async ({ attestation }: AttestationWithDemand): Promise<boolean | null> => {
+					// Verify seller's key
+					console.log("🔍 Verifying Bob's registered key...");
+					const bobKey = await getRegisteredKey(
+						testContext.testClient,
+						gitIdentityRegistryAddress,
+						bob,
+					);
+					expect(bobKey).not.toBeNull();
+					console.log(`✅ Bob's key verified: ${KeyType[bobKey!.keyType]}`);
+
+					console.log("🔧 Running local custom dockerfile test execution...");
 					const result = await runTests(testsDir, sourceDir, {
 						timeout: 120000,
 					});
@@ -549,22 +737,20 @@ describe("Full Escrow Flow Integration", () => {
 					console.log(`   Framework: ${result.frameworkUsed}`);
 					console.log(`   Duration: ${result.duration}ms`);
 					console.log(`   Success: ${result.success}`);
+					expect(result.success).toBe(true);
 
 					return result.success;
-				} catch (error) {
-					console.error("❌ Test execution failed:", error);
-					return false;
-				}
-			},
-			{ mode: "past" },
-		);
+				},
+				{ mode: "past" },
+			);
 
 		expect(decisions.length).toBeGreaterThan(0);
 		const lastDecision = decisions[decisions.length - 1];
-		expect(lastDecision.decision).toBe(true);
-		console.log(`✅ Arbitration complete: APPROVED`);
+		expect(lastDecision).toBeDefined();
+		expect(lastDecision!.decision).toBe(true);
+		console.log("✅ Arbitration complete: APPROVED");
 
-		console.log("\n📋 Step 5: Bob collects escrow");
+		console.log("\n📋 Step 6: Bob collects escrow");
 		const collectionHash = await bobClient.erc20.escrow.nonTierable.collect(
 			escrow.uid,
 			fulfillment.uid,
