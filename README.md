@@ -30,10 +30,10 @@ git-escrows new-client --privateKey "0x..." --network "sepolia"
 
 ```env
 PRIVATE_KEY=0x...                           # Your wallet private key (address derived automatically)
-NETWORK=sepolia                             # Network: anvil, localhost, sepolia, mainnet
+NETWORK=base-sepolia                        # Network: anvil, base-sepolia
 RPC_URL=https://...                         # RPC endpoint
 
-# Contract addresses (auto-configured for sepolia)
+# Contract addresses (auto-configured for base-sepolia)
 COMMIT_OBLIGATION_ADDRESS=0x...
 GIT_IDENTITY_REGISTRY_ADDRESS=0x...
 ERC20_ESCROW_OBLIGATION_ADDRESS=0x...

@@ -54,11 +54,8 @@ PRIVATE_KEY=${options.privateKey}
 NETWORK=${options.network}
 `;
 
-		// Add RPC URL if not anvil/localhost
-		if (
-			options.network.toLowerCase() !== "anvil" &&
-			options.network.toLowerCase() !== "localhost"
-		) {
+		// Add RPC URL if not anvil
+		if (options.network.toLowerCase() !== "anvil") {
 			envContent += `RPC_URL=# Add your RPC URL here
 `;
 		} else {

@@ -12,7 +12,7 @@ import {
 	webSocket,
 } from "viem";
 import { nonceManager, privateKeyToAccount } from "viem/accounts";
-import { baseSepolia, foundry, mainnet, sepolia } from "viem/chains";
+import { baseSepolia, foundry } from "viem/chains";
 import {
 	type CommitObligationAddresses,
 	makeCommitObligationClient,
@@ -155,21 +155,10 @@ export async function createClientFromEnv(
 
 	switch (network.toLowerCase()) {
 		case "anvil":
-		case "localhost":
 			rpcUrl = rpcUrl || "http://127.0.0.1:8545";
 			walletClient = createWalletClient({
 				account,
 				chain: foundry,
-				transport: createTransport(rpcUrl),
-			});
-			break;
-		case "sepolia":
-			if (!rpcUrl) {
-				throw new Error("RPC_URL is required for sepolia network in .env file");
-			}
-			walletClient = createWalletClient({
-				account,
-				chain: sepolia,
 				transport: createTransport(rpcUrl),
 			});
 			break;
@@ -186,19 +175,9 @@ export async function createClientFromEnv(
 				transport: createTransport(rpcUrl),
 			});
 			break;
-		case "mainnet":
-			if (!rpcUrl) {
-				throw new Error("RPC_URL is required for mainnet network in .env file");
-			}
-			walletClient = createWalletClient({
-				account,
-				chain: mainnet,
-				transport: createTransport(rpcUrl),
-			});
-			break;
 		default:
 			throw new Error(
-				`Unsupported network: ${network}. Supported: anvil, localhost, sepolia, base-sepolia, mainnet`,
+				`Unsupported network: ${network}. Supported: anvil, base-sepolia`,
 			);
 	}
 
@@ -264,12 +243,12 @@ export function requireEnvFile(envPath: string = ".env"): void {
 		console.error(chalk.gray("PRIVATE_KEY=0x1234567890abcdef..."));
 		console.error(
 			chalk.gray(
-				"NETWORK=anvil  # optional: anvil, localhost, sepolia, base-sepolia, mainnet",
+				"NETWORK=anvil  # optional: anvil, base-sepolia",
 			),
 		);
 		console.error(
 			chalk.gray(
-				"RPC_URL=http://127.0.0.1:8545  # optional for anvil/localhost",
+				"RPC_URL=http://127.0.0.1:8545  # optional for anvil",
 			),
 		);
 		console.error(chalk.gray("COMMIT_OBLIGATION_ADDRESS=0x...  # optional"));

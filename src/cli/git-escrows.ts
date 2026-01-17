@@ -25,7 +25,7 @@ program
 	.requiredOption("--privateKey <key>", "Private key for the client (0x...)")
 	.requiredOption(
 		"--network <network>",
-		"Network to connect to (anvil, localhost, sepolia, mainnet)",
+		"Network to connect to (anvil, base-sepolia)",
 	)
 	.action(newClientCommand);
 
