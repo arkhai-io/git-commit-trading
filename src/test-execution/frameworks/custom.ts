@@ -1,5 +1,5 @@
-import { promises as fs } from "fs";
-import path from "path";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 import type { Framework } from "../types.js";
 
 export const customDockerfile: Framework = {
@@ -16,7 +16,7 @@ export const customDockerfile: Framework = {
 		}
 	},
 
-	parseTests(output: string, exitCode: number): boolean {
+	parseTests(_output: string, exitCode: number): boolean {
 		// For custom dockerfiles, rely on exit code
 		return exitCode === 0;
 	},

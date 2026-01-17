@@ -1,5 +1,3 @@
-import { promises as fs } from "fs";
-import path from "path";
 import { defaultFrameworks, readCustomDockerfile } from "./frameworks/index.js";
 import type { Framework } from "./types.js";
 

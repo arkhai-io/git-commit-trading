@@ -6,6 +6,19 @@ import * as openpgp from "openpgp";
 import { KeyType } from "../clients/gitIdentityRegistry.js";
 import { verifyPGPSignature } from "./signatures.js";
 
+// Type extensions for library types that don't expose all properties
+interface KeyPacketExtended {
+	getBitSize?: () => number;
+	publicParams?: {
+		n?: { bitLength: () => number };
+	};
+}
+
+interface X509CertExtended {
+	keyUsages?: string[];
+	signatureAlgorithm: { name?: string };
+}
+
 /**
  * Validate PGP key format and extract metadata
  * @param pgpKey - PGP public key in armored format
@@ -69,12 +82,13 @@ export async function validatePGPKey(pgpKey: string): Promise<{
 		// Extract key size with proper validation
 		let keySize = 0;
 		try {
-			if ((keyPacket as any).getBitSize) {
-				keySize = (keyPacket as any).getBitSize();
-			} else if ((keyPacket as any).publicParams) {
+			const extendedPacket = keyPacket as KeyPacketExtended;
+			if (extendedPacket.getBitSize) {
+				keySize = extendedPacket.getBitSize();
+			} else if (extendedPacket.publicParams) {
 				// For RSA keys, try to get key size from public parameters
-				const publicParams = (keyPacket as any).publicParams;
-				if (publicParams.n && publicParams.n.bitLength) {
+				const publicParams = extendedPacket.publicParams;
+				if (publicParams.n?.bitLength) {
 					keySize = publicParams.n.bitLength();
 				}
 			}
@@ -146,9 +160,11 @@ export function validateX509Certificate(x509Cert: string): {
 			serialNumber: cert.serialNumber,
 			notBefore: cert.notBefore,
 			notAfter: cert.notAfter,
-			keyUsage: (cert as any).keyUsages || [],
+			keyUsage: (cert as unknown as X509CertExtended).keyUsages || [],
 			publicKeyAlgorithm: cert.publicKey.algorithm.name,
-			signatureAlgorithm: (cert.signatureAlgorithm as any).name || "unknown",
+			signatureAlgorithm:
+				(cert.signatureAlgorithm as X509CertExtended["signatureAlgorithm"])
+					.name || "unknown",
 		};
 	} catch (error) {
 		throw new Error(`Failed to validate X509 certificate: ${error}`);
@@ -176,7 +192,7 @@ export async function validateKeyForGitSigning(
 		switch (keyType) {
 			case KeyType.PGPv4: {
 				// Validate PGP key structure and metadata
-				let metadata;
+				let metadata: Awaited<ReturnType<typeof validatePGPKey>>;
 				try {
 					metadata = await validatePGPKey(keyMaterial);
 				} catch (validationError) {

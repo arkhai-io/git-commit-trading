@@ -1,26 +1,19 @@
+import { existsSync, readFileSync } from "node:fs";
 import { makeClient } from "alkahest-ts";
 import chalk from "chalk";
-import { existsSync, readFileSync } from "fs";
 import {
 	type Account,
 	type Chain,
 	createWalletClient,
 	http,
-	publicActions,
 	type Transport,
 	type WalletClient,
 	webSocket,
 } from "viem";
-import { nonceManager, privateKeyToAccount } from "viem/accounts";
+import { privateKeyToAccount } from "viem/accounts";
 import { baseSepolia, foundry } from "viem/chains";
-import {
-	type CommitObligationAddresses,
-	makeCommitObligationClient,
-} from "../../clients/commitObligation.js";
-import {
-	type GitIdentityRegistryAddresses,
-	makeGitIdentityRegistryClient,
-} from "../../clients/gitIdentityRegistry.js";
+import { makeCommitObligationClient } from "../../clients/commitObligation.js";
+import { makeGitIdentityRegistryClient } from "../../clients/gitIdentityRegistry.js";
 
 export interface EnvConfig {
 	privateKey: `0x${string}`;
@@ -241,15 +234,9 @@ export function requireEnvFile(envPath: string = ".env"): void {
 			chalk.yellow("\nPlease create a .env file with the following format:"),
 		);
 		console.error(chalk.gray("PRIVATE_KEY=0x1234567890abcdef..."));
+		console.error(chalk.gray("NETWORK=anvil  # optional: anvil, base-sepolia"));
 		console.error(
-			chalk.gray(
-				"NETWORK=anvil  # optional: anvil, base-sepolia",
-			),
-		);
-		console.error(
-			chalk.gray(
-				"RPC_URL=http://127.0.0.1:8545  # optional for anvil",
-			),
+			chalk.gray("RPC_URL=http://127.0.0.1:8545  # optional for anvil"),
 		);
 		console.error(chalk.gray("COMMIT_OBLIGATION_ADDRESS=0x...  # optional"));
 		console.error(
@@ -301,7 +288,9 @@ export function validateGitKeyEnv(envPath: string = ".env"): void {
 					"❌ Missing required environment variables for Git Key operations:",
 				),
 			);
-			missing.forEach((field) => console.error(chalk.red(`   - ${field}`)));
+			for (const field of missing) {
+				console.error(chalk.red(`   - ${field}`));
+			}
 			console.error(
 				chalk.yellow(
 					"\nPlease update your .env file or generate a new one with:",

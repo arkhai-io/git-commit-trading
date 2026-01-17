@@ -1,11 +1,11 @@
 /**
  * Git server key management functions for commit signature verification
  */
-import { exec } from "child_process";
-import fs from "fs/promises";
+import { exec } from "node:child_process";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { promisify } from "node:util";
 import * as openpgp from "openpgp";
-import path from "path";
-import { promisify } from "util";
 
 const execAsync = promisify(exec);
 
@@ -45,7 +45,7 @@ export async function importSSHKeyToServer(
 				);
 				return true;
 			}
-		} catch (error) {
+		} catch (_error) {
 			// File doesn't exist yet, which is fine
 		}
 
@@ -176,7 +176,7 @@ export async function removeSSHKeyFromServer(
 			);
 			return true;
 		} catch (error) {
-			if ((error as any).code === "ENOENT") {
+			if ((error as NodeJS.ErrnoException).code === "ENOENT") {
 				console.log("allowed_signers file does not exist");
 				return true;
 			}
@@ -226,7 +226,7 @@ export async function removeGPGKeyFromServer(
 						"Found GPG keys for identity, manual removal may be needed",
 					);
 				}
-			} catch (listError) {
+			} catch (_listError) {
 				console.log("No GPG keys found for identity");
 			}
 		}
@@ -252,7 +252,7 @@ export async function isSSHKeyImported(identity: string): Promise<boolean> {
 			const content = await fs.readFile(allowedSignersFile, "utf-8");
 			return content.includes(`${identity} `);
 		} catch (error) {
-			if ((error as any).code === "ENOENT") {
+			if ((error as NodeJS.ErrnoException).code === "ENOENT") {
 				return false;
 			}
 			throw error;
@@ -277,7 +277,7 @@ export async function isGPGKeyImported(
 		});
 
 		return stdout.includes("pub ") || stdout.includes("uid ");
-	} catch (error) {
+	} catch (_error) {
 		// gpg --list-keys exits with non-zero code if key not found
 		return false;
 	}
@@ -328,7 +328,7 @@ export async function initializeServerGitEnvironment(): Promise<boolean> {
 		try {
 			await execAsync("gpg --version", { timeout: 5000 });
 			console.log("GPG is available");
-		} catch (error) {
+		} catch (_error) {
 			console.warn(
 				"⚠️ GPG is not available, GPG signature verification will be disabled",
 			);
@@ -338,7 +338,7 @@ export async function initializeServerGitEnvironment(): Promise<boolean> {
 		try {
 			await execAsync("ssh -V", { timeout: 5000 });
 			console.log("SSH tools are available");
-		} catch (error) {
+		} catch (_error) {
 			console.warn(
 				"⚠️ SSH tools are not available, SSH signature verification may be limited",
 			);
@@ -371,7 +371,7 @@ export async function getServerGitCapabilities(): Promise<{
 	try {
 		await execAsync("git --version", { timeout: 5000 });
 		capabilities.git = true;
-	} catch (error) {
+	} catch (_error) {
 		console.warn("Git is not available");
 	}
 
@@ -379,7 +379,7 @@ export async function getServerGitCapabilities(): Promise<{
 	try {
 		await execAsync("gpg --version", { timeout: 5000 });
 		capabilities.gpg = true;
-	} catch (error) {
+	} catch (_error) {
 		console.warn("GPG is not available");
 	}
 
@@ -387,7 +387,7 @@ export async function getServerGitCapabilities(): Promise<{
 	try {
 		await execAsync("ssh -V", { timeout: 5000 });
 		capabilities.ssh = true;
-	} catch (error) {
+	} catch (_error) {
 		console.warn("SSH tools are not available");
 	}
 

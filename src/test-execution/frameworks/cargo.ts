@@ -1,4 +1,4 @@
-import { promises as fs } from "fs";
+import { promises as fs } from "node:fs";
 import cargoDockerfile from "../dockerfiles/cargo.dockerfile" with {
 	type: "text",
 };

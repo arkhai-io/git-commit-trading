@@ -24,7 +24,9 @@ export type CommitObligationAddresses = {
 	commitObligation: `0x${string}`;
 };
 
-export type CommitObligationClient = ReturnType<typeof makeCommitObligationClient>;
+export type CommitObligationClient = ReturnType<
+	typeof makeCommitObligationClient
+>;
 
 export const makeCommitObligationClient = (
 	viemClient: ViemClient,
@@ -32,9 +34,7 @@ export const makeCommitObligationClient = (
 ) => {
 	const decode = (obligationData: `0x${string}`) => {
 		return decodeAbiParameters(
-			parseAbiParameters(
-				"(string commitHash,uint8 commitAlgo,string[] hosts)",
-			),
+			parseAbiParameters("(string commitHash,uint8 commitAlgo,string[] hosts)"),
 			obligationData,
 		)[0] as CommitObligationData;
 	};

@@ -1,4 +1,4 @@
-import { promises as fs } from "fs";
+import { promises as fs } from "node:fs";
 import nodeJestDockerfile from "../dockerfiles/node-jest.dockerfile" with {
 	type: "text",
 };

@@ -1,5 +1,5 @@
+import { existsSync, writeFileSync } from "node:fs";
 import chalk from "chalk";
-import { existsSync, writeFileSync } from "fs";
 import { nonceManager } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 

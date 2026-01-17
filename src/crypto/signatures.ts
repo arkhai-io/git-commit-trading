@@ -1,7 +1,7 @@
 /**
  * Signature generation and verification utilities
  */
-import fs from "fs";
+import fs from "node:fs";
 import * as openpgp from "openpgp";
 import sshpk from "sshpk";
 
@@ -133,7 +133,7 @@ export function verifySSHSignature(
 
 			const signatureObj = sshpk.parseSignature(
 				signatureBuffer,
-				key.type as any,
+				key.type as "rsa" | "dsa" | "ecdsa" | "ed25519",
 				"ssh",
 			);
 			return verifier.verify(signatureObj);
@@ -414,7 +414,7 @@ export async function verifyGitKeyClaimSignature(
 export async function generatePGPKeyPair(
 	name: string,
 	email: string,
-	passphrase?: string,
+	_passphrase?: string,
 ): Promise<{
 	publicKeyArmored: string;
 	privateKeyArmored: string;
@@ -476,7 +476,7 @@ export async function preparePGPKeyForRegistration(
 
 		// Get key ID
 		const keyIds = key.getKeyIDs();
-		const keyId = keyIds.length > 0 ? keyIds[0]!.toHex() : "";
+		const keyId = keyIds.length > 0 ? keyIds[0]?.toHex() : "";
 
 		// Create message to sign
 		const message = `${ethereumAddress} ${nonce}`;

@@ -1,11 +1,11 @@
 /**
  * Git commit signature verification
  */
-import { exec } from "child_process";
-import { createHash } from "crypto";
-import fs from "fs/promises";
-import path from "path";
-import { promisify } from "util";
+import { exec } from "node:child_process";
+import { createHash } from "node:crypto";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { promisify } from "node:util";
 import { KeyType } from "../clients/gitIdentityRegistry.js";
 
 const execAsync = promisify(exec);
@@ -70,7 +70,7 @@ export async function verifyRepo(
 			publicKey,
 			signatureInfo.fingerprint,
 			signatureInfo.keyId,
-			verifyResult.rawOutput + "\n" + verifyResult.stderr,
+			`${verifyResult.rawOutput}\n${verifyResult.stderr}`,
 		);
 
 		if (isMatch) {
@@ -256,13 +256,13 @@ async function matchKey(
 async function matchGpgKey(
 	publicKey: string,
 	fingerprint?: string,
-	keyId?: string,
+	_keyId?: string,
 	gitOutput?: string,
 ): Promise<boolean> {
 	try {
 		const openpgp = await import("openpgp");
 
-		let key;
+		let key: Awaited<ReturnType<typeof openpgp.readKey>>;
 		if (publicKey.includes("-----BEGIN PGP")) {
 			key = await openpgp.readKey({ armoredKey: publicKey });
 		} else {

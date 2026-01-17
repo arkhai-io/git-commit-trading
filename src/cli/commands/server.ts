@@ -34,8 +34,8 @@ export async function serverCommand(options: ServerOptions) {
 			);
 		}
 
-		const pollingInterval = parseInt(options.pollingInterval || "1000");
-		const timeout = parseInt(options.timeout || "300000");
+		const pollingInterval = parseInt(options.pollingInterval || "1000", 10);
+		const timeout = parseInt(options.timeout || "300000", 10);
 		const cleanup = options.cleanup !== false;
 		const transport = options.transport || "http";
 
@@ -59,8 +59,13 @@ export async function serverCommand(options: ServerOptions) {
 		requireEnvFile();
 
 		console.log(chalk.gray("Setting up blockchain client..."));
-		const { client, config, address, hasCommitObligation, hasGitIdentityRegistry } =
-			await createClientFromEnv(".env", transport);
+		const {
+			client,
+			config,
+			address,
+			hasCommitObligation,
+			hasGitIdentityRegistry,
+		} = await createClientFromEnv(".env", transport);
 
 		if (!hasCommitObligation) {
 			throw new Error(
@@ -69,9 +74,7 @@ export async function serverCommand(options: ServerOptions) {
 		}
 
 		console.log(chalk.green("Blockchain environment ready"));
-		console.log(
-			chalk.gray(`  Oracle Address (Your Wallet): ${address}`),
-		);
+		console.log(chalk.gray(`  Oracle Address (Your Wallet): ${address}`));
 		console.log(
 			chalk.gray(
 				`  CommitObligation Contract: ${config.commitObligationAddress}`,
@@ -103,7 +106,11 @@ export async function serverCommand(options: ServerOptions) {
 		const arbitrate = async ({
 			attestation,
 		}: {
-			attestation: { data: `0x${string}`; refUID: `0x${string}`; recipient: `0x${string}` };
+			attestation: {
+				data: `0x${string}`;
+				refUID: `0x${string}`;
+				recipient: `0x${string}`;
+			};
 			demand: `0x${string}`;
 		}) => {
 			console.log(
@@ -133,7 +140,8 @@ export async function serverCommand(options: ServerOptions) {
 			// Extract data
 			const obligation = obligationData[0];
 			const demand = demandData[0];
-			const senderAddress = attestation.recipient.toLowerCase() as `0x${string}`;
+			const senderAddress =
+				attestation.recipient.toLowerCase() as `0x${string}`;
 
 			console.log(`🔍 Fulfillment submitted by: ${senderAddress}`);
 			console.log("📁 Repository configuration:");
@@ -190,9 +198,9 @@ export async function serverCommand(options: ServerOptions) {
 				if (result.error) {
 					console.log("   Error:", result.error);
 				}
-				if (result.output && result.output.trim()) {
+				if (result.output?.trim()) {
 					console.log("\n   Output:");
-					console.log("   " + "─".repeat(70));
+					console.log(`   ${"─".repeat(70)}`);
 					const outputLines = result.output.split("\n");
 					const linesToShow = outputLines.slice(-100);
 					if (outputLines.length > 100) {
@@ -200,8 +208,10 @@ export async function serverCommand(options: ServerOptions) {
 							`   ... (showing last 100 of ${outputLines.length} lines)`,
 						);
 					}
-					linesToShow.forEach((line) => console.log("   " + line));
-					console.log("   " + "─".repeat(70));
+					for (const line of linesToShow) {
+						console.log(`   ${line}`);
+					}
+					console.log(`   ${"─".repeat(70)}`);
 				}
 			}
 
@@ -252,7 +262,7 @@ export async function serverCommand(options: ServerOptions) {
 				}
 			});
 
-			process.on("unhandledRejection", (reason, promise) => {
+			process.on("unhandledRejection", (reason, _promise) => {
 				console.error(chalk.red("❌ Unhandled rejection:"), reason);
 			});
 		}

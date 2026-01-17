@@ -1,8 +1,8 @@
+import { exec } from "node:child_process";
+import { promises as fs } from "node:fs";
+import path from "node:path";
+import { promisify } from "node:util";
 import chalk from "chalk";
-import { exec } from "child_process";
-import { promises as fs } from "fs";
-import path from "path";
-import { promisify } from "util";
 import { verifyRepo } from "../crypto/index.js";
 import { detectFramework } from "./frameworkDetection.js";
 import { defaultFrameworks } from "./frameworks/index.js";
@@ -62,7 +62,8 @@ export async function cloneRepo(
 	let lastError: Error | null = null;
 
 	for (let i = 0; i < hosts.length; i++) {
-		const host = hosts[i]!;
+		const host = hosts[i];
+		if (!host) continue;
 		try {
 			console.log(
 				chalk.gray(`  Trying host ${i + 1}/${hosts.length}: ${host}`),
@@ -172,7 +173,7 @@ export async function runTests(
 		await removeDirectory(workDir);
 
 		// Parse test output
-		const combinedOutput = stdout + "\n" + stderr;
+		const combinedOutput = `${stdout}\n${stderr}`;
 		const success = detectedFramework.parseTests(combinedOutput, exitCode);
 
 		console.log(
@@ -212,7 +213,9 @@ async function buildAndRunDocker(
 
 	try {
 		// Build image
-		console.log(chalk.gray(`  Building image: ${imageName} (using ${runtime})`));
+		console.log(
+			chalk.gray(`  Building image: ${imageName} (using ${runtime})`),
+		);
 		const buildCmd = `${runtime} build -t ${imageName} ${contextDir}`;
 
 		try {
@@ -246,9 +249,12 @@ async function buildAndRunDocker(
 		let stdout = "";
 		let stderr = "";
 		try {
-			const logsResult = await execAsync(`${runtime} logs ${containerName} 2>&1`, {
-				maxBuffer: 50 * 1024 * 1024,
-			});
+			const logsResult = await execAsync(
+				`${runtime} logs ${containerName} 2>&1`,
+				{
+					maxBuffer: 50 * 1024 * 1024,
+				},
+			);
 			stdout = logsResult.stdout;
 		} catch (logsError) {
 			const execError = logsError as { stdout?: string; stderr?: string };
@@ -354,7 +360,10 @@ async function verifyRepoSignature(
 	repo: RepoSpec,
 	label: string,
 ): Promise<void> {
-	const key = repo.verifyWith!;
+	if (!repo.verifyWith) {
+		throw new Error("verifyWith is required for signature verification");
+	}
+	const key = repo.verifyWith;
 	console.log(chalk.cyan(`Verifying ${label} repo signature...`));
 
 	const isValid = await verifyRepo(

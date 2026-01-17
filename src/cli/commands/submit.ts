@@ -1,7 +1,7 @@
+import { promises as fs } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import chalk from "chalk";
-import { promises as fs } from "fs";
-import os from "os";
-import path from "path";
 import { encodeAbiParameters, parseAbiParameters } from "viem";
 import { CommitAlgo } from "../../clients/commitObligation.js";
 import { detectFramework } from "../../test-execution/frameworkDetection.js";
@@ -42,7 +42,7 @@ export async function submitCommand(options: SubmitOptions) {
 				options.testsCommit,
 			);
 
-			let isCustom = false;
+			let _isCustom = false;
 
 			// Priority 1: Check if arkhai_tests.dockerfile exists in the test repo
 			const repoDockerfilePath = path.join(
@@ -54,11 +54,11 @@ export async function submitCommand(options: SubmitOptions) {
 
 			try {
 				await fs.access(repoDockerfilePath);
-				isCustom = true;
+				_isCustom = true;
 				dockerfileContent = await fs.readFile(repoDockerfilePath, "utf-8");
 				frameworkName = "custom";
 				console.log(chalk.cyan("Found arkhai_tests.dockerfile in repository"));
-			} catch (error) {
+			} catch (_error) {
 				// Priority 2: Detect framework and use default dockerfile content
 				console.log(
 					chalk.cyan(
@@ -109,7 +109,7 @@ export async function submitCommand(options: SubmitOptions) {
 		requireEnvFile();
 
 		console.log(chalk.gray("Setting up blockchain client..."));
-		const { client, config, hasCommitObligation } = await createClientFromEnv();
+		const { client, hasCommitObligation } = await createClientFromEnv();
 
 		if (!hasCommitObligation) {
 			throw new Error(
@@ -166,7 +166,12 @@ export async function submitCommand(options: SubmitOptions) {
 
 		// Create the escrow by depositing tokens
 		const rewardAmount = BigInt(options.reward);
-		let escrow;
+		let escrow: {
+			uid: `0x${string}`;
+			attester: `0x${string}`;
+			recipient: `0x${string}`;
+			schema: `0x${string}`;
+		};
 
 		try {
 			// Try with permit first (EIP-2612)

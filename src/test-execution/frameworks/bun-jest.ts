@@ -1,4 +1,4 @@
-import { promises as fs } from "fs";
+import { promises as fs } from "node:fs";
 import bunJestDockerfile from "../dockerfiles/bun-jest.dockerfile" with {
 	type: "text",
 };
@@ -14,7 +14,8 @@ export const bunJest: Framework = {
 		try {
 			const files = await fs.readdir(testsPath);
 			// Check for bun.lockb (binary, older) or bun.lock (text, newer)
-			if (!files.includes("bun.lockb") && !files.includes("bun.lock")) return false;
+			if (!files.includes("bun.lockb") && !files.includes("bun.lock"))
+				return false;
 			return await checkForJest(testsPath, files);
 		} catch {
 			return false;

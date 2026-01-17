@@ -1,4 +1,4 @@
-import { promises as fs } from "fs";
+import { promises as fs } from "node:fs";
 import nodeJestDockerfile from "../dockerfiles/node-jest.dockerfile" with {
 	type: "text",
 };
@@ -29,9 +29,9 @@ export const pytestFallback: Framework = {
 	parseTests(output: string, exitCode: number): boolean {
 		// Same as other pytest frameworks
 		const failedMatch = output.match(/(\d+) failed/);
-		if (failedMatch?.[1] && parseInt(failedMatch[1]) > 0) return false;
+		if (failedMatch?.[1] && parseInt(failedMatch[1], 10) > 0) return false;
 		const passedMatch = output.match(/(\d+) passed/);
-		if (passedMatch?.[1] && parseInt(passedMatch[1]) > 0) return true;
+		if (passedMatch?.[1] && parseInt(passedMatch[1], 10) > 0) return true;
 		return exitCode === 0;
 	},
 };
@@ -65,7 +65,7 @@ export const nodeFallback: Framework = {
 		// Could be bun test or jest, check both patterns
 		if (output.includes("Tests:") && output.includes("failed")) return false;
 		const failMatch = output.match(/(\d+) fail/);
-		if (failMatch?.[1] && parseInt(failMatch[1]) > 0) return false;
+		if (failMatch?.[1] && parseInt(failMatch[1], 10) > 0) return false;
 		return exitCode === 0;
 	},
 };

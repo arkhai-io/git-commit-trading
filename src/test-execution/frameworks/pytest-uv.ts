@@ -1,4 +1,4 @@
-import { promises as fs } from "fs";
+import { promises as fs } from "node:fs";
 import pytestUvDockerfile from "../dockerfiles/pytest-uv.dockerfile" with {
 	type: "text",
 };
@@ -21,9 +21,9 @@ export const pytestUv: Framework = {
 	parseTests(output: string, exitCode: number): boolean {
 		// pytest outputs summary like "X passed" or "X failed"
 		const failedMatch = output.match(/(\d+) failed/);
-		if (failedMatch?.[1] && parseInt(failedMatch[1]) > 0) return false;
+		if (failedMatch?.[1] && parseInt(failedMatch[1], 10) > 0) return false;
 		const passedMatch = output.match(/(\d+) passed/);
-		if (passedMatch?.[1] && parseInt(passedMatch[1]) > 0) return true;
+		if (passedMatch?.[1] && parseInt(passedMatch[1], 10) > 0) return true;
 		return exitCode === 0;
 	},
 };

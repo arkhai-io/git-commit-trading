@@ -1,6 +1,6 @@
-import { exec, type SpawnOptions, spawn } from "child_process";
-import { promises as fs } from "fs";
-import path from "path";
+import { exec, type SpawnOptions, spawn } from "node:child_process";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 
 export async function executeCommand(
 	command: string,
@@ -202,7 +202,7 @@ export async function cloneGitRepository(
 	return new Promise((resolve, reject) => {
 		// First, clone the repository
 		const cloneCmd = `git clone "${gitUrl}" "${targetDir}"`;
-		exec(cloneCmd, (error, stdout, stderr) => {
+		exec(cloneCmd, (error, _stdout, stderr) => {
 			if (error) {
 				reject(
 					new Error(`Failed to clone repository: ${stderr || error.message}`),
@@ -218,7 +218,7 @@ export async function cloneGitRepository(
 
 			// Checkout the specific commit
 			const checkoutCmd = `cd "${targetDir}" && git checkout "${commitHash}"`;
-			exec(checkoutCmd, (checkoutError, checkoutStdout, checkoutStderr) => {
+			exec(checkoutCmd, (checkoutError, _checkoutStdout, checkoutStderr) => {
 				if (checkoutError) {
 					reject(
 						new Error(

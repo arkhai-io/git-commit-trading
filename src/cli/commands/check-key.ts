@@ -1,10 +1,6 @@
 import chalk from "chalk";
 import { KeyType } from "../../clients/gitIdentityRegistry.js";
-import {
-	createClientFromEnv,
-	requireEnvFile,
-	validateGitKeyEnv,
-} from "../utils/envLoader.js";
+import { createClientFromEnv, validateGitKeyEnv } from "../utils/envLoader.js";
 
 interface CheckKeyOptions {
 	address?: string;

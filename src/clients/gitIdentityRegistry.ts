@@ -82,7 +82,7 @@ export async function getLatestKeyClaim(
 		claimant,
 		fromBlock,
 	);
-	return claims.length > 0 ? claims[claims.length - 1]! : null;
+	return claims.at(-1) ?? null;
 }
 
 // ============================================================================

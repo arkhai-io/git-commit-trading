@@ -21,7 +21,7 @@ export async function collectCommand(options: CollectOptions) {
 		requireEnvFile();
 
 		console.log(chalk.gray("Setting up blockchain client..."));
-		const { client, config } = await createClientFromEnv();
+		const { client } = await createClientFromEnv();
 
 		console.log(chalk.gray("Collection details:"));
 		console.log(chalk.gray(`  Escrow UID: ${options.escrowUid}`));

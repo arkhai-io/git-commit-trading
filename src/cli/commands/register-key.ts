@@ -1,6 +1,5 @@
+import { existsSync, readFileSync, statSync } from "node:fs";
 import chalk from "chalk";
-import { existsSync, readFileSync, statSync } from "fs";
-import sshpk from "sshpk";
 import {
 	createGitKeyClaim,
 	KeyType,
@@ -8,7 +7,6 @@ import {
 import {
 	detectKeyTypeFromContent,
 	extractPGPKeyMaterial,
-	extractSSHKeyMaterial,
 	formatKeyForStorage,
 	generatePGPSignature,
 	generateSigningMessage,
@@ -20,11 +18,7 @@ import {
 	isSSHKeyImported,
 	validateKeyForGitSigning,
 } from "../../crypto/index.js";
-import {
-	createClientFromEnv,
-	requireEnvFile,
-	validateGitKeyEnv,
-} from "../utils/envLoader.js";
+import { createClientFromEnv, validateGitKeyEnv } from "../utils/envLoader.js";
 
 interface RegisterKeyOptions {
 	path?: string;
@@ -45,7 +39,7 @@ interface RegisterKeyOptions {
 function detectKeyType(keyContent: string): KeyType {
 	try {
 		return detectKeyTypeFromContent(keyContent);
-	} catch (error) {
+	} catch (_error) {
 		// Fallback to legacy SSH detection
 		if (keyContent.includes("ssh-ed25519")) {
 			return KeyType.SSHEd25519;
@@ -119,7 +113,7 @@ function readCryptographicKey(options: RegisterKeyOptions): {
 /**
  * Legacy SSH public key reader for backward compatibility
  */
-function readSSHPublicKey(options: RegisterKeyOptions): string {
+function _readSSHPublicKey(options: RegisterKeyOptions): string {
 	const { content } = readCryptographicKey(options);
 	return content;
 }
@@ -135,10 +129,10 @@ function readSSHPrivateKey(
 
 	if (options.privateKeyFile) {
 		privateKeyPath = options.privateKeyFile;
-	} else if (options.path && options.path.endsWith(".pub")) {
+	} else if (options.path?.endsWith(".pub")) {
 		// If public key path is provided, try corresponding private key
 		privateKeyPath = options.path.replace(".pub", "");
-	} else if (publicKeyPath && publicKeyPath.endsWith(".pub")) {
+	} else if (publicKeyPath?.endsWith(".pub")) {
 		privateKeyPath = publicKeyPath.replace(".pub", "");
 	} else {
 		// Try common SSH private key locations
@@ -279,12 +273,12 @@ export async function registerKeyCommand(options: RegisterKeyOptions) {
 		// Generate nonce that fits in bytes32 (32 bytes = 64 hex chars)
 		// Format: timestamp(8 bytes) + random(24 bytes) = 32 bytes total
 		// This allows us to verify signatures later since we can retrieve the exact nonce
-		const crypto = await import("crypto");
+		const crypto = await import("node:crypto");
 		const timestamp = Date.now();
 		const randomPart = crypto.randomBytes(24).toString("hex"); // 24 bytes = 48 hex chars
 		const timestampHex = timestamp.toString(16).padStart(16, "0"); // 8 bytes = 16 hex chars
 		const nonceHex = timestampHex + randomPart; // 64 hex chars = 32 bytes
-		const nonceHash = "0x" + nonceHex; // Store as bytes32 on-chain
+		const nonceHash = `0x${nonceHex}`; // Store as bytes32 on-chain
 
 		// Use the hex nonce for signing
 		const signingMessage = generateSigningMessage(
@@ -315,7 +309,7 @@ export async function registerKeyCommand(options: RegisterKeyOptions) {
 					signingMessage,
 					passphrase,
 				);
-				signature = "0x" + pgpSignatureHex;
+				signature = `0x${pgpSignatureHex}`;
 			} catch (error) {
 				throw new Error(`Failed to generate PGP signature: ${error}`);
 			}
@@ -482,7 +476,7 @@ async function importKeyToServer(
 						console.log(chalk.gray("   GPG key already imported to server"));
 						return true;
 					}
-				} catch (error) {
+				} catch (_error) {
 					// Continue with import attempt
 				}
 

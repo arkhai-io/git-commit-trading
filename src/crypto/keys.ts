@@ -109,7 +109,7 @@ export async function generatePGPKeyFingerprint(
 	pgpKey: string,
 ): Promise<string> {
 	try {
-		let key;
+		let key: Awaited<ReturnType<typeof openpgp.readKey>>;
 
 		// Handle both armored format and base64 key material
 		if (pgpKey.includes("-----BEGIN PGP PUBLIC KEY BLOCK-----")) {
@@ -223,7 +223,7 @@ export async function generateKeyFingerprint(
 	keyType: KeyType,
 	keyMaterial: string,
 ): Promise<string> {
-	const crypto = await import("crypto");
+	const crypto = await import("node:crypto");
 
 	switch (keyType) {
 		case KeyType.PGPv4: {
@@ -238,7 +238,7 @@ export async function generateKeyFingerprint(
 
 		case KeyType.X509: {
 			try {
-				const cert = new X509Certificate(keyMaterial);
+				const _cert = new X509Certificate(keyMaterial);
 				// Use SHA256 hash of the certificate
 				const certBuffer = Buffer.from(keyMaterial);
 				return crypto.createHash("sha256").update(certBuffer).digest("hex");

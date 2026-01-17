@@ -5,7 +5,6 @@ import {
 	parseAbiItem,
 	parseAbiParameters,
 } from "viem";
-import type { CommitObligationAddresses } from "../../clients/commitObligation";
 import { createClientFromEnv, requireEnvFile } from "../utils/envLoader.js";
 
 interface ListOptions {
@@ -43,7 +42,7 @@ export async function listCommand(options: ListOptions) {
 	try {
 		console.log(chalk.blue("🔍 Fetching available escrows from blockchain..."));
 
-		const limit = parseInt(options.limit || "20");
+		const limit = parseInt(options.limit || "20", 10);
 		const status = options.status?.toLowerCase();
 		const format = options.format?.toLowerCase() || "table";
 		const verbose = options.verbose || false;
@@ -57,7 +56,7 @@ export async function listCommand(options: ListOptions) {
 		requireEnvFile();
 
 		console.log(chalk.gray("Setting up blockchain client..."));
-		const { client, config } = await createClientFromEnv();
+		const { client } = await createClientFromEnv();
 
 		const viemClient = client.viemClient;
 		const erc20EscrowAddress = client.contractAddresses.erc20EscrowObligation;
@@ -231,7 +230,7 @@ export async function listCommand(options: ListOptions) {
 						testsCommit = decodedOracleData[0].testsCommitHash;
 						const hosts = decodedOracleData[0].hosts;
 						testsRepo = hosts.length > 0 ? hosts[0] : undefined;
-					} catch (demandError) {
+					} catch (_demandError) {
 						// If demand decoding fails, just skip it - not all escrows may have this structure
 						if (verbose) {
 							console.log(
@@ -281,7 +280,7 @@ export async function listCommand(options: ListOptions) {
 									const hosts = decodedFulfillment[0].hosts;
 									fulfillmentRepo = hosts.length > 0 ? hosts[0] : undefined;
 								}
-							} catch (fulfillmentError) {
+							} catch (_fulfillmentError) {
 								if (verbose) {
 									console.log(
 										chalk.gray(
@@ -567,7 +566,7 @@ function formatWeiToEth(weiAmount: string): string {
 			const trimmedDecimal = decimal.replace(/0+$/, ""); // Remove trailing zeros
 			return `${eth.toString()}.${trimmedDecimal}`;
 		}
-	} catch (error) {
+	} catch (_error) {
 		return `${weiAmount} wei`;
 	}
 }
