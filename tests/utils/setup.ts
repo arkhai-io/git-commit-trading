@@ -6,23 +6,16 @@ import {
 import type { AlkahestClient } from "alkahest-ts/sdks/ts/src/index";
 import {
 	type CommitObligationAddresses,
-	type CommitObligationClient,
 	makeCommitObligationClient,
 } from "../../src/clients/commitObligation";
 import {
 	type GitIdentityRegistryAddresses,
-	type GitIdentityRegistryClient,
 	makeGitIdentityRegistryClient,
 } from "../../src/clients/gitIdentityRegistry";
 import GitIdentityRegistry from "../../src/contracts/GitIdentityRegistry.json";
 
-// Extended client type: AlkahestClient + our git-commit-trading extensions
-// Note: We declare this explicitly because TypeScript can't infer the combined
-// type from alkahest-ts's `extend()` method due to its generic type structure.
-export type ExtendedClient = AlkahestClient & {
-	commitObligation: CommitObligationClient;
-	gitIdentityRegistry: GitIdentityRegistryClient;
-};
+// ExtendedClient type is now inferred from the setupTest return type
+export type ExtendedClient = Awaited<ReturnType<typeof setupTest>>["aliceClient"];
 
 export async function setupTest() {
 	const testContext: TestContext = await setupTestEnvironment();
@@ -46,10 +39,8 @@ export async function setupTest() {
 		gitIdentityRegistry: gitIdentityRegistryAddress,
 	};
 
-	// Helper to create extended client
-	// The return type is declared explicitly because alkahest-ts's extend()
-	// uses complex generics that TypeScript can't fully infer
-	const createExtendedClient = (baseClient: AlkahestClient): ExtendedClient => {
+	// Helper to create extended client - types now infer correctly via alkahest's extend()
+	const createExtendedClient = (baseClient: AlkahestClient) => {
 		return baseClient.extend((client) => ({
 			commitObligation: makeCommitObligationClient(
 				client.viemClient,
@@ -59,7 +50,7 @@ export async function setupTest() {
 				client.viemClient,
 				gitIdentityRegistryAddresses,
 			),
-		})) as unknown as ExtendedClient;
+		}));
 	};
 
 	// New SDK structure: testContext.alice.client instead of testContext.aliceClient

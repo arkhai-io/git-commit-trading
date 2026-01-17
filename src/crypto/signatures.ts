@@ -476,7 +476,7 @@ export async function preparePGPKeyForRegistration(
 
 		// Get key ID
 		const keyIds = key.getKeyIDs();
-		const keyId = keyIds.length > 0 ? keyIds[0]?.toHex() : "";
+		const keyId = keyIds.length > 0 && keyIds[0] ? keyIds[0].toHex() : "";
 
 		// Create message to sign
 		const message = `${ethereumAddress} ${nonce}`;
