@@ -1,7 +1,7 @@
 /**
  * Full Flow Integration Test
  *
- * Tests the complete escrow lifecycle with REAL cryptographic verification.
+ * Tests the complete escrow lifecycle with cryptographic verification.
  *
  * ============================================================================
  * SETUP INSTRUCTIONS
@@ -33,10 +33,10 @@
  * 3. Bob submits a fulfillment attestation
  * 4. Bob requests arbitration from the oracle
  * 5. Oracle verifies Bob's registered key and runs tests
- * 6. Oracle submits arbitration decision (pass/fail based on real test execution)
+ * 6. Oracle submits arbitration decision (pass/fail based on test execution)
  * 7. Bob collects escrow funds on successful arbitration
  *
- * All cryptographic signatures are REAL - no mocking.
+ * All cryptographic signatures are verified.
  */
 
 import {
@@ -241,7 +241,7 @@ describe("Full Escrow Flow Integration", () => {
 		);
 	};
 
-	// Register a git key with REAL cryptographic signatures
+	// Register a git key with cryptographic signatures
 	const registerGitKey = async (
 		client: ExtendedClient,
 		userAddress: `0x${string}`,
@@ -282,7 +282,7 @@ describe("Full Escrow Flow Integration", () => {
 	};
 
 
-	test("Full flow: bun-test framework with REAL key registration and verification", async () => {
+	test("Full flow: bun-test framework", async () => {
 		if (!containerAvailable) {
 			console.log("Skipping: No container runtime available");
 			return;
@@ -403,9 +403,7 @@ describe("Full Escrow Flow Integration", () => {
 		expect(collectionHash).toBeTruthy();
 		console.log(`✅ Escrow collected! Tx: ${collectionHash.slice(0, 18)}...`);
 
-		console.log(
-			"\n🎉 Full flow with REAL cryptographic verification completed!",
-		);
+		console.log("\n🎉 Full bun-test flow completed successfully!");
 	}, 300000); // 5 minute timeout
 
 	test("Full flow: cargo framework (local examples)", async () => {
