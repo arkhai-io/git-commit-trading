@@ -164,11 +164,14 @@ describe("Arbitration", () => {
 				escrow.uid,
 			);
 
-		await bobClient.arbiters.general.trustedOracle.requestArbitration(
+		const requestHash = await bobClient.arbiters.general.trustedOracle.requestArbitration(
 			fulfillment.uid,
 			oracle,
 			demand,
 		);
+
+		// Wait for arbitration request to be confirmed
+		await testContext.testClient.waitForTransactionReceipt({ hash: requestHash });
 
 		return { escrow, fulfillment, demand };
 	};
@@ -208,18 +211,32 @@ describe("Arbitration", () => {
 			expect(decisions[decisions.length - 1]!.decision).toBe(true);
 		}, 60000);
 
-		test("oracle can reject or skip (returns false/null)", async () => {
+		test("oracle can reject fulfillment (returns false)", async () => {
 			await setupEscrowAndFulfillment();
 
-			// When callback returns false or null, no on-chain decision is recorded
-			// The request remains pending for future arbitration
+			// When callback returns false, a rejection decision is submitted on-chain
 			const { decisions } =
 				await oracleClient.arbiters.general.trustedOracle.arbitrateMany(
 					async () => false,
 					{ mode: "past" },
 				);
 
-			// No decision recorded when rejecting/skipping
+			expect(decisions.length).toBeGreaterThan(0);
+			expect(decisions[decisions.length - 1]!.decision).toBe(false);
+		}, 60000);
+
+		test("oracle can skip arbitration (returns null)", async () => {
+			await setupEscrowAndFulfillment();
+
+			// When callback returns null, no on-chain decision is recorded
+			// The request remains pending for future arbitration
+			const { decisions } =
+				await oracleClient.arbiters.general.trustedOracle.arbitrateMany(
+					async () => null,
+					{ mode: "past" },
+				);
+
+			// No decision recorded when skipping
 			expect(decisions.length).toBe(0);
 		}, 60000);
 	});

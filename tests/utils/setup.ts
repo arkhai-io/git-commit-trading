@@ -34,6 +34,10 @@ export async function setupTest() {
 	const gitIdentityRegistryAddress =
 		await testContext.deployContract(GitIdentityRegistry);
 
+	// Re-capture state snapshot after deploying additional contracts
+	// This ensures loadState() restores to a state with all contracts deployed
+	testContext.anvilInitState = await testContext.testClient.dumpState();
+
 	const commitObligationAddresses: CommitObligationAddresses = {
 		commitObligation: commitObligationAddress,
 	};
