@@ -9,7 +9,7 @@
         "@peculiar/x509": "^1.13.0",
         "@types/openpgp": "^5.0.0",
         "@viem/anvil": "^0.0.10",
-        "alkahest-ts": "github:arkhai-io/alkahest#6c485ad",
+        "alkahest-ts": "^0.6.0",
         "chalk": "^5.6.0",
         "commander": "^12.1.0",
         "simple-git": "^3.28.0",
@@ -207,7 +207,7 @@
 
     "acorn": ["acorn@8.15.0", "", { "bin": { "acorn": "bin/acorn" } }, "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg=="],
 
-    "alkahest-ts": ["alkahest-ts@github:arkhai-io/alkahest#6c485ad", { "dependencies": { "@viem/anvil": "^0.0.10", "arktype": "^2.1.23", "zod": "^3.25.76" }, "peerDependencies": { "typescript": "^5.9.3", "viem": "^2.38.3" } }, "arkhai-io-alkahest-6c485ad"],
+    "alkahest-ts": ["alkahest-ts@0.6.0", "", { "dependencies": { "@viem/anvil": "^0.0.10", "arktype": "^2.1.23", "zod": "^3.25.76" }, "peerDependencies": { "typescript": "^5.9.3", "viem": "^2.38.3" } }, "sha512-X6AtLl7485PGN9nOyg4T9d3OWkOcF5OD8xn/jDWXzOG12oCbPnLweD1eJV9QIwzOn/AXR05k+thGabWT5yEkfA=="],
 
     "ansi-regex": ["ansi-regex@6.2.2", "", {}, "sha512-Bq3SmSpyFHaWjPk8If9yc6svM8c56dB5BAtW4Qbw5jHTwwXXcTLoRMkpDJp6VL0XzlWaCHTXrkFURMYmD0sLqg=="],
 
