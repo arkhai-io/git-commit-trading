@@ -47,8 +47,8 @@ import {
 	expect,
 	test,
 } from "bun:test";
-import type { TestContext } from "alkahest-ts/sdks/ts/tests/utils/setup";
-import type { AttestationWithDemand } from "alkahest-ts/sdks/ts/src/clients/arbiters/general/trustedOracle";
+import type { TestContext } from "alkahest-ts/test-utils";
+import type { AttestationWithDemand } from "alkahest-ts";
 import { exec } from "child_process";
 import fs from "fs";
 import path from "path";

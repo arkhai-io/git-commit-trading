@@ -1,9 +1,5 @@
 import CommitObligation from "@contracts/CommitObligation.json";
-import {
-	setupTestEnvironment,
-	type TestContext,
-} from "alkahest-ts/sdks/ts/tests/utils/setup";
-import type { AlkahestClient } from "alkahest-ts/sdks/ts/src/index";
+import { setupTestEnvironment } from "alkahest-ts/test-utils";
 import {
 	type CommitObligationAddresses,
 	makeCommitObligationClient,
@@ -18,7 +14,7 @@ import GitIdentityRegistry from "../../src/contracts/GitIdentityRegistry.json";
 export type ExtendedClient = Awaited<ReturnType<typeof setupTest>>["aliceClient"];
 
 export async function setupTest() {
-	const testContext: TestContext = await setupTestEnvironment();
+	const testContext = await setupTestEnvironment();
 
 	const commitObligationAddress =
 		await testContext.deployObligation(CommitObligation);
@@ -39,8 +35,9 @@ export async function setupTest() {
 		gitIdentityRegistry: gitIdentityRegistryAddress,
 	};
 
-	// Helper to create extended client - types now infer correctly via alkahest's extend()
-	const createExtendedClient = (baseClient: AlkahestClient) => {
+	// Helper to create extended client
+	// Using type inference from the actual client types
+	const createExtendedClient = (baseClient: typeof testContext.alice.client) => {
 		return baseClient.extend((client) => ({
 			commitObligation: makeCommitObligationClient(
 				client.viemClient,

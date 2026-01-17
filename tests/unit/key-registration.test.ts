@@ -17,7 +17,7 @@ import {
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
-import type { TestContext } from "alkahest-ts/sdks/ts/tests/utils/setup";
+import type { TestContext } from "alkahest-ts/test-utils";
 import {
 	KeyType,
 	createGitKeyClaim,

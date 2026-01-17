@@ -1,5 +1,5 @@
 {
-	"exclude": ["contract/**/*", "node_modules/**/*"],
+	"exclude": ["contract/**/*", "node_modules/**/*", "examples/**/*"],
 	"compilerOptions": {
 		// Environment setup & latest features
 		"lib": ["ESNext"],
@@ -28,7 +28,6 @@
 		"noPropertyAccessFromIndexSignature": false,
 
 		"paths": {
-			"alkahest-ts/*": ["../alkahest-ts/*"],
 			"@contracts/*": ["./src/contracts/*"]
 		}
 	}

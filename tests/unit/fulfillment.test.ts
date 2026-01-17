@@ -12,7 +12,7 @@ import {
 	expect,
 	test,
 } from "bun:test";
-import type { TestContext } from "alkahest-ts/sdks/ts/tests/utils/setup";
+import type { TestContext } from "alkahest-ts/test-utils";
 import { encodeAbiParameters, parseAbiParameters } from "viem";
 import { CommitAlgo } from "../../src/clients/commitObligation";
 import { type ExtendedClient, setupTest } from "../utils/setup";
