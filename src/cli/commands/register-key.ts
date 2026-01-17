@@ -235,7 +235,7 @@ export async function registerKeyCommand(options: RegisterKeyOptions) {
 		validateGitKeyEnv();
 
 		console.log(chalk.gray("Setting up blockchain client..."));
-		const { gitIdentityRegistryClient, config } = await createClientFromEnv();
+		const { gitIdentityRegistryClient, address } = await createClientFromEnv();
 
 		// Read and detect cryptographic key
 		console.log(chalk.gray("Reading cryptographic key..."));
@@ -288,7 +288,7 @@ export async function registerKeyCommand(options: RegisterKeyOptions) {
 
 		// Use the hex nonce for signing
 		const signingMessage = generateSigningMessage(
-			config.address as `0x${string}`,
+			address as `0x${string}`,
 			nonceHex,
 		);
 
@@ -361,7 +361,7 @@ export async function registerKeyCommand(options: RegisterKeyOptions) {
 		console.log(chalk.gray(`  Transaction Hash: ${result.hash}`));
 		console.log(chalk.gray(`  Key Type: ${getKeyTypeName(keyType)}`));
 		console.log(chalk.gray(`  Public Key: ${keyMaterial.substring(0, 32)}...`));
-		console.log(chalk.gray(`  Ethereum Address: ${config.address}`));
+		console.log(chalk.gray(`  Ethereum Address: ${address}`));
 		console.log(chalk.gray(`  Nonce (bytes32): ${nonceHash}`));
 
 		// Import key to server for local verification (if not skipped)
@@ -376,7 +376,7 @@ export async function registerKeyCommand(options: RegisterKeyOptions) {
 			const serverImportResult = await importKeyToServer(
 				gitKeyClaim.keyType,
 				keyForServerImport,
-				config.address as string,
+				address as string,
 			);
 			if (serverImportResult) {
 				console.log(chalk.green("✅ Key imported to server successfully"));

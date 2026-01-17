@@ -59,7 +59,7 @@ export async function serverCommand(options: ServerOptions) {
 		requireEnvFile();
 
 		console.log(chalk.gray("Setting up blockchain client..."));
-		const { client, config, hasCommitObligation, hasGitIdentityRegistry } =
+		const { client, config, address, hasCommitObligation, hasGitIdentityRegistry } =
 			await createClientFromEnv(".env", transport);
 
 		if (!hasCommitObligation) {
@@ -70,7 +70,7 @@ export async function serverCommand(options: ServerOptions) {
 
 		console.log(chalk.green("Blockchain environment ready"));
 		console.log(
-			chalk.gray(`  Oracle Address (Your Wallet): ${config.address}`),
+			chalk.gray(`  Oracle Address (Your Wallet): ${address}`),
 		);
 		console.log(
 			chalk.gray(

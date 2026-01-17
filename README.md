@@ -29,8 +29,7 @@ git-escrows new-client --privateKey "0x..." --network "sepolia"
 ### Environment Variables
 
 ```env
-PRIVATE_KEY=0x...                           # Your wallet private key
-ADDRESS=0x...                               # Ethereum address
+PRIVATE_KEY=0x...                           # Your wallet private key (address derived automatically)
 NETWORK=sepolia                             # Network: anvil, localhost, sepolia, mainnet
 RPC_URL=https://...                         # RPC endpoint
 

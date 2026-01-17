@@ -46,12 +46,11 @@ export async function newClientCommand(options: NewClientOptions) {
 		console.log(chalk.gray(`  Address: ${account.address}`));
 		console.log(chalk.gray(`  Network: ${options.network}`));
 
-		// Create .env content
+		// Create .env content (address is derived from private key automatically)
 		let envContent = `# Git Escrows Client Configuration
 # Generated on ${new Date().toISOString()}
 
 PRIVATE_KEY=${options.privateKey}
-ADDRESS=${account.address}
 NETWORK=${options.network}
 `;
 

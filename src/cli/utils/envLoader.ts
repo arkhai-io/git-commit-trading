@@ -23,8 +23,7 @@ import {
 } from "../../clients/gitIdentityRegistry.js";
 
 export interface EnvConfig {
-	privateKey: string;
-	address: string;
+	privateKey: `0x${string}`;
 	network?: string;
 	rpcUrl?: string;
 	wsRpcUrl?: string;
@@ -39,7 +38,7 @@ export interface EnvConfig {
 function loadEnvFile(envPath: string = ".env"): Record<string, string> {
 	if (!existsSync(envPath)) {
 		throw new Error(
-			`Environment file ${envPath} not found. Please create a .env file with PRIVATE_KEY and ADDRESS.`,
+			`Environment file ${envPath} not found. Please create a .env file with PRIVATE_KEY.`,
 		);
 	}
 
@@ -65,14 +64,9 @@ function loadEnvFile(envPath: string = ".env"): Record<string, string> {
  */
 function validateEnvConfig(envVars: Record<string, string>): EnvConfig {
 	const privateKey = envVars.PRIVATE_KEY;
-	const address = envVars.ADDRESS;
 
 	if (!privateKey) {
 		throw new Error("PRIVATE_KEY is required in .env file");
-	}
-
-	if (!address) {
-		throw new Error("ADDRESS is required in .env file");
 	}
 
 	// Validate private key format
@@ -82,23 +76,14 @@ function validateEnvConfig(envVars: Record<string, string>): EnvConfig {
 		);
 	}
 
-	// Validate address format
-	if (!address.startsWith("0x") || address.length !== 42) {
-		throw new Error(
-			"ADDRESS must be a valid Ethereum address starting with 0x and 40 characters long",
-		);
-	}
-
 	// Normalize all addresses to lowercase to avoid checksum case mismatches
-	const normalizedAddress = address.toLowerCase();
 	const normalizedCommitObligation =
 		envVars.COMMIT_OBLIGATION_ADDRESS?.toLowerCase();
 	const normalizedGitIdentityRegistry =
 		envVars.GIT_IDENTITY_REGISTRY_ADDRESS?.toLowerCase();
 
 	return {
-		privateKey,
-		address: normalizedAddress,
+		privateKey: privateKey as `0x${string}`,
 		network: envVars.NETWORK || "anvil",
 		rpcUrl: envVars.RPC_URL,
 		wsRpcUrl: envVars.WS_RPC_URL,
@@ -119,8 +104,12 @@ export async function createClientFromEnv(
 	const envVars = loadEnvFile(envPath);
 	const config = validateEnvConfig(envVars);
 
+	// Create account from private key to derive address
+	const account = privateKeyToAccount(config.privateKey);
+	const address = account.address;
+
 	console.log(chalk.green("✓ Environment configuration loaded"));
-	console.log(chalk.gray(`  Address: ${config.address}`));
+	console.log(chalk.gray(`  Address: ${address}`));
 
 	const network = config.network || "anvil";
 	console.log(chalk.gray(`  Network: ${network}`));
@@ -129,16 +118,6 @@ export async function createClientFromEnv(
 	if (transportType === "websocket" && config.wsRpcUrl) {
 		console.log(
 			chalk.gray(`  WebSocket URL: ${config.wsRpcUrl.substring(0, 40)}...`),
-		);
-	}
-
-	// Create account from private key
-	const account = privateKeyToAccount(config.privateKey as `0x${string}`);
-
-	// Verify that the private key matches the address
-	if (account.address.toLowerCase() !== config.address.toLowerCase()) {
-		throw new Error(
-			`Private key does not match the provided address. Expected: ${config.address}, Got: ${account.address}`,
 		);
 	}
 
@@ -267,6 +246,7 @@ export async function createClientFromEnv(
 		commitObligationClient,
 		gitIdentityRegistryClient,
 		config,
+		address,
 		hasCommitObligation: !!config.commitObligationAddress,
 		hasGitIdentityRegistry: !!config.gitIdentityRegistryAddress,
 	};
@@ -282,7 +262,6 @@ export function requireEnvFile(envPath: string = ".env"): void {
 			chalk.yellow("\nPlease create a .env file with the following format:"),
 		);
 		console.error(chalk.gray("PRIVATE_KEY=0x1234567890abcdef..."));
-		console.error(chalk.gray("ADDRESS=0xYourEthereumAddress"));
 		console.error(
 			chalk.gray(
 				"NETWORK=anvil  # optional: anvil, localhost, sepolia, base-sepolia, mainnet",
@@ -301,7 +280,6 @@ export function requireEnvFile(envPath: string = ".env"): void {
 		console.error(chalk.yellow("\nExample .env file:"));
 		console.error(
 			chalk.cyan(`PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
-ADDRESS=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
 NETWORK=anvil
 RPC_URL=http://127.0.0.1:8545
 GIT_IDENTITY_REGISTRY_ADDRESS=0x...
@@ -331,7 +309,6 @@ export function validateGitKeyEnv(envPath: string = ".env"): void {
 		const missing: string[] = [];
 
 		if (!env.PRIVATE_KEY) missing.push("PRIVATE_KEY");
-		if (!env.ADDRESS) missing.push("ADDRESS");
 		if (
 			!env.GIT_IDENTITY_REGISTRY_ADDRESS ||
 			env.GIT_IDENTITY_REGISTRY_ADDRESS.startsWith("#")

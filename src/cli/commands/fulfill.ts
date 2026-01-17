@@ -53,7 +53,7 @@ export async function fulfillCommand(options: FulfillOptions) {
 			client,
 			commitObligationClient,
 			gitIdentityRegistryClient,
-			config,
+			address,
 			hasCommitObligation,
 			hasGitIdentityRegistry,
 		} = await createClientFromEnv();
@@ -74,7 +74,7 @@ export async function fulfillCommand(options: FulfillOptions) {
 			try {
 				const latestKeyClaim =
 					await gitIdentityRegistryClient.getLatestKeyClaim(
-						config.address as `0x${string}`,
+						address as `0x${string}`,
 					);
 				if (
 					!latestKeyClaim ||

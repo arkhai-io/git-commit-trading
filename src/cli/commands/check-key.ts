@@ -19,7 +19,7 @@ export async function checkKeyCommand(options: CheckKeyOptions) {
 		validateGitKeyEnv();
 
 		console.log(chalk.gray("Setting up blockchain client..."));
-		const { gitIdentityRegistryClient, config, hasGitIdentityRegistry } =
+		const { gitIdentityRegistryClient, address, hasGitIdentityRegistry } =
 			await createClientFromEnv();
 
 		if (!hasGitIdentityRegistry || !gitIdentityRegistryClient) {
@@ -30,7 +30,7 @@ export async function checkKeyCommand(options: CheckKeyOptions) {
 
 		// Normalize address to lowercase to avoid checksum case mismatches
 		const addressToCheck = (
-			(options.address || config.address) as string
+			(options.address || address) as string
 		).toLowerCase() as `0x${string}`;
 		console.log(chalk.gray(`Checking address: ${addressToCheck}`));
 
