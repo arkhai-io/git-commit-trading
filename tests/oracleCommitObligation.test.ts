@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:tes
 import { decodeAbiParameters, encodeAbiParameters, parseAbiParameters } from "viem";
 import sshpk from 'sshpk';
 import { setupTest } from "./utils/setup";
-import { teardownTestEnvironment, type TestContext } from "alkahest-ts/tests/utils/setup";
+import { type TestContext } from "alkahest-ts";
 import { CommitAlgo, type CommitObligationData } from "../src/clients/commitObligation";
 import { KeyType } from "../src/clients/gitIdentityRegistry";
 import { GitTestExecution } from "../src/test-execution/";
@@ -10,15 +10,18 @@ import { extractSSHKeyMaterial } from "../src/utils/gitUtils";
 import { verifyCommitSignature, generateSigningMessage, verifyGitKeyClaimSignature, generateSSHSignature, verifySSHSignature, generatePGPSignature, generatePGPKeyPair } from "../src/utils/sshSignatureUtils";
 import { extractPGPKeyMaterial } from "../src/utils/keyUtils";
 
+// Type for extended client with commitObligation and gitIdentityRegistry
+type ExtendedClient = Awaited<ReturnType<typeof setupTest>>['aliceClient'];
+
 describe("Oracle CommitObligation Tests", () => {
     // Test context and variables
     let testContext: TestContext;
     let alice: `0x${string}`;
     let bob: `0x${string}`;
     let oracle: `0x${string}`;
-    let aliceClient: any;
-    let bobClient: any;
-    let arbiterClient: any;
+    let aliceClient: ExtendedClient;
+    let bobClient: ExtendedClient;
+    let arbiterClient: ExtendedClient; // arbiterClient has oracle property from testContext.charlie.client
     let commitObligationAddress: `0x${string}`;
     let gitIdentityRegistryAddress: `0x${string}`;
     beforeAll(async () => {
@@ -28,15 +31,15 @@ describe("Oracle CommitObligation Tests", () => {
         bobClient = setup.bobClient;
 
         // Extend charlie client with our contracts
-        arbiterClient = testContext.charlieClient.extend((client: any) => ({
+        arbiterClient = testContext.charlie.client.extend((client: any) => ({
             commitObligation: setup.aliceClient.commitObligation,
             gitIdentityRegistry: setup.aliceClient.gitIdentityRegistry,
         }));
 
         // Extract the values we need for tests
-        alice = testContext.alice;
-        bob = testContext.bob;
-        oracle = testContext.charlie;
+        alice = testContext.alice.address;
+        bob = testContext.bob.address;
+        oracle = testContext.charlie.address;
         commitObligationAddress = setup.commitObligationAddress;
         gitIdentityRegistryAddress = setup.gitIdentityRegistryAddress;
     });
@@ -50,10 +53,6 @@ describe("Oracle CommitObligation Tests", () => {
         }
     });
 
-    afterAll(async () => {
-        // Clean up
-        await teardownTestEnvironment(testContext);
-    });
 
     describe("Git App Flow", () => {
         test("Oracle CommitObligation Integration - Python", async () => {
@@ -78,13 +77,13 @@ describe("Oracle CommitObligation Tests", () => {
                 hosts: ["https://github.com/thinhnx-var/testcase-py-alice.git"]
             });
 
-            const demand = aliceClient.arbiters.encodeTrustedOracleDemand({
+            const demand = aliceClient.arbiters.general.trustedOracle.encodeDemand({
                 oracle,
                 data: commitTestsData,
             });
 
             const { attested: escrow } =
-                await aliceClient.erc20.permitAndBuyWithErc20(
+                await aliceClient.erc20.escrow.nonTierable.permitAndCreate(
                     {
                         address: testContext.mockAddresses.erc20A,
                         value: 10n,
@@ -107,27 +106,26 @@ describe("Oracle CommitObligation Tests", () => {
             await Bun.sleep(150);
 
             // 2.a Oracle arbitrates the Python test execution
-            const { unwatch } = await arbiterClient.oracle.listenAndArbitrateForEscrow({
-                escrow: {
-                    attester: testContext.addresses.erc20EscrowObligation,
-                    demandAbi: parseAbiParameters("(string testsCommitHash, uint8 testsCommitAlgo, string[] hosts)"),
-                },
-                fulfillment: {
-                    attester: commitObligationAddress,
-                    obligationAbi: parseAbiParameters("(string commitHash, uint8 commitAlgo, string[] hosts)"),
-                },
-                arbitrate: async (obligation: any, demand: any) => {
+            const { unwatch } = await arbiterClient.arbiters.general.trustedOracle.arbitrateMany(
+                    async ({attestation, demand}) => {
+
+                    console.log("Arbitrating ", attestation, demand);
+                    const obligation = arbiterClient.commitObligation.decode(
+                    attestation.data
+                    );
+                    const trustedOracleDemandData = arbiterClient.arbiters.general.trustedOracle.decodeDemand(demand)
+                    const gctDemandData = arbiterClient.extractObligationData(parseAbiParameters("(string testsCommitHash, uint8 testsCommitAlgo, string[] hosts)"),trustedOracleDemandData)
                     console.log("Arbitrating Python obligation:", obligation, "against demand:", demand);
                     try {
                         const config = GitTestExecution.initConfig();
 
                         // Configure Python test repository (Alice's tests)
-                        config.repositories.testcase.url = demand[0].hosts[0];
-                        config.repositories.testcase.commitHash = demand[0].testsCommitHash;
+                        config.repositories.testcase.url = gctDemandData[0].hosts[0]!;
+                        config.repositories.testcase.commitHash = gctDemandData[0].testsCommitHash!;
 
                         // Configure Python solution repository (Bob's solution)
-                        config.repositories.source.url = obligation[0].hosts[0];
-                        config.repositories.source.commitHash = obligation[0].commitHash;
+                        config.repositories.source.url = obligation.hosts[0]!;
+                        config.repositories.source.commitHash = obligation.commitHash;
 
                         config.execution.timeout = 60000; // 60 seconds for Python setup
                         config.execution.cleanupAfterExecution = true;
@@ -147,14 +145,16 @@ describe("Oracle CommitObligation Tests", () => {
                         return false;
                     }
                 },
-                onAfterArbitrate: async (decision: any) => {
-                    console.log("Python arbitration decision:", decision);
-                },
-                pollingInterval: 50,
-            });
+                {
+                    onAfterArbitrate: async (decision: any) => {
+                        console.log("Python arbitration decision:", decision);
+                    },
+                    pollingInterval: 50,
+                }
+            );
 
             // 3. Bob collects the escrow
-            const collectionHash = await bobClient.erc20.collectEscrow(
+            const collectionHash = await bobClient.erc20.escrow.nonTierable.collect(
                 escrow.uid,
                 fulfillment.uid,
             );
@@ -185,13 +185,13 @@ describe("Oracle CommitObligation Tests", () => {
                 hosts: ["https://github.com/thinhnx-var/testcase-rust-alice.git"]
             });
 
-            const demand = aliceClient.arbiters.encodeTrustedOracleDemand({
+            const demand = aliceClient.arbiters.general.trustedOracle.encodeDemand({
                 oracle,
                 data: commitTestsData,
             });
 
             const { attested: escrow } =
-                await aliceClient.erc20.permitAndBuyWithErc20(
+                await aliceClient.erc20.escrow.nonTierable.permitAndCreate(
                     {
                         address: testContext.mockAddresses.erc20A,
                         value: 10n,
@@ -263,7 +263,7 @@ describe("Oracle CommitObligation Tests", () => {
             });
 
             // 3. Bob collects the escrow
-            const collectionHash = await bobClient.erc20.collectEscrow(
+            const collectionHash = await bobClient.erc20.escrow.nonTierable.collect(
                 escrow.uid,
                 fulfillment.uid,
             );
@@ -294,13 +294,13 @@ describe("Oracle CommitObligation Tests", () => {
                 hosts: ["https://github.com/thinhnx-var/testcase-repo-alice.git"]
             });
 
-            const demand = aliceClient.arbiters.encodeTrustedOracleDemand({
+            const demand = aliceClient.arbiters.general.trustedOracle.encodeDemand({
                 oracle,
                 data: commitTestsData,
             });
 
             const { attested: escrow } =
-                await aliceClient.erc20.permitAndBuyWithErc20(
+                await aliceClient.erc20.escrow.nonTierable.permitAndCreate(
                     {
                         address: testContext.mockAddresses.erc20A,
                         value: 10n,
@@ -469,7 +469,7 @@ describe("Oracle CommitObligation Tests", () => {
             });
 
             // 5. Bob collects the escrow (only if verification and tests passed)
-            const collectionHash = await bobClient.erc20.collectEscrow(
+            const collectionHash = await bobClient.erc20.escrow.nonTierable.collect(
                 escrow.uid,
                 fulfillment.uid,
             );
@@ -502,13 +502,13 @@ describe("Oracle CommitObligation Tests", () => {
                 hosts: ["https://github.com/thinhnx-var/testcase-repo-alice.git"]
             });
 
-            const demand = aliceClient.arbiters.encodeTrustedOracleDemand({
+            const demand = aliceClient.arbiters.general.trustedOracle.encodeDemand({
                 oracle,
                 data: commitTestsData,
             });
 
             const { attested: escrow } =
-                await aliceClient.erc20.permitAndBuyWithErc20(
+                await aliceClient.erc20.escrow.nonTierable.permitAndCreate(
                     {
                         address: testContext.mockAddresses.erc20A,
                         value: 10n,
@@ -687,7 +687,7 @@ describe("Oracle CommitObligation Tests", () => {
             });
 
             // 3. Bob collects the escrow
-            const collectionHash = await bobClient.erc20.collectEscrow(
+            const collectionHash = await bobClient.erc20.escrow.nonTierable.collect(
                 escrow.uid,
                 fulfillment.uid,
             );
@@ -719,13 +719,13 @@ describe("Oracle CommitObligation Tests", () => {
                 hosts: ["https://github.com/thinhnx-var/testcase-repo-alice.git"]
             });
 
-            const demand = aliceClient.arbiters.encodeTrustedOracleDemand({
+            const demand = aliceClient.arbiters.general.trustedOracle.encodeDemand({
                 oracle,
                 data: commitTestsData,
             });
 
             const { attested: escrow } =
-                await aliceClient.erc20.permitAndBuyWithErc20(
+                await aliceClient.erc20.escrow.nonTierable.permitAndCreate(
                     {
                         address: testContext.mockAddresses.erc20A,
                         value: 10n,
@@ -924,7 +924,7 @@ describe("Oracle CommitObligation Tests", () => {
             // 5. Bob attempts to collect the escrow (only if PGP verification and tests passed)
             console.log("🔍 Step 5: Bob attempts to collect escrow");
             try {
-                const collectionHash = await bobClient.erc20.collectEscrow(
+                const collectionHash = await bobClient.erc20.escrow.nonTierable.collect(
                     escrow.uid,
                     fulfillment.uid,
                 );

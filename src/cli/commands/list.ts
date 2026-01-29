@@ -217,7 +217,7 @@ export async function listCommand(options: ListOptions) {
 
           // Apply address filter if specified
           if (filterAddress && 
-              recipient.toLowerCase() !== filterAddress && 
+              recipient!.toLowerCase() !== filterAddress && 
               attestation.attester.toLowerCase() !== filterAddress) {
             continue;
           }

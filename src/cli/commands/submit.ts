@@ -82,7 +82,7 @@ export async function submitCommand(options: SubmitOptions) {
     console.log(chalk.gray(`  Commit Algorithm: ${options.testsAlgo || 'sha1'}`));
 
     // Create the trusted oracle demand
-    const demand = client.arbiters.encodeTrustedOracleDemand({
+    const demand = client.arbiters.general.trustedOracle.encodeDemand({
       oracle: oracleAddress,
       data: commitTestsData,
     });
@@ -96,7 +96,7 @@ export async function submitCommand(options: SubmitOptions) {
     try {
       // Try with permit first (EIP-2612)
       console.log(chalk.gray('Attempting to use EIP-2612 permit...'));
-      const result = await client.erc20.permitAndBuyWithErc20(
+      const result = await client.erc20.escrow.nonTierable.permitAndCreate(
         {
           address: tokenAddress,
           value: rewardAmount,
@@ -145,7 +145,7 @@ export async function submitCommand(options: SubmitOptions) {
         console.log(chalk.gray(`Current allowance: ${currentAllowance}, approving ${rewardAmount}...`));
         
         // First approve the tokens
-        approveHash = await client.erc20.approve(
+        approveHash = await client.erc20.util.approve(
           {
             address: tokenAddress,
             value: rewardAmount,
@@ -187,7 +187,7 @@ export async function submitCommand(options: SubmitOptions) {
       await new Promise(resolve => setTimeout(resolve, 5000));
       console.log(chalk.gray('Creating escrow...'));
       try {
-        const result = await client.erc20.buyWithErc20(
+        const result = await client.erc20.escrow.nonTierable.permitAndCreate(
           {
             address: tokenAddress,
             value: rewardAmount,

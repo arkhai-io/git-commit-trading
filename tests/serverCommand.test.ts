@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { encodeAbiParameters, parseAbiParameters } from "viem";
 import { setupTest } from "./utils/setup";
-import { teardownTestEnvironment, type TestContext } from "alkahest-ts/tests/utils/setup";
+import {  type TestContext } from "alkahest-ts";
 import { CommitAlgo } from "../src/clients/commitObligation";
 import { spawn } from "child_process";
 import path from "path";
@@ -25,12 +25,12 @@ describe("Server Command Tests", () => {
         testContext = setup.testContext;
         aliceClient = setup.aliceClient;
         bobClient = setup.bobClient;
-        arbiterClient = testContext.charlieClient;
+        arbiterClient = testContext.charlie.client;
 
         // Extract the values we need for tests
-        alice = testContext.alice;
-        bob = testContext.bob;
-        oracle = testContext.charlie;
+        alice = testContext.alice.address;
+        bob = testContext.bob.address;
+        oracle = testContext.charlie.address;
         commitObligationAddress = setup.commitObligationAddress;
         
         console.log("Test environment setup complete!");
@@ -45,10 +45,7 @@ describe("Server Command Tests", () => {
         }
     });
 
-    afterAll(async () => {
-        // Clean up
-        await teardownTestEnvironment(testContext);
-    });
+
 
     describe("Oracle Functions (Direct Testing)", () => {
         test("should arbitrate past obligations using arbitratePastForEscrow", async () => {
@@ -74,12 +71,12 @@ describe("Server Command Tests", () => {
                 hosts: ["https://github.com/thinhnx-var/testcase-repo-alice.git"]
             });
 
-            const demand = aliceClient.arbiters.encodeTrustedOracleDemand({
+            const demand = aliceClient.arbiters.general.trustedOracle.encodeDemand({
                 oracle,
                 data: commitTestsData,
             });
 
-            const { attested: escrow } = await aliceClient.erc20.permitAndBuyWithErc20(
+            const { attested: escrow } = await aliceClient.erc20.escrow.nonTierable.permitAndCreate(
                 {
                     address: testContext.mockAddresses.erc20A,
                     value: 10n,
@@ -167,12 +164,12 @@ describe("Server Command Tests", () => {
                     hosts: ["https://github.com/thinhnx-var/testcase-repo-alice.git"]
                 });
 
-                const demand = aliceClient.arbiters.encodeTrustedOracleDemand({
+                const demand = aliceClient.arbiters.general.trustedOracle.encodeDemand({
                     oracle,
                     data: commitTestsData,
                 });
 
-                const { attested: escrow } = await aliceClient.erc20.permitAndBuyWithErc20(
+                const { attested: escrow } = await aliceClient.erc20.escrow.nonTierable.permitAndCreate(
                     {
                         address: testContext.mockAddresses.erc20A,
                         value: 10n,
@@ -330,12 +327,12 @@ describe("Server Command Tests", () => {
                     hosts: ["https://github.com/thinhnx-var/testcase-repo-alice.git"]
                 });
 
-                const demand = aliceClient.arbiters.encodeTrustedOracleDemand({
+                const demand = aliceClient.arbiters.general.trustedOracle.encodeDemand({
                     oracle,
                     data: commitTestsData,
                 });
 
-                const { attested: escrow } = await aliceClient.erc20.permitAndBuyWithErc20(
+                const { attested: escrow } = await aliceClient.erc20.escrow.nonTierable.permitAndCreate(
                     {
                         address: testContext.mockAddresses.erc20A,
                         value: 10n,

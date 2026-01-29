@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { decodeAbiParameters, encodeAbiParameters, parseAbiParameters } from "viem";
 import { setupTest } from "./utils/setup";
-import { teardownTestEnvironment, type TestContext } from "alkahest-ts/tests/utils/setup";
+import {  type TestContext } from "alkahest-ts";
 import { CommitAlgo, type CommitObligationData } from "../src/clients/commitObligation";
 import { KeyType, createGitKeyClaim } from "../src/clients/gitIdentityRegistry";
 import { GitTestExecution } from "../src/test-execution/";
@@ -27,15 +27,15 @@ describe("Oracle CommitObligation Integration Tests", () => {
         bobClient = setup.bobClient;
 
         // Extend charlie client with our contracts
-        arbiterClient = testContext.charlieClient.extend((client: any) => ({
+        arbiterClient = testContext.charlie.client.extend((client: any) => ({
             commitObligation: setup.aliceClient.commitObligation,
             gitIdentityRegistry: setup.aliceClient.gitIdentityRegistry,
         }));
 
         // Extract the values we need for tests
-        alice = testContext.alice;
-        bob = testContext.bob;
-        oracle = testContext.charlie;
+        alice = testContext.alice.address;
+        bob = testContext.bob.address;
+        oracle = testContext.charlie.address;
         commitObligationAddress = setup.commitObligationAddress;
         gitIdentityRegistryAddress = setup.gitIdentityRegistryAddress;
     });
@@ -49,10 +49,7 @@ describe("Oracle CommitObligation Integration Tests", () => {
         }
     });
 
-    afterAll(async () => {
-        // Clean up
-        await teardownTestEnvironment(testContext);
-    });
+
 
     describe("Security Flow", () => {
         test("Oracle Integration - Git Key Registration Before Fulfillment", async () => {
@@ -111,12 +108,12 @@ describe("Oracle CommitObligation Integration Tests", () => {
                 hosts: ["https://github.com/alice/enhanced-tests.git"]
             });
 
-            const demand = aliceClient.arbiters.encodeTrustedOracleDemand({
+            const demand = aliceClient.arbiters.general.trustedOracle.encodeDemand({
                 oracle,
                 data: commitTestsData,
             });
 
-            const { attested: escrow } = await aliceClient.erc20.permitAndBuyWithErc20(
+            const { attested: escrow } = await aliceClient.erc20.escrow.nonTierable.permitAndCreate(
                 {
                     address: testContext.mockAddresses.erc20A,
                     value: 10n,
@@ -244,7 +241,7 @@ describe("Oracle CommitObligation Integration Tests", () => {
 
             // Step 5 - Bob collects the reward (only after verification)
             console.log("\n📋 Step 5: Secure reward collection");
-            const collectionHash = await bobClient.erc20.collectEscrow(
+            const collectionHash = await bobClient.erc20.escrow.nonTierable.collect(
                 escrow.uid,
                 fulfillment.uid,
             );

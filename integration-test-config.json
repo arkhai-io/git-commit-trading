@@ -11,7 +11,7 @@
   
   "keys": {
     "description": "Real cryptographic keys for testing - YOU MUST FILL THESE",
-    "preferredKeyType": "both",
+    "preferredKeyType": "ssh",
     "comment": "Set preferredKeyType to 'pgp', 'ssh', or 'both' to choose which key type(s) to use for testing",
     "pgp": {
       "publicKeyPath": "/path/to/bob-gpg-public.asc",
@@ -21,8 +21,8 @@
       "comment": "Generate real PGP key pair and put paths here"
     },
     "ssh": {
-      "publicKeyPath": "~/.ssh/git-alkahest/id_ed25519.pub",
-      "privateKeyPath": "~/.ssh/git-alkahest/id_ed25519",
+      "publicKeyPath": "~/.ssh/id_ed25519.pub",
+      "privateKeyPath": "~/.ssh/id_ed25519",
       "keyType": "ed25519",
       "comment": "Generate real SSH key pair and put paths here"
     }

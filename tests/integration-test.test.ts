@@ -3,7 +3,7 @@ import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
 import { parseAbiParameters, encodeAbiParameters } from "viem";
 import { setupTest } from "./utils/setup";
-import { teardownTestEnvironment, type TestContext } from "alkahest-ts/tests/utils/setup";
+import type { TestContext } from "alkahest-ts";
 import { CommitAlgo, type CommitObligationData } from "../src/clients/commitObligation";
 import { KeyType, createGitKeyClaim } from "../src/clients/gitIdentityRegistry";
 import { GitTestExecution } from "../src/test-execution/";
@@ -18,6 +18,9 @@ import {
 } from "../src/utils/sshSignatureUtils";
 import IntegrationTestHelpers from "./utils/integration-helpers";
 import chalk from 'chalk';
+
+// Type for extended client with commitObligation and gitIdentityRegistry
+type ExtendedClient = Awaited<ReturnType<typeof setupTest>>['aliceClient'];
 
 // Integration test configuration interface
 interface IntegrationConfig {
@@ -80,9 +83,9 @@ interface IntegrationConfig {
 }
 
 // Global client references for use in helper functions
-let globalAliceClient: any;
-let globalBobClient: any;
-let globalArbiterClient: any;
+let globalAliceClient: ExtendedClient;
+let globalBobClient: ExtendedClient;
+let globalArbiterClient: ExtendedClient;
 
 describe("🚀 Complete Integration Test - Real Keys & Commits", () => {
   let testContext: TestContext;
@@ -123,16 +126,16 @@ describe("🚀 Complete Integration Test - Real Keys & Commits", () => {
     globalBobClient = bobClient;
 
     // Extend charlie client as oracle/arbiter
-    arbiterClient = testContext.charlieClient.extend((client: any) => ({
+    arbiterClient = testContext.charlie.client.extend((client: any) => ({
       commitObligation: setup.aliceClient.commitObligation,
       gitIdentityRegistry: setup.aliceClient.gitIdentityRegistry,
     }));
 
     globalArbiterClient = arbiterClient;
 
-    alice = testContext.alice;
-    bob = testContext.bob;
-    oracle = testContext.charlie;
+    alice = testContext.alice.address;
+    bob = testContext.bob.address;
+    oracle = testContext.charlie.address;
     commitObligationAddress = setup.commitObligationAddress;
     gitIdentityRegistryAddress = setup.gitIdentityRegistryAddress;
 
@@ -142,13 +145,7 @@ describe("🚀 Complete Integration Test - Real Keys & Commits", () => {
     console.log(chalk.gray(`   Oracle: ${oracle}`));
   });
 
-  afterAll(async () => {
-    if (config.test.cleanupAfterTest) {
-      console.log(chalk.yellow("🧹 Cleaning up test environment..."));
-      await teardownTestEnvironment(testContext);
-      console.log(chalk.green("✅ Cleanup completed"));
-    }
-  });
+
 
   test("Complete End-to-End Flow with Real Keys and Commits", async () => {
     const keyType = config.keys.preferredKeyType;
@@ -210,12 +207,12 @@ async function runTestWithKeyType(keyType: "pgp" | "ssh", config: IntegrationCon
   console.log(chalk.green(`✅ Loaded ${keyType.toUpperCase()} key material`));
 
   // Get the global clients that were set up in beforeAll
-  const registrationResult = await registerBobKey(globalBobClient, keyData, testContext.bob, tempConfig);
+  const registrationResult = await registerBobKey(globalBobClient, keyData, testContext.bob.address, tempConfig);
   console.log(chalk.green("✅ Bob's key registered successfully"));
 
   // Verify registration (only for single key type tests)
   if (config.keys.preferredKeyType !== "both") {
-    const registeredClaim = await globalBobClient.gitIdentityRegistry.getLatestKeyClaim(testContext.bob);
+    const registeredClaim = await globalBobClient.gitIdentityRegistry.getLatestKeyClaim(testContext.bob.address);
     console.log(chalk.blue(`🔍 Expected key: ${keyData.publicKeyMaterial}`));
     console.log(chalk.blue(`🔍 Registered key: ${registeredClaim?.publicKey}`));
     expect(registeredClaim?.publicKey).toBe(keyData.publicKeyMaterial);
@@ -229,7 +226,7 @@ async function runTestWithKeyType(keyType: "pgp" | "ssh", config: IntegrationCon
   // Step 2: Alice creates escrow challenge
   console.log(chalk.blue("\n📋 Step 2: Alice Creates Escrow Challenge"));
   
-  const escrowResult = await createAliceEscrow(globalAliceClient, config, testContext.charlie, testContext);
+  const escrowResult = await createAliceEscrow(globalAliceClient, config, testContext.charlie.address, testContext);
   console.log(chalk.green("✅ Alice's escrow challenge created"));
   console.log(chalk.gray(`   Escrow UID: ${escrowResult.attested.uid}`));
 
@@ -249,16 +246,13 @@ async function runTestWithKeyType(keyType: "pgp" | "ssh", config: IntegrationCon
   let arbitrationCompleted = false;
   let arbitrationResult = false;
 
-  const { unwatch } = await globalArbiterClient.oracle.listenAndArbitrateForEscrow({
-    escrow: {
-      attester: testContext.addresses.erc20EscrowObligation,
-      demandAbi: parseAbiParameters("(string testsCommitHash, uint8 testsCommitAlgo, string[] hosts)"),
-    },
-    fulfillment: {
-      attester: commitObligationAddress,
-      obligationAbi: parseAbiParameters("(string commitHash, uint8 commitAlgo, string[] hosts, address sender)"),
-    },
-    arbitrate: async (obligation: any, demand: any) => {
+  const { unwatch } = await globalArbiterClient.arbiters.general.trustedOracle.arbitrateMany(
+  async ({attestation, demand}) => {
+      console.log("Arbitrating ", attestation, demand);
+      const obligation = globalArbiterClient.commitObligation.decode(
+                    attestation.data
+                );
+                console.log("Obligation:", obligation);
       console.log(chalk.yellow("\n🏛️ Oracle Arbitration Process Starting..."));
       
       const result = await performCompleteArbitration(
@@ -273,7 +267,9 @@ async function runTestWithKeyType(keyType: "pgp" | "ssh", config: IntegrationCon
       arbitrationCompleted = true;
       return result;
     },
-    onAfterArbitrate: async (decision: any) => {
+    {
+      mode:"past",
+      onAfterArbitrate: async (decision: any) => {
       console.log(chalk.green(`\n✅ Arbitration Decision: ${decision.decision ? 'APPROVED' : 'REJECTED'}`));
       console.log(chalk.gray(`   Transaction Hash: ${decision.hash}`));
     },
@@ -304,7 +300,7 @@ async function runTestWithKeyType(keyType: "pgp" | "ssh", config: IntegrationCon
   if (arbitrationResult) {
     console.log(chalk.blue("\n📋 Step 5: Bob Collects Reward"));
     
-    const collectionHash = await globalBobClient.erc20.collectEscrow(
+    const collectionHash = await globalBobClient.erc20.escrow.nonTierable.collect(
       escrowResult.attested.uid,
       fulfillmentResult.attested.uid,
     );
@@ -496,12 +492,12 @@ async function createAliceEscrow(aliceClient: any, config: IntegrationConfig, or
     }]
   );
 
-  const demand = aliceClient.arbiters.encodeTrustedOracleDemand({
+  const demand = aliceClient.arbiters.general.trustedOracle.encodeDemand({
     oracle,
     data: commitTestsData,
   });
 
-  return await aliceClient.erc20.permitAndBuyWithErc20(
+  return await aliceClient.erc20.escrow.nonTierable.permitAndCreate(
     {
       address: testContext.mockAddresses.erc20A,
       value: BigInt(config.escrow.tokenAmount),

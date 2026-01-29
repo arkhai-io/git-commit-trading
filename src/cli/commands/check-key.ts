@@ -21,6 +21,11 @@ export async function checkKeyCommand(options: CheckKeyOptions) {
       throw new Error('GIT_IDENTITY_REGISTRY_ADDRESS is required in .env file for this command');
     }
 
+    // TypeScript type guard: gitIdentityRegistry exists when hasGitIdentityRegistry is true
+    if (!client.gitIdentityRegistry) {
+      throw new Error('Git Identity Registry client not initialized');
+    }
+
     // Use address as provided - Solidity's address type is case-insensitive
     const addressToCheck = (options.address || config.address) as `0x${string}`;
     console.log(chalk.gray(`Checking address: ${addressToCheck}`));

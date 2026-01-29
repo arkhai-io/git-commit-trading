@@ -11,8 +11,8 @@ import {
     parseAbiParameters,
 } from "viem";
 import { setupTest } from "./utils/setup";
-import { teardownTestEnvironment, type TestContext } from "alkahest-ts/tests/utils/setup";
 import { CommitAlgo, type CommitObligationData } from "../src/clients/commitObligation";
+import type { TestContext } from "alkahest-ts";
 
 describe("CommitObligation Tests", () => {
     // Test context and variables
@@ -30,8 +30,8 @@ describe("CommitObligation Tests", () => {
         bobClient = setup.bobClient;
 
         // Extract the values we need for tests
-        alice = testContext.alice;
-        bob = testContext.bob;
+        alice = testContext.alice.address;
+        bob = testContext.bob.address;
         testClient = testContext.testClient;
     });
 
@@ -44,10 +44,6 @@ describe("CommitObligation Tests", () => {
         }
     });
 
-    afterAll(async () => {
-        // Clean up
-        await teardownTestEnvironment(testContext);
-    });
 
     describe("CommitObligation - Contract Interactions", () => {
         test("testDoObligation - Success Case", async () => {

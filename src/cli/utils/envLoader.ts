@@ -7,6 +7,12 @@ import { makeCommitObligationClient, type CommitObligationAddresses } from '../.
 import { makeGitIdentityRegistryClient, type GitIdentityRegistryAddresses } from '../../clients/gitIdentityRegistry.js';
 import chalk from 'chalk';
 
+// Type for the extended client with optional extensions
+type ExtendedClient = ReturnType<typeof makeClient> & {
+  commitObligation?: ReturnType<typeof makeCommitObligationClient>;
+  gitIdentityRegistry?: ReturnType<typeof makeGitIdentityRegistryClient>;
+};
+
 export interface EnvConfig {
   privateKey: string;
   address: string;
@@ -83,7 +89,12 @@ function validateEnvConfig(envVars: Record<string, string>): EnvConfig {
 /**
  * Create a blockchain client from environment configuration
  */
-export async function createClientFromEnv(envPath: string = '.env', transportType: 'http' | 'websocket' = 'http') {
+export async function createClientFromEnv(envPath: string = '.env', transportType: 'http' | 'websocket' = 'http'): Promise<{
+  client: ExtendedClient;
+  config: EnvConfig;
+  hasCommitObligation: boolean;
+  hasGitIdentityRegistry: boolean;
+}> {
   console.log(chalk.gray('Loading environment configuration...'));
   
   const envVars = loadEnvFile(envPath);

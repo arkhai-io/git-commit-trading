@@ -152,12 +152,13 @@ export async function serverCommand(options: ServerOptions) {
           if (gitVerificationService) {
             console.log('🔐 Verifying commit signature using git verify-commit...');
             
+            
             // Create a map with only the latest key
             const registeredKeys = new Map();
             registeredKeys.set(senderAddress, latestKeyClaim);
             
             const verificationResult = await gitVerificationService.verifyCommit(
-              obligation.hosts[0],
+              obligation.hosts[0]!,
               obligation.commitHash,
               registeredKeys
             );
@@ -200,11 +201,11 @@ export async function serverCommand(options: ServerOptions) {
         const demand = demandData[0];
         
         // Configure repositories from obligation and demand
-        testConfig.repositories.testcase.url = demand.hosts[0];
+        testConfig.repositories.testcase.url = demand.hosts[0]!;
         testConfig.repositories.testcase.commitHash = demand.testsCommitHash;
         testConfig.repositories.testcase.testCommand = demand.testsCommand;
 
-        testConfig.repositories.source.url = obligation.hosts[0];
+        testConfig.repositories.source.url = obligation.hosts[0]!;
         testConfig.repositories.source.commitHash = obligation.commitHash;
 
         // If test command doesn't include installation (no && or ;), auto-detect install command
@@ -278,13 +279,13 @@ export async function serverCommand(options: ServerOptions) {
     if (options.past) {
       console.log(chalk.yellow('Arbitrating past obligations...'));
 
-      const decisions = await client.oracle.arbitratePast(arbitrate, {
-        skipAlreadyArbitrated: true,
+      const {decisions} = await client.arbiters.general.trustedOracle.arbitrateMany(arbitrate, {
         onAfterArbitrate: async (decision: any) => {
           console.log(chalk.green(`✓ Arbitration completed: ${decision.decision ? 'PASSED' : 'FAILED'}`));
           console.log(chalk.gray(`  Transaction Hash: ${decision.hash}`));
           console.log(chalk.gray(`  Attestation UID: ${decision.attestation.uid}`));
         },
+        mode: 'past',
       });
 
       console.log(chalk.green(`✓ Arbitration completed for ${decisions.length} past obligations`));
@@ -337,8 +338,7 @@ export async function serverCommand(options: ServerOptions) {
       });
 
       // Start listening and arbitrating
-      const { unwatch, decisions } = await client.oracle.listenAndArbitrate(arbitrate, {
-        skipAlreadyArbitrated: true,
+      const { unwatch, decisions } = await client.arbiters.general.trustedOracle.arbitrateMany(arbitrate, {
         onAfterArbitrate: async (decision: any) => {
           console.log(chalk.green(`✓ Arbitration completed: ${decision.decision ? 'PASSED' : 'FAILED'}`));
           console.log(chalk.gray(`  Transaction Hash: ${decision.hash}`));
