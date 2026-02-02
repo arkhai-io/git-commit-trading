@@ -68,11 +68,9 @@ export async function listCommand(options: ListOptions) {
 			console.log(
 				chalk.yellow("\n⚠️  No ERC20EscrowObligation address configured"),
 			);
-			console.log(chalk.gray("Please add the following to your .env file:"));
-			console.log(chalk.gray("ERC20_ESCROW_OBLIGATION_ADDRESS=0x..."));
-			console.log(chalk.gray("\nYou can find the deployed address in:"));
-			console.log(chalk.gray("  contract/deployments/[network].json"));
-			throw new Error("ERC20_ESCROW_OBLIGATION_ADDRESS required");
+			console.log(chalk.gray("The ERC20EscrowObligation address should be provided by the Alkahest SDK."));
+			console.log(chalk.gray("Make sure you are using a supported network."));
+			throw new Error("ERC20EscrowObligation address not available from SDK");
 		}
 
 		console.log(chalk.gray(`ERC20 Escrow Contract: ${erc20EscrowAddress}`));

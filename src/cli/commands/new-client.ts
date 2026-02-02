@@ -68,8 +68,6 @@ NETWORK=${options.network}
 GIT_IDENTITY_REGISTRY_ADDRESS= #Add the deployed GitIdentityRegistry contract address here
 
 # Optional additional contract addresses:
-# ERC20_ESCROW_OBLIGATION_ADDRESS=
-# ARBITER_ADDRESS=
 # ORACLE_ADDRESS=
 # TOKEN_ADDRESS=
 `;
