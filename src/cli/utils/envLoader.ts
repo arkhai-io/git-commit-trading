@@ -254,7 +254,7 @@ export async function createClientFromEnv(
  * Check if .env file exists, load it into process.env, and show helpful error message if not found
  */
 export function requireEnvFile(envPath: string = ".env"): void {
-	if (!existsSync(envPath)) {
+	if (!process.env.PRIVATE_KEY && !existsSync(envPath)) {
 		console.error(chalk.red("❌ .env file not found"));
 		console.error(
 			chalk.yellow("\nPlease create a .env file with the following format:"),

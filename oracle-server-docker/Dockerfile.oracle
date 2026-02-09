@@ -9,6 +9,18 @@ COPY package.json bun.lock ./
 # Install dependencies
 RUN bun install --frozen-lockfile
 
+# Patch alkahest-ts to use correct Base Sepolia ERC20 escrow address
+# RUN sed -i 's/0xFa76421cEe6aee41adc7f6a475b9Ef3776d500F0/0x19df198F7C538f478746F092fb3aF7BE159f9801/g' \
+#     node_modules/alkahest-ts/dist/index.js \
+#     node_modules/alkahest-ts/dist/index.cjs \
+#     node_modules/alkahest-ts/src/config.ts
+
+# # Patch alkahest-ts to use correct Base Sepolia TrustedOracleArbiter address
+# RUN sed -i 's/trustedOracleArbiter: "0x361E0950534F4a54A39F8C4f1f642C323f6e66B9"/trustedOracleArbiter: "0xD2c1A86BBa27143bc43C9A2Ef23BD1EC8B4C568F"/g' \
+#     node_modules/alkahest-ts/dist/index.js \
+#     node_modules/alkahest-ts/dist/index.cjs \
+#     node_modules/alkahest-ts/src/config.ts
+
 # Copy source code
 COPY . .
 
@@ -49,9 +61,6 @@ COPY src/test-execution/dockerfiles /app/dockerfiles
 
 # Set environment variable for dockerfile path (used in containerized deployment)
 ENV DOCKERFILES_PATH=/app/dockerfiles
-
-# Enable Docker BuildKit (required for modern Docker builds)
-ENV DOCKER_BUILDKIT=1
 
 # Health check - verify the oracle process is running
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
