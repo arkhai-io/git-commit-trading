@@ -170,6 +170,7 @@ export async function fulfillCommand(options: FulfillOptions) {
 				escrowAbi,
 				escrowAttestation.data,
 			);
+			const arbiterAddress = decodedEscrow[0].arbiter;
 			const demandBytes = decodedEscrow[0].demand;
 
 			// Then decode the TrustedOracleDemand from the demand bytes: (address oracle, bytes data)
@@ -177,16 +178,31 @@ export async function fulfillCommand(options: FulfillOptions) {
 			const decodedDemand = decodeAbiParameters(demandAbi, demandBytes);
 			const oracleAddress = decodedDemand[0].oracle;
 
+			console.log(chalk.gray(`  Arbiter Address: ${arbiterAddress}`));
 			console.log(chalk.gray(`  Oracle Address: ${oracleAddress}`));
 
-			// Request arbitration
+			// Request arbitration - call the arbiter contract directly
 			await new Promise((resolve) => setTimeout(resolve, 2000));
-			const arbitrationTx =
-				await client.arbiters.general.trustedOracle.requestArbitration(
-					fulfillment.uid,
-					oracleAddress,
-					demandBytes,
-				);
+			const arbitrationTx = await client.viemClient.writeContract({
+				address: arbiterAddress,
+				abi: [
+					{
+						type: "function",
+						name: "requestArbitration",
+						inputs: [
+							{ name: "_obligation", type: "bytes32" },
+							{ name: "oracle", type: "address" },
+							{ name: "demand", type: "bytes" },
+						],
+						outputs: [],
+						stateMutability: "nonpayable",
+					},
+				],
+				functionName: "requestArbitration",
+				args: [fulfillment.uid, oracleAddress, demandBytes],
+				account: client.viemClient.account,
+				chain: client.viemClient.chain,
+			});
 			console.log(chalk.green("Arbitration requested successfully!"));
 			console.log(
 				chalk.gray(`  Arbitration Request Transaction: ${arbitrationTx}`),
