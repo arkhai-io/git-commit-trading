@@ -19,7 +19,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # dotenv environment variable files
 .env
 .env.test
-
+.env.oracle
 # Integration test sensitive files - NEVER COMMIT THESE
 # integration-test-config.json
 test-keys/

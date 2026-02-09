@@ -26,9 +26,35 @@ export interface EnvConfig {
 }
 
 /**
- * Load and parse .env file
+ * Load environment variables from process.env or .env file.
+ * Supports Docker --env-file which injects vars directly into process.env.
  */
 function loadEnvFile(envPath: string = ".env"): Record<string, string> {
+	// First, check if required vars are already in process.env (Docker --env-file)
+	if (process.env.PRIVATE_KEY) {
+		// Environment variables already loaded (e.g., from Docker --env-file)
+		const envVars: Record<string, string> = {};
+		const relevantKeys = [
+			"PRIVATE_KEY",
+			"NETWORK",
+			"RPC_URL",
+			"WS_RPC_URL",
+			"COMMIT_OBLIGATION_ADDRESS",
+			"GIT_IDENTITY_REGISTRY_ADDRESS",
+			"ORACLE_ADDRESS",
+			"TOKEN_ADDRESS",
+			"DEBUG",
+			"DOCKERFILES_PATH",
+		];
+		for (const key of relevantKeys) {
+			if (process.env[key]) {
+				envVars[key] = process.env[key] as string;
+			}
+		}
+		return envVars;
+	}
+
+	// Fall back to reading .env file
 	if (!existsSync(envPath)) {
 		throw new Error(
 			`Environment file ${envPath} not found. Please create a .env file with PRIVATE_KEY.`,

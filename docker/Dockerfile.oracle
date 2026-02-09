@@ -1,0 +1,61 @@
+# Build stage - compile the git-escrows binary
+FROM oven/bun:1-debian AS builder
+
+WORKDIR /app
+
+# Copy package files first for better caching
+COPY package.json bun.lock ./
+
+# Install dependencies
+RUN bun install --frozen-lockfile
+
+# Copy source code
+COPY . .
+
+# Build the binary
+RUN bun build --compile --outfile /app/bin/git-escrows src/cli/git-escrows.ts
+
+# Runtime stage - minimal image with required tools
+FROM oven/bun:1-debian AS runtime
+
+# Install required system dependencies:
+# - git: for cloning test repositories
+# - gpg: for GPG key verification
+# - openssh-client: for SSH key operations
+# - ca-certificates: for HTTPS connections
+# - curl: for downloading Docker CLI
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    gpg \
+    openssh-client \
+    ca-certificates \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Docker CLI (client only - we'll use host Docker daemon via socket)
+# Auto-detect architecture for ARM64 (Apple Silicon) or x86_64
+RUN ARCH=$(uname -m) && \
+    if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then ARCH="aarch64"; else ARCH="x86_64"; fi && \
+    curl -fsSL "https://download.docker.com/linux/static/stable/${ARCH}/docker-24.0.7.tgz" | \
+    tar xz --strip-components=1 -C /usr/local/bin docker/docker
+
+WORKDIR /app
+
+# Copy the compiled binary from builder
+COPY --from=builder /app/bin/git-escrows /app/git-escrows
+
+# Copy dockerfiles for test execution frameworks
+COPY src/test-execution/dockerfiles /app/dockerfiles
+
+# Set environment variable for dockerfile path (used in containerized deployment)
+ENV DOCKERFILES_PATH=/app/dockerfiles
+
+# Enable Docker BuildKit (required for modern Docker builds)
+ENV DOCKER_BUILDKIT=1
+
+# Health check - verify the oracle process is running
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD pgrep -f "git-escrows" || exit 1
+
+# Default entrypoint runs the server
+ENTRYPOINT ["/app/git-escrows", "server"]

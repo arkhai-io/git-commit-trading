@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Version control
+.git/
+
+# Logs
+*.log
+
+# Environment files (contain secrets)
+.env*
+!.env.example
+!.env.test.example
+
+# Contract build artifacts and sources (not needed for oracle)
+contract/
+
+# Examples and tests (not needed in production image)
+examples/
+tests/
+
+# Pre-built binaries (we build fresh in Docker)
+bin/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
