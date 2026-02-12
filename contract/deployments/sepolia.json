@@ -1,0 +1,11 @@
+{
+  "gitIdentityRegistry": "0x57D5165F9487F6E7bD6E6a24017FAdadc2b1D7D2",
+  "commitObligation": "0x5bf1EE1fEC1bC25d20C4537f74bD0909B195DEBd",
+  "deployer": "0xc5c132B69f57dAAAb75d9ebA86cab504b272Ccbc",
+  "blockNumber": 10245692,
+  "timestamp": 1770904560,
+  "easRegistry": "0xC2679fBD37d54388Ce493F1DB75320D236e1815e",
+  "schemaRegistry": "0x0a7E2Ff54e76B8E6659aedc9103FB21c038050D0",
+  "network": "sepolia",
+  "chainId": 11155111
+}

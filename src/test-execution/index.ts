@@ -1,8 +1,38 @@
-// Main SDK exports
-export { GitTestExecution } from './sdk.js';
-export { TestExecutor } from './executor.js';
-export type { Config, ExecutionResult, TestResult, RepositoryConfig } from './types.js';
-export { loadConfig } from './utils.js';
-
-// Default export for convenience
-export { GitTestExecution as default } from './sdk.js';
+// Primitives
+// Composition
+// Default export
+export {
+	cloneRepo,
+	runTests,
+	verifyAndRunTests,
+	verifyAndRunTests as default,
+} from "./executor.js";
+// Framework detection utility
+export {
+	detectFramework,
+	type FrameworkDetectionResult,
+} from "./frameworkDetection.js";
+// Frameworks
+export {
+	bunJest,
+	bunTest,
+	cargo,
+	customDockerfile,
+	defaultFrameworks,
+	nodeFallback,
+	nodeJest,
+	pnpmJest,
+	pytestFallback,
+	pytestPoetry,
+	pytestUv,
+} from "./frameworks/index.js";
+// Types
+export type {
+	Framework,
+	ProjectLanguage,
+	RegisteredKey,
+	RepoSpec,
+	RunTestsOptions,
+	TestResult,
+	VerifyAndRunTestsOptions,
+} from "./types.js";

@@ -1,110 +1,110 @@
 {
-  "description": "Integration test configuration - Fill in your real values for end-to-end testing",
-  "version": "1.0.0",
-  
-  "blockchain": {
-    "description": "Local blockchain configuration",
-    "rpcUrl": "http://127.0.0.1:8545",
-    "chainId": 31337,
-    "comment": "Make sure local hardhat node is running on port 8545"
-  },
-  
-  "keys": {
-    "description": "Real cryptographic keys for testing - YOU MUST FILL THESE",
-    "preferredKeyType": "both",
-    "comment": "Set preferredKeyType to 'pgp', 'ssh', or 'both' to choose which key type(s) to use for testing",
-    "pgp": {
-      "publicKeyPath": "/path/to/bob-gpg-public.asc",
-      "privateKeyPath": "/path/to/bob-gpg-private.asc",
-      "keyId": "ABCD1234EFGH5678",
-      "passphrase": "YOUR_PASSPHRASE_HERE",
-      "comment": "Generate real PGP key pair and put paths here"
-    },
-    "ssh": {
-      "publicKeyPath": "~/.ssh/git-alkahest/id_ed25519.pub",
-      "privateKeyPath": "~/.ssh/git-alkahest/id_ed25519",
-      "keyType": "ed25519",
-      "comment": "Generate real SSH key pair and put paths here"
-    }
-  },
-  
-  "repositories": {
-    "description": "Real Git repositories with actual commits - YOU MUST FILL THESE",
-    "alice": {
-      "name": "Alice's Test Repository",
-      "url": "https://github.com/thinhnx-var/testcase-repo-alice.git",
-      "testsCommitHash": "ab940eceae6702e05b9c03765b7407a054ea84c9",
-      "testsCommitAlgo": 0,
-      "localClonePath": "./temp/alice-tests",
-      "comment": "Alice's repository containing test cases"
-    },
-    "bob": {
-      "name": "Bob's Solution Repository", 
-      "url": "https://github.com/thinhnx-var/solution-repo-bob.git",
-      "ssh": {
-        "solutionCommitHash": "be24984150e1b92e7fb1cd48dd4308fa6ee5ddb5",
-        "solutionCommitAlgo": 0,
-        "comment": "Commit signed with SSH key for SSH testing"
-      },
-      "pgp": {
-        "solutionCommitHash": "2816bfe4a841f76239a1cfb3e14dcf579d108964",
-        "solutionCommitAlgo": 0,
-        "comment": "Commit signed with PGP key for PGP testing"
-      },
-      "localClonePath": "./temp/bob-solution",
-      "comment": "Bob's repository containing solution code with separate commits for SSH and PGP testing"
-    }
-  },
-  
-  "escrow": {
-    "description": "Test escrow configuration",
-    "tokenAmount": "10000000000000000000",
-    "tokenSymbol": "ETH",
-    "expirationHours": 24,
-    "comment": "Amount in wei (10 ETH), expires in 24 hours"
-  },
-  
-  "server": {
-    "description": "Oracle server configuration",
-    "pollingInterval": 1000,
-    "timeout": 300000,
-    "skipKeyVerification": false,
-    "useGitVerifyCommit": true,
-    "comment": "Server settings for arbitration"
-  },
-  
-  "test": {
-    "description": "Test execution settings",
-    "waitTimeMs": 5000,
-    "maxRetries": 3,
-    "cleanupAfterTest": true,
-    "enableDetailedLogs": true,
-    "comment": "Test behavior configuration"
-  },
-  
-  "_instructions": {
-    "setup_steps": [
-      "1. Generate real PGP key: gpg --gen-key",
-      "2. Export PGP keys: gpg --export --armor > public.asc && gpg --export-secret-keys --armor > private.asc",
-      "3. Generate SSH key: ssh-keygen -t ed25519 -f ./test-keys/bob-ssh",
-      "4. Create real commits in Bob's repository for both key types:",
-      "   - Make one commit and sign with SSH key: git commit -S",
-      "   - Make another commit and sign with PGP key: git commit -S",
-      "5. Fill in both SSH and PGP commit hashes in repositories.bob.ssh/pgp sections",
-      "6. Fill in key paths and other config values",
-      "7. Start local hardhat node: npx hardhat node",
-      "8. Run integration test: bun test integration-test"
-    ],
-    "required_commits": {
-      "alice": "Commit containing test cases that Bob's solution should pass",
-      "bob_ssh": "Commit containing solution code signed with SSH key",
-      "bob_pgp": "Commit containing solution code signed with PGP key"
-    },
-    "testing_flow": {
-      "ssh_test": "Uses repositories.bob.ssh.solutionCommitHash for SSH key verification",
-      "pgp_test": "Uses repositories.bob.pgp.solutionCommitHash for PGP key verification",
-      "both_mode": "Runs both SSH and PGP tests sequentially with their respective commits"
-    },
-    "security_note": "This config contains sensitive key information - DO NOT commit to public repos"
-  }
+	"description": "Integration test configuration - Fill in your real values for end-to-end testing",
+	"version": "1.0.0",
+
+	"blockchain": {
+		"description": "Local blockchain configuration",
+		"rpcUrl": "http://127.0.0.1:8545",
+		"chainId": 31337,
+		"comment": "Make sure local hardhat node is running on port 8545"
+	},
+
+	"keys": {
+		"description": "Real cryptographic keys for testing - YOU MUST FILL THESE",
+		"preferredKeyType": "both",
+		"comment": "Set preferredKeyType to 'pgp', 'ssh', or 'both' to choose which key type(s) to use for testing",
+		"pgp": {
+			"publicKeyPath": "/path/to/bob-gpg-public.asc",
+			"privateKeyPath": "/path/to/bob-gpg-private.asc",
+			"keyId": "ABCD1234EFGH5678",
+			"passphrase": "YOUR_PASSPHRASE_HERE",
+			"comment": "Generate real PGP key pair and put paths here"
+		},
+		"ssh": {
+			"publicKeyPath": "~/.ssh/git-alkahest/id_ed25519.pub",
+			"privateKeyPath": "~/.ssh/git-alkahest/id_ed25519",
+			"keyType": "ed25519",
+			"comment": "Generate real SSH key pair and put paths here"
+		}
+	},
+
+	"repositories": {
+		"description": "Real Git repositories with actual commits - YOU MUST FILL THESE",
+		"alice": {
+			"name": "Alice's Test Repository",
+			"url": "https://github.com/thinhnx-var/testcase-repo-alice.git",
+			"testsCommitHash": "ab940eceae6702e05b9c03765b7407a054ea84c9",
+			"testsCommitAlgo": 0,
+			"localClonePath": "./temp/alice-tests",
+			"comment": "Alice's repository containing test cases"
+		},
+		"bob": {
+			"name": "Bob's Solution Repository",
+			"url": "https://github.com/thinhnx-var/solution-repo-bob.git",
+			"ssh": {
+				"solutionCommitHash": "be24984150e1b92e7fb1cd48dd4308fa6ee5ddb5",
+				"solutionCommitAlgo": 0,
+				"comment": "Commit signed with SSH key for SSH testing"
+			},
+			"pgp": {
+				"solutionCommitHash": "2816bfe4a841f76239a1cfb3e14dcf579d108964",
+				"solutionCommitAlgo": 0,
+				"comment": "Commit signed with PGP key for PGP testing"
+			},
+			"localClonePath": "./temp/bob-solution",
+			"comment": "Bob's repository containing solution code with separate commits for SSH and PGP testing"
+		}
+	},
+
+	"escrow": {
+		"description": "Test escrow configuration",
+		"tokenAmount": "10000000000000000000",
+		"tokenSymbol": "ETH",
+		"expirationHours": 24,
+		"comment": "Amount in wei (10 ETH), expires in 24 hours"
+	},
+
+	"server": {
+		"description": "Oracle server configuration",
+		"pollingInterval": 1000,
+		"timeout": 300000,
+		"skipKeyVerification": false,
+		"useGitVerifyCommit": true,
+		"comment": "Server settings for arbitration"
+	},
+
+	"test": {
+		"description": "Test execution settings",
+		"waitTimeMs": 5000,
+		"maxRetries": 3,
+		"cleanupAfterTest": true,
+		"enableDetailedLogs": true,
+		"comment": "Test behavior configuration"
+	},
+
+	"_instructions": {
+		"setup_steps": [
+			"1. Generate real PGP key: gpg --gen-key",
+			"2. Export PGP keys: gpg --export --armor > public.asc && gpg --export-secret-keys --armor > private.asc",
+			"3. Generate SSH key: ssh-keygen -t ed25519 -f ./test-keys/bob-ssh",
+			"4. Create real commits in Bob's repository for both key types:",
+			"   - Make one commit and sign with SSH key: git commit -S",
+			"   - Make another commit and sign with PGP key: git commit -S",
+			"5. Fill in both SSH and PGP commit hashes in repositories.bob.ssh/pgp sections",
+			"6. Fill in key paths and other config values",
+			"7. Start local hardhat node: npx hardhat node",
+			"8. Run integration test: bun test integration-test"
+		],
+		"required_commits": {
+			"alice": "Commit containing test cases that Bob's solution should pass",
+			"bob_ssh": "Commit containing solution code signed with SSH key",
+			"bob_pgp": "Commit containing solution code signed with PGP key"
+		},
+		"testing_flow": {
+			"ssh_test": "Uses repositories.bob.ssh.solutionCommitHash for SSH key verification",
+			"pgp_test": "Uses repositories.bob.pgp.solutionCommitHash for PGP key verification",
+			"both_mode": "Runs both SSH and PGP tests sequentially with their respective commits"
+		},
+		"security_note": "This config contains sensitive key information - DO NOT commit to public repos"
+	}
 }

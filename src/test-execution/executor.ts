@@ -1,437 +1,383 @@
-import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
-import chalk from 'chalk';
-import type { Config, ExecutionResult, TestResult, RepositoryConfig, ProjectLanguage } from './types.js';
-import { Logger, executeCommand, ensureDirectory, removeDirectory, copyDirectory, parseCommand, validateCommitHash, normalizeCommitHash, cloneGitRepository } from './utils.js';
-import { detectProjectCommands, detectPackageManager, updateCommandsForPackageManager, type ProjectCommands } from './projectDetection.js';
-import { GitCommitVerifier } from '../utils/gitVerification.js';
+import { exec } from "node:child_process";
+import { promises as fs } from "node:fs";
+import path from "node:path";
+import { promisify } from "node:util";
+import chalk from "chalk";
+import { verifyRepo } from "../crypto/index.js";
+import { detectFramework } from "./frameworkDetection.js";
+import { defaultFrameworks } from "./frameworks/index.js";
+import type {
+	Framework,
+	RepoSpec,
+	RunTestsOptions,
+	TestResult,
+	VerifyAndRunTestsOptions,
+} from "./types.js";
+import { ensureDirectory, removeDirectory } from "./utils.js";
 
-export class TestExecutor {
-  private config: Config;
-  private workingDir: string;
-  private sourceDir: string;
-  private testcaseDir: string;
-  private mergedDir: string;
-  private detectedLanguage: ProjectLanguage | null = null;
-  private projectCommands: ProjectCommands | null = null;
-  private gitVerifier: GitCommitVerifier | null = null;
+const execAsync = promisify(exec);
 
-  constructor(config: Config) {
-    this.config = config;
-    this.workingDir = path.resolve(config.execution.tempDirectory, `execution-${uuidv4()}`);
-    this.sourceDir = path.join(this.workingDir, 'source');
-    this.testcaseDir = path.join(this.workingDir, 'testcase');
-    this.mergedDir = path.join(this.workingDir, 'merged');
-    
-    // Initialize git verifier if signature verification is enabled
-    if (config.execution.verifyCommitSignatures) {
-      this.gitVerifier = new GitCommitVerifier({});
-    }
-  }
+// Container runtime detection (supports docker and podman)
+let containerRuntime: string | null = null;
 
-  async execute(): Promise<ExecutionResult> {
-    const result: ExecutionResult = {
-      sourceCloned: false,
-      testcaseCloned: false,
-      sourceSignatureVerified: undefined,
-      testcaseSignatureVerified: undefined,
-      dependenciesInstalled: false,
-      testsExecuted: false,
-      testResult: {
-        success: false,
-        output: '',
-        duration: 0,
-        timestamp: new Date(),
-      },
-      cleanup: false,
-      workingDirectory: this.workingDir,
-    };
+async function getContainerRuntime(): Promise<string> {
+	if (containerRuntime) return containerRuntime;
 
-    try {
-      // Create working directory
-      await ensureDirectory(this.workingDir);
-      
-      // Step 1: Clone source repository (Bob's solution)
-      console.log(chalk.cyan('Cloning solution repo...'));
-      const sourceRepoInfo = this.config.repositories.source.commitHash && this.config.repositories.source.commitHash.trim() !== '' 
-        ? `${this.config.repositories.source.url} (commit: ${this.config.repositories.source.commitHash})`
-        : `${this.config.repositories.source.url} (branch: ${this.config.repositories.source.branch})`;
-      console.log(chalk.gray(`Source: ${sourceRepoInfo}`));
-      result.sourceSignatureVerified = await this.cloneRepository(this.config.repositories.source, this.sourceDir, 'source');
-      result.sourceCloned = true;
+	// Try docker first, then podman
+	for (const runtime of ["docker", "podman"]) {
+		try {
+			await execAsync(`${runtime} --version`);
+			containerRuntime = runtime;
+			return runtime;
+		} catch {
+			// Continue to next runtime
+		}
+	}
 
-      // Step 2: Clone testcase repository (Alice's tests)
-      console.log(chalk.cyan('Cloning test repo...'));
-      const testcaseRepoInfo = this.config.repositories.testcase.commitHash && this.config.repositories.testcase.commitHash.trim() !== '' 
-        ? `${this.config.repositories.testcase.url} (commit: ${this.config.repositories.testcase.commitHash})`
-        : `${this.config.repositories.testcase.url} (branch: ${this.config.repositories.testcase.branch})`;
-      console.log(chalk.gray(`Testcase: ${testcaseRepoInfo}`));
-      result.testcaseSignatureVerified = await this.cloneRepository(this.config.repositories.testcase, this.testcaseDir, 'testcase');
-      result.testcaseCloned = true;
-
-      // Step 3: Merge Bob's solution into Alice's test structure
-      console.log(chalk.cyan('Merging solution with tests...'));
-      await this.mergeTestcases();
-
-      // Step 4: Install dependencies
-      console.log(chalk.cyan('Installing dependencies...'));
-      await this.installDependencies();
-      result.dependenciesInstalled = true;
-
-      // Step 5: Build source if needed (use Alice's build command if available)
-      const buildCommand = this.config.repositories.testcase.buildCommand || this.config.repositories.source.buildCommand;
-      if (buildCommand) {
-        console.log(chalk.cyan('Building project...'));
-        await this.buildSource();
-      }
-
-      // Step 6: Run tests
-      console.log(chalk.cyan('Running tests...'));
-      result.testResult = await this.runTests();
-      result.testsExecuted = true;
-
-    } catch (error) {
-      result.testResult.error = error instanceof Error ? error.message : String(error);
-    } finally {
-      // Cleanup if configured
-      if (this.config.execution.cleanupAfterExecution) {
-        console.log(chalk.cyan('Cleaning up...'));
-        try {
-          await this.cleanup();
-          result.cleanup = true;
-        } catch (error) {
-          result.cleanup = false;
-        }
-      } else {
-        result.cleanup = true;
-      }
-    }
-
-    return result;
-  }
-
-  private async cloneRepository(repo: RepositoryConfig, targetDir: string, repoType: 'source' | 'testcase' = 'source'): Promise<boolean> {
-    const gitUrl = repo.url;
-
-    // Validate commit hash format if algorithm is specified
-    if (repo.commitHash && repo.commitAlgo) {
-      const normalizedHash = normalizeCommitHash(repo.commitHash);
-      if (!validateCommitHash(normalizedHash, repo.commitAlgo)) {
-        throw new Error(`Invalid ${repo.commitAlgo.toUpperCase()} commit hash format: ${repo.commitHash}`);
-      }
-      Logger.step(`Validated ${repo.commitAlgo.toUpperCase()} commit hash: ${normalizedHash}`);
-    }
-
-    // Clone the repository and checkout specific commit
-    Logger.step(`Cloning repository from ${gitUrl}...`);
-    await ensureDirectory(targetDir);
-    await cloneGitRepository(gitUrl, targetDir, repo.commitHash);
-    Logger.success('Repository cloned successfully');
-
-    // Verify commit signature if enabled
-    let signatureVerified = false;
-    if (this.config.execution.verifyCommitSignatures && this.gitVerifier && repo.commitHash) {
-      Logger.step(`Verifying commit signature for ${repo.commitHash}...`);
-      try {
-        const verification = await this.gitVerifier.verifyCommitInDirectory(targetDir, repo.commitHash);
-        signatureVerified = verification.isValid;
-        
-        if (verification.isValid) {
-          Logger.success(`✅ Commit signature verified for ${repoType} repository`);
-          Logger.step(`Signer: ${verification.keyFingerprint || 'Unknown'}`);
-        } else {
-          Logger.error(`❌ Commit signature verification failed for ${repoType} repository`);
-          Logger.error(`Reason: ${verification.error || 'Unknown error'}`);
-          
-          // Fail the process if signature verification is required
-          throw new Error(`Commit signature verification failed for ${repoType}: ${verification.error}`);
-        }
-      } catch (error) {
-        Logger.error(`❌ Error during signature verification for ${repoType}: ${error instanceof Error ? error.message : String(error)}`);
-        throw error;
-      }
-    }
-
-    return signatureVerified;
-  }
-
-  private async mergeTestcases(): Promise<void> {
-    // In this scenario:
-    // - testcase repo (Alice) has the test structure with empty src/
-    // - source repo (Bob) has the implementation in src/
-    // We need to copy Alice's structure first, then merge Bob's src/ into Alice's src/
-    
-    Logger.step('Setting up Alice\'s test structure...');
-    await copyDirectory(this.testcaseDir, this.mergedDir);
-    
-    Logger.step('Detecting language-specific merge strategy...');
-    const mergeStrategy = await this.getLanguageSpecificMergeStrategy();
-    
-    Logger.step('Merging Bob\'s solution into Alice\'s project structure...');
-    
-    // Determine source and target directories
-    const bobSourceDir = mergeStrategy.sourceSubDir 
-      ? path.join(this.sourceDir, mergeStrategy.sourceSubDir)
-      : this.sourceDir;
-    
-    const aliceTargetDir = mergeStrategy.targetSubDir
-      ? path.join(this.mergedDir, mergeStrategy.targetSubDir)
-      : this.mergedDir;
-    
-    // Ensure Alice's target directory exists if needed
-    if (mergeStrategy.shouldCreateTarget) {
-      await ensureDirectory(aliceTargetDir);
-    }
-    
-    // Copy Bob's source content into Alice's target
-    try {
-      await copyDirectory(bobSourceDir, aliceTargetDir);
-      Logger.success(`Successfully merged Bob's ${this.detectedLanguage || 'code'} solution`);
-    } catch (error) {
-      Logger.warning(`Could not copy from ${bobSourceDir}: ${error}`);
-      // If Bob doesn't have the expected structure, try copying the entire repo content
-      Logger.step('Trying to copy all of Bob\'s content to target directory...');
-      const entries = await import('fs').then(fs => fs.promises.readdir(this.sourceDir, { withFileTypes: true }));
-      
-      for (const entry of entries) {
-        if (entry.name === '.git' || entry.name === 'node_modules' || entry.name === 'target' || entry.name === '__pycache__') continue;
-        
-        const srcPath = path.join(this.sourceDir, entry.name);
-        const destPath = path.join(aliceTargetDir, entry.name);
-        
-        if (entry.isDirectory()) {
-          await copyDirectory(srcPath, destPath);
-        } else {
-          await import('fs').then(fs => fs.promises.copyFile(srcPath, destPath));
-        }
-      }
-    }
-  }
-
-  private async installDependencies(): Promise<void> {
-    let installCommand: string | undefined;
-    
-    // Check if install command is explicitly configured
-    if (this.config.repositories.testcase.installCommand) {
-      installCommand = this.config.repositories.testcase.installCommand;
-      Logger.step(`Using configured install command: ${installCommand}`);
-    } else {
-      // Check if test command includes installation (&&, ;)
-      const testCommand = this.config.repositories.testcase.testCommand;
-      const hasInstallInTestCommand = testCommand && /&&|;/.test(testCommand);
-      
-      if (hasInstallInTestCommand) {
-        Logger.warning('No separate install command - test command includes installation');
-        return;
-      }
-      
-      // Auto-detect install command from testcase repo only (for convenience)
-      Logger.step('Auto-detecting install command from testcase repo...');
-      const detectedCommands = await detectProjectCommands(this.mergedDir);
-      
-      if (!detectedCommands.isValidProject || !detectedCommands.commands) {
-        Logger.warning('Could not detect project type, skipping dependency installation');
-        Logger.step('Note: Test command may need to handle its own environment setup');
-        return;
-      }
-      
-      installCommand = detectedCommands.commands.installCommand;
-      this.detectedLanguage = detectedCommands.language;
-      this.projectCommands = detectedCommands.commands;
-      
-      Logger.step(`Auto-detected ${detectedCommands.language} project with install command: ${installCommand}`);
-    }
-    
-    const { command, args } = parseCommand(installCommand);
-    Logger.step(`Executing install command: ${command} with args: ${args.join(' ')}`);
-    
-    const result = await executeCommand(
-      command,
-      args,
-      {
-        cwd: this.mergedDir,
-        timeout: this.config.execution.timeout,
-      }
-    );
-
-    if (result.exitCode !== 0) {
-      throw new Error(`Dependency installation failed: ${result.stderr}`);
-    }
-    
-    Logger.success('Dependencies installed successfully');
-  }
-
-  private async buildSource(): Promise<void> {
-    // Only build if explicitly configured - DO NOT auto-detect
-    const buildCommand = this.config.repositories.testcase.buildCommand || this.config.repositories.source.buildCommand;
-    
-    if (!buildCommand) {
-      Logger.warning('No build command configured, skipping build step');
-      return;
-    }
-    
-    Logger.step(`Using configured build command: ${buildCommand}`);
-
-    const { command, args } = parseCommand(buildCommand);
-    
-    const result = await executeCommand(
-      command,
-      args,
-      {
-        cwd: this.mergedDir,
-        timeout: this.config.execution.timeout,
-      }
-    );
-
-    if (result.exitCode !== 0) {
-      throw new Error(`Build failed: ${result.stderr}`);
-    }
-    
-    Logger.success('Build completed successfully');
-  }
-
-  private async runTests(): Promise<TestResult> {
-    const startTime = Date.now();
-    
-    try {
-      // Use Alice's test command first, then Bob's - REQUIRED, no auto-detection
-      const testCommand = this.config.repositories.testcase.testCommand || this.config.repositories.source.testCommand;
-      
-      if (!testCommand) {
-        throw new Error('No test command configured. Test command must be explicitly provided in the escrow.');
-      }
-      
-      Logger.step(`Using configured test command: ${testCommand}`);
-
-      const { command, args } = parseCommand(testCommand);
-
-      const result = await executeCommand(
-        command,
-        args,
-        {
-          cwd: this.mergedDir,
-          timeout: this.config.execution.timeout,
-        }
-      );
-
-      const duration = Date.now() - startTime;
-
-      return {
-        success: result.exitCode === 0,
-        output: result.stdout,
-        error: result.exitCode !== 0 ? result.stderr : undefined,
-        duration,
-        timestamp: new Date(),
-      };
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      return {
-        success: false,
-        output: '',
-        error: error instanceof Error ? error.message : String(error),
-        duration,
-        timestamp: new Date(),
-      };
-    }
-  }
-
-  private async cleanup(): Promise<void> {
-    // Remove the entire temp directory instead of just the working subdirectory
-    const tempDirectory = path.resolve(this.config.execution.tempDirectory);
-    await removeDirectory(tempDirectory);
-  }
-
-  getWorkingDirectory(): string {
-    return this.workingDir;
-  }
-
-  getDetectedLanguage(): ProjectLanguage | null {
-    return this.detectedLanguage;
-  }
-
-  getProjectCommands(): ProjectCommands | null {
-    return this.projectCommands;
-  }
-
-  /**
-   * Get language-specific merge strategy
-   */
-  private async getLanguageSpecificMergeStrategy(): Promise<{
-    sourceSubDir?: string;
-    targetSubDir?: string;
-    shouldCreateTarget?: boolean;
-  }> {
-    // Detect language if not already detected
-    if (!this.detectedLanguage) {
-      const testcaseDetection = await detectProjectCommands(this.testcaseDir);
-      if (testcaseDetection.isValidProject) {
-        this.detectedLanguage = testcaseDetection.language;
-      }
-    }
-
-    switch (this.detectedLanguage) {
-      case 'typescript':
-        return {
-          sourceSubDir: 'src',
-          targetSubDir: 'src',
-          shouldCreateTarget: true
-        };
-      case 'rust':
-        return {
-          sourceSubDir: 'src',
-          targetSubDir: 'src',
-          shouldCreateTarget: true
-        };
-      case 'python':
-        return {
-          // Python projects might have various structures
-          // Try to detect if it's a package or simple scripts
-          sourceSubDir: await this.detectPythonSourceStructure(),
-          targetSubDir: 'src', // Standard target
-          shouldCreateTarget: true
-        };
-      default:
-        return {
-          sourceSubDir: 'src',
-          targetSubDir: 'src',
-          shouldCreateTarget: true
-        };
-    }
-  }
-
-  private async detectPythonSourceStructure(): Promise<string | undefined> {
-    try {
-      const entries = await import('fs').then(fs => fs.promises.readdir(this.sourceDir, { withFileTypes: true }));
-      
-      // Look for common Python source patterns
-      const patterns = ['src', 'lib', '*.py files in root'];
-      
-      // Check if there's a src directory
-      if (entries.some(entry => entry.isDirectory() && entry.name === 'src')) {
-        return 'src';
-      }
-      
-      // Check if there are Python files in root
-      if (entries.some(entry => entry.isFile() && entry.name.endsWith('.py'))) {
-        return undefined; // Use root directory
-      }
-      
-      // Look for a package directory (directory with __init__.py)
-      for (const entry of entries) {
-        if (entry.isDirectory()) {
-          try {
-            const packageDir = path.join(this.sourceDir, entry.name);
-            await import('fs').then(fs => fs.promises.access(path.join(packageDir, '__init__.py')));
-            return entry.name; // Found a package directory
-          } catch {
-            // Not a package directory, continue
-          }
-        }
-      }
-      
-      return 'src'; // Default fallback
-    } catch {
-      return 'src'; // Error fallback
-    }
-  }
+	throw new Error(
+		"No container runtime found. Please install docker or podman.",
+	);
 }
+
+// ============================================================================
+// Primitive: cloneRepo
+// ============================================================================
+
+/**
+ * Clone a git repository, trying multiple hosts in order.
+ *
+ * @param hosts - Git URLs to try in order (first success wins)
+ * @param commit - Commit hash to checkout
+ * @param targetDir - Directory to clone into (generates temp dir if not provided)
+ * @returns Path to the cloned repository
+ */
+export async function cloneRepo(
+	hosts: string[],
+	commit: string,
+	targetDir?: string,
+): Promise<string> {
+	const dir =
+		targetDir ||
+		`/tmp/git-clone-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+	let lastError: Error | null = null;
+
+	for (let i = 0; i < hosts.length; i++) {
+		const host = hosts[i];
+		if (!host) continue;
+		try {
+			console.log(
+				chalk.gray(`  Trying host ${i + 1}/${hosts.length}: ${host}`),
+			);
+			await cloneGitRepository(host, dir, commit);
+			console.log(chalk.green(`  ✅ Cloned from ${host}`));
+			return dir;
+		} catch (e) {
+			lastError = e as Error;
+			console.log(chalk.yellow(`  ⚠️ Failed: ${lastError.message}`));
+			await removeDirectory(dir);
+		}
+	}
+
+	throw new Error(
+		`Failed to clone from all ${hosts.length} hosts: ${lastError?.message}`,
+	);
+}
+
+async function cloneGitRepository(
+	url: string,
+	targetDir: string,
+	commit: string,
+): Promise<void> {
+	await ensureDirectory(path.dirname(targetDir));
+
+	// Clone with depth for efficiency, but enough to include the commit
+	const cloneCmd = `git clone --depth 50 "${url}" "${targetDir}"`;
+	await execAsync(cloneCmd, { timeout: 120000, maxBuffer: 50 * 1024 * 1024 });
+
+	// Checkout specific commit
+	const checkoutCmd = `git checkout ${commit}`;
+	await execAsync(checkoutCmd, { cwd: targetDir, timeout: 30000 });
+}
+
+// ============================================================================
+// Primitive: runTests
+// ============================================================================
+
+/**
+ * Run tests given already-cloned test and source directories.
+ * Detects framework, builds Docker container, and executes tests.
+ *
+ * @param testsDir - Path to cloned test repository
+ * @param sourceDir - Path to cloned source repository
+ * @param options - Optional configuration
+ * @returns Test execution result
+ */
+export async function runTests(
+	testsDir: string,
+	sourceDir: string,
+	options: RunTestsOptions = {},
+): Promise<TestResult> {
+	const { frameworks = defaultFrameworks, timeout = 300000 } = options;
+	const startTime = Date.now();
+	let detectedFramework: Framework | null = null;
+
+	try {
+		// Detect framework
+		// First check for custom dockerfile in test repo (highest priority)
+		// Then detect from source repo (has config files and lock files)
+		console.log(chalk.cyan("Detecting framework..."));
+		let framework: Framework;
+		let dockerfileContent: string;
+
+		// Try to detect custom dockerfile in testsDir first
+		try {
+			const customResult = await detectFramework(testsDir, frameworks);
+			if (customResult.framework.name === "custom") {
+				framework = customResult.framework;
+				dockerfileContent = customResult.dockerfileContent;
+			} else {
+				// Not custom, detect from sourceDir
+				const result = await detectFramework(sourceDir, frameworks);
+				framework = result.framework;
+				dockerfileContent = result.dockerfileContent;
+			}
+		} catch {
+			// No custom dockerfile found, detect from sourceDir
+			const result = await detectFramework(sourceDir, frameworks);
+			framework = result.framework;
+			dockerfileContent = result.dockerfileContent;
+		}
+		detectedFramework = framework;
+		console.log(chalk.green(`✅ Detected framework: ${framework.name}`));
+
+		// Create temp work directory for Docker build
+		const workDir = `/tmp/git-test-${Date.now()}`;
+		await ensureDirectory(workDir);
+
+		// Copy repos to work directory (Docker needs them in build context)
+		await execAsync(`cp -r "${testsDir}" "${workDir}/test-repo"`);
+		await execAsync(`cp -r "${sourceDir}" "${workDir}/source-repo"`);
+
+		const dockerfilePath = path.join(workDir, "Dockerfile");
+		await fs.writeFile(dockerfilePath, dockerfileContent);
+
+		// Build and run
+		console.log(chalk.cyan("Building and running Docker container..."));
+		const { stdout, stderr, exitCode } = await buildAndRunDocker(
+			workDir,
+			timeout,
+		);
+		const duration = Date.now() - startTime;
+
+		// Cleanup work directory
+		await removeDirectory(workDir);
+
+		// Parse test output
+		const combinedOutput = `${stdout}\n${stderr}`;
+		const success = detectedFramework.parseTests(combinedOutput, exitCode);
+
+		console.log(
+			success ? chalk.green("✅ Tests passed") : chalk.red("❌ Tests failed"),
+		);
+
+		return {
+			success,
+			output: combinedOutput,
+			error: success ? undefined : stderr || "Tests failed",
+			frameworkUsed: detectedFramework.name,
+			duration,
+		};
+	} catch (error) {
+		const duration = Date.now() - startTime;
+		const errorMessage = error instanceof Error ? error.message : String(error);
+
+		console.log(chalk.red(`❌ Error: ${errorMessage}`));
+
+		return {
+			success: false,
+			output: "",
+			error: errorMessage,
+			frameworkUsed: detectedFramework?.name || "unknown",
+			duration,
+		};
+	}
+}
+
+async function buildAndRunDocker(
+	contextDir: string,
+	timeout: number,
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+	const runtime = await getContainerRuntime();
+	const imageName = `git-test:${Date.now()}`;
+	const containerName = `git-test-${Date.now()}`;
+
+	try {
+		// Build image
+		console.log(
+			chalk.gray(`  Building image: ${imageName} (using ${runtime})`),
+		);
+		const buildCmd = `${runtime} build -t ${imageName} ${contextDir}`;
+
+		try {
+			await execAsync(buildCmd, { maxBuffer: 50 * 1024 * 1024 });
+		} catch (buildError) {
+			const execError = buildError as { stderr?: string; message?: string };
+			throw new Error(
+				`Container build failed: ${execError.stderr || execError.message || String(buildError)}`,
+			);
+		}
+
+		console.log(chalk.green("  ✅ Image built successfully"));
+
+		// Run container with Node-based timeout
+		console.log(chalk.gray(`  Running container: ${containerName}`));
+
+		try {
+			const runCmd = `${runtime} run --name ${containerName} ${imageName}`;
+			await execAsync(runCmd, { maxBuffer: 50 * 1024 * 1024, timeout });
+		} catch (runError) {
+			// If timeout, kill the container
+			const err = runError as { killed?: boolean };
+			if (err.killed) {
+				console.log(chalk.yellow("  ⚠️ Container timed out, killing..."));
+				await execAsync(`${runtime} kill ${containerName}`).catch(() => {});
+			}
+			// Ignore other errors - we'll get exit code from inspect
+		}
+
+		// Get logs
+		let stdout = "";
+		let stderr = "";
+		try {
+			const logsResult = await execAsync(
+				`${runtime} logs ${containerName} 2>&1`,
+				{
+					maxBuffer: 50 * 1024 * 1024,
+				},
+			);
+			stdout = logsResult.stdout;
+		} catch (logsError) {
+			const execError = logsError as { stdout?: string; stderr?: string };
+			stdout = execError.stdout || "";
+			stderr = execError.stderr || "";
+		}
+
+		// Get exit code
+		let exitCode = 1;
+		try {
+			const { stdout: exitCodeStr } = await execAsync(
+				`${runtime} inspect --format='{{.State.ExitCode}}' ${containerName}`,
+			);
+			exitCode = parseInt(exitCodeStr.trim(), 10);
+		} catch {
+			// Default to 1
+		}
+
+		console.log(chalk.gray(`  Container exited with code: ${exitCode}`));
+
+		return { stdout, stderr, exitCode };
+	} finally {
+		// Cleanup
+		try {
+			await execAsync(`${runtime} rm -f ${containerName}`).catch(() => {});
+			await execAsync(`${runtime} rmi -f ${imageName}`).catch(() => {});
+		} catch {
+			// Ignore cleanup errors
+		}
+	}
+}
+
+// ============================================================================
+// Composition: verifyAndRunTests
+// ============================================================================
+
+/**
+ * High-level function that composes cloning, verification, and test execution.
+ * Handles cleanup automatically.
+ *
+ * @param options - Full options including repos, verification, and execution config
+ * @returns Test execution result
+ */
+export async function verifyAndRunTests(
+	options: VerifyAndRunTestsOptions,
+): Promise<TestResult> {
+	const { tests, source, frameworks, timeout, cleanup = true } = options;
+
+	const clonedDirs: string[] = [];
+	const startTime = Date.now();
+
+	try {
+		// Clone test repo
+		console.log(chalk.cyan("Cloning test repo..."));
+		const testsDir = await cloneRepo(tests.hosts, tests.commit);
+		clonedDirs.push(testsDir);
+
+		// Clone source repo
+		console.log(chalk.cyan("Cloning source repo..."));
+		const sourceDir = await cloneRepo(source.hosts, source.commit);
+		clonedDirs.push(sourceDir);
+
+		// Verify test repo if key provided
+		if (tests.verifyWith) {
+			await verifyRepoSignature(testsDir, tests, "test");
+		}
+
+		// Verify source repo if key provided
+		if (source.verifyWith) {
+			await verifyRepoSignature(sourceDir, source, "source");
+		}
+
+		// Run tests
+		return await runTests(testsDir, sourceDir, { frameworks, timeout });
+	} catch (error) {
+		const duration = Date.now() - startTime;
+		const errorMessage = error instanceof Error ? error.message : String(error);
+
+		return {
+			success: false,
+			output: "",
+			error: errorMessage,
+			frameworkUsed: "unknown",
+			duration,
+		};
+	} finally {
+		// Cleanup cloned directories
+		if (cleanup) {
+			console.log(chalk.cyan("Cleaning up..."));
+			for (const dir of clonedDirs) {
+				await removeDirectory(dir);
+			}
+		} else {
+			console.log(
+				chalk.gray(`Cloned directories preserved: ${clonedDirs.join(", ")}`),
+			);
+		}
+	}
+}
+
+async function verifyRepoSignature(
+	repoDir: string,
+	repo: RepoSpec,
+	label: string,
+): Promise<void> {
+	if (!repo.verifyWith) {
+		throw new Error("verifyWith is required for signature verification");
+	}
+	const key = repo.verifyWith;
+	console.log(chalk.cyan(`Verifying ${label} repo signature...`));
+
+	const isValid = await verifyRepo(
+		repoDir,
+		repo.commit,
+		key.keyType,
+		key.publicKey,
+	);
+
+	if (!isValid) {
+		throw new Error(`${label} repo commit not signed by provided key`);
+	}
+
+	console.log(chalk.green(`✅ ${label} repo signature verified`));
+}
+
+// ============================================================================

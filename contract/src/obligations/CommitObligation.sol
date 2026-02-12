@@ -2,9 +2,9 @@
 pragma solidity ^0.8.26;
 
 import {Attestation} from "@eas/Common.sol";
-import {IEAS, AttestationRequest, AttestationRequestData} from "@eas/IEAS.sol";
+import {IEAS} from "@eas/IEAS.sol";
 import {ISchemaRegistry} from "@eas/ISchemaRegistry.sol";
-import {BaseObligation} from "alkahest-mocks/BaseObligation.sol";
+import {BaseObligation} from "alkahest/BaseObligation.sol";
 
 contract CommitObligation is BaseObligation {
     enum CommitAlgo {
@@ -16,14 +16,6 @@ contract CommitObligation is BaseObligation {
         string commitHash;
         CommitAlgo commitAlgo;
         string[] hosts; // optional if communicated out of band
-        address sender; // automatically filled with msg.sender
-    }
-
-    // Input struct for doObligation function (without sender)
-    struct ObligationInput {
-        string commitHash;
-        CommitAlgo commitAlgo;
-        string[] hosts;
     }
 
     constructor(
@@ -33,31 +25,17 @@ contract CommitObligation is BaseObligation {
         BaseObligation(
             _eas,
             _schemaRegistry,
-            "string commitHash,uint8 commitAlgo,string[] hosts,address sender",
+            "string commitHash,uint8 commitAlgo,string[] hosts",
             true
         )
     {}
 
     function doObligation(
-        ObligationInput calldata data,
+        ObligationData calldata data,
         bytes32 refUID
     ) public returns (bytes32 uid_) {
-        // Create a new ObligationData with the sender automatically filled
-        ObligationData memory dataWithSender = ObligationData({
-            commitHash: data.commitHash,
-            commitAlgo: data.commitAlgo,
-            hosts: data.hosts,
-            sender: msg.sender
-        });
-
-        bytes memory encodedData = abi.encode(dataWithSender);
-        uid_ = this.doObligationForRaw(
-            encodedData,
-            0,
-            msg.sender,
-            msg.sender,
-            refUID
-        );
+        bytes memory encodedData = abi.encode(data);
+        uid_ = _doObligationForRaw(encodedData, 0, msg.sender, refUID);
     }
 
     function getObligationData(

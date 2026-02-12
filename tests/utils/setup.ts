@@ -1,65 +1,70 @@
-import {
-  setupTestEnvironment,
-  type TestContext,
-} from "alkahest-ts/tests/utils/setup";
 import CommitObligation from "@contracts/CommitObligation.json";
-import GitIdentityRegistry from "../../src/contracts/GitIdentityRegistry.json";
+import { setupTestEnvironment } from "alkahest-ts/test-utils";
 import {
-  makeCommitObligationClient,
-  type CommitObligationAddresses,
+	type CommitObligationAddresses,
+	makeCommitObligationClient,
 } from "../../src/clients/commitObligation";
 import {
-  makeGitIdentityRegistryClient,
-  type GitIdentityRegistryAddresses,
+	type GitIdentityRegistryAddresses,
+	makeGitIdentityRegistryClient,
 } from "../../src/clients/gitIdentityRegistry";
+import GitIdentityRegistry from "../../src/contracts/GitIdentityRegistry.json";
+
+// ExtendedClient type is now inferred from the setupTest return type
+export type ExtendedClient = Awaited<ReturnType<typeof setupTest>>["aliceClient"];
 
 export async function setupTest() {
-  let testContext: TestContext = await setupTestEnvironment();
+	const testContext = await setupTestEnvironment();
 
-  const commitObligationAddress = await testContext.deployObligation(
-    CommitObligation
-  );
+	const commitObligationAddress =
+		await testContext.deployObligation(CommitObligation);
 
-  // Deploy GitIdentityRegistry using deployContract (not deployObligation since it doesn't need EAS)
-  const gitIdentityRegistryAddress = await testContext.deployContract(
-    GitIdentityRegistry
-  );
+	// Deploy GitIdentityRegistry using deployContract (not deployObligation since it doesn't need EAS)
+	const gitIdentityRegistryAddress =
+		await testContext.deployContract(GitIdentityRegistry);
 
-  const commitObligationAddresses: CommitObligationAddresses = {
-    commitObligation: commitObligationAddress,
-  };
+	// Re-capture state snapshot after deploying additional contracts
+	// This ensures loadState() restores to a state with all contracts deployed
+	testContext.anvilInitState = await testContext.testClient.dumpState();
 
-  const gitIdentityRegistryAddresses: GitIdentityRegistryAddresses = {
-    gitIdentityRegistry: gitIdentityRegistryAddress,
-  };
+	const commitObligationAddresses: CommitObligationAddresses = {
+		commitObligation: commitObligationAddress,
+	};
 
-  const aliceClient = testContext.aliceClient.extend((client: any) => ({
-    commitObligation: makeCommitObligationClient(
-      client.viemClient,
-      commitObligationAddresses
-    ),
-    gitIdentityRegistry: makeGitIdentityRegistryClient(
-      client.viemClient,
-      gitIdentityRegistryAddresses
-    ),
-  }));
+	const gitIdentityRegistryAddresses: GitIdentityRegistryAddresses = {
+		gitIdentityRegistry: gitIdentityRegistryAddress,
+	};
 
-  const bobClient = testContext.bobClient.extend((client: any) => ({
-    commitObligation: makeCommitObligationClient(
-      client.viemClient,
-      commitObligationAddresses
-    ),
-    gitIdentityRegistry: makeGitIdentityRegistryClient(
-      client.viemClient,
-      gitIdentityRegistryAddresses
-    ),
-  }));
+	// Helper to create extended client
+	// Using type inference from the actual client types
+	const createExtendedClient = (baseClient: typeof testContext.alice.client) => {
+		return baseClient.extend((client) => ({
+			commitObligation: makeCommitObligationClient(
+				client.viemClient,
+				commitObligationAddresses,
+			),
+			gitIdentityRegistry: makeGitIdentityRegistryClient(
+				client.viemClient,
+				gitIdentityRegistryAddresses,
+			),
+		}));
+	};
 
-  return {
-    testContext,
-    commitObligationAddress,
-    gitIdentityRegistryAddress,
-    aliceClient,
-    bobClient,
-  };
+	// New SDK structure: testContext.alice.client instead of testContext.aliceClient
+	const aliceClient = createExtendedClient(testContext.alice.client);
+	const bobClient = createExtendedClient(testContext.bob.client);
+	const charlieClient = createExtendedClient(testContext.charlie.client);
+
+	return {
+		testContext,
+		commitObligationAddress,
+		gitIdentityRegistryAddress,
+		aliceClient,
+		bobClient,
+		charlieClient,
+		// Also export addresses for convenience
+		alice: testContext.alice,
+		bob: testContext.bob,
+		charlie: testContext.charlie,
+	};
 }
