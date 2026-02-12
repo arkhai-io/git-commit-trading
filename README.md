@@ -30,12 +30,13 @@ git-escrows new-client --privateKey "0x..." --network "sepolia"
 
 ```env
 PRIVATE_KEY=0x...                           # Your wallet private key (address derived automatically)
-NETWORK=base-sepolia                        # Network: anvil, base-sepolia
+NETWORK=base-sepolia                        # Network: anvil, base-sepolia, sepolia
 RPC_URL=https://...                         # RPC endpoint
 
-# Contract addresses (auto-configured for base-sepolia)
-COMMIT_OBLIGATION_ADDRESS=0x...
-GIT_IDENTITY_REGISTRY_ADDRESS=0x...
+# Contract addresses (auto-configured for base-sepolia and sepolia)
+# Only needed as overrides or for custom/local deployments
+COMMIT_OBLIGATION_ADDRESS=0x...             # optional override
+GIT_IDENTITY_REGISTRY_ADDRESS=0x...         # optional override
 ```
 
 ---
@@ -332,6 +333,17 @@ Challenge Submitter (Alice)
 - **CommitObligation**: Handles fulfillment submissions (solution attestations)
 - **GitIdentityRegistry**: Stores registered Git signing keys
 
+#### Canonical Deployments
+
+Contracts are deployed on the following networks with built-in address defaults (no env vars needed):
+
+| Network | CommitObligation | GitIdentityRegistry |
+|---------|-----------------|---------------------|
+| Base Sepolia | `0x03d2591DfDf75611AdE94A9a80af61F9BcBfc4e2` | `0xc6b3fA56853F7D5abdFdaa7d008d9c27eBdE3e8a` |
+| Sepolia | `0x5bf1EE1fEC1bC25d20C4537f74bD0909B195DEBd` | `0x57D5165F9487F6E7bD6E6a24017FAdadc2b1D7D2` |
+
+Set `COMMIT_OBLIGATION_ADDRESS` and `GIT_IDENTITY_REGISTRY_ADDRESS` in `.env` only to override these defaults (e.g., for local Anvil deployments).
+
 ### Test Execution
 
 1. Clone test repository (from provided hosts)
@@ -354,7 +366,8 @@ bun test
 bun run build
 
 # Deploy contracts (requires Foundry)
-cd contract && forge script script/DeploySepolia.s.sol --broadcast
+cd contract && forge script script/DeploySepolia.s.sol --broadcast        # Base Sepolia
+cd contract && forge script script/DeployEthSepolia.s.sol --broadcast     # Ethereum Sepolia
 ```
 
 ## License

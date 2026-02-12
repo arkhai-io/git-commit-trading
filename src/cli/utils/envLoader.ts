@@ -11,7 +11,7 @@ import {
 	webSocket,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { baseSepolia, foundry } from "viem/chains";
+import { baseSepolia, foundry, sepolia } from "viem/chains";
 import { makeCommitObligationClient } from "../../clients/commitObligation.js";
 import { makeGitIdentityRegistryClient } from "../../clients/gitIdentityRegistry.js";
 
@@ -24,6 +24,22 @@ export interface EnvConfig {
 	gitIdentityRegistryAddress?: string;
 	// DEBUG=true enables verbose logging with trace IDs
 }
+
+interface CanonicalAddresses {
+	commitObligation: `0x${string}`;
+	gitIdentityRegistry: `0x${string}`;
+}
+
+const CANONICAL_ADDRESSES: Record<string, CanonicalAddresses> = {
+	"base-sepolia": {
+		commitObligation: "0x03d2591DfDf75611AdE94A9a80af61F9BcBfc4e2",
+		gitIdentityRegistry: "0xc6b3fA56853F7D5abdFdaa7d008d9c27eBdE3e8a",
+	},
+	sepolia: {
+		commitObligation: "0x5bf1EE1fEC1bC25d20C4537f74bD0909B195DEBd",
+		gitIdentityRegistry: "0x57D5165F9487F6E7bD6E6a24017FAdadc2b1D7D2",
+	},
+};
 
 /**
  * Load and parse .env file
@@ -69,19 +85,26 @@ function validateEnvConfig(envVars: Record<string, string>): EnvConfig {
 		);
 	}
 
-	// Normalize all addresses to lowercase to avoid checksum case mismatches
-	const normalizedCommitObligation =
-		envVars.COMMIT_OBLIGATION_ADDRESS?.toLowerCase();
-	const normalizedGitIdentityRegistry =
-		envVars.GIT_IDENTITY_REGISTRY_ADDRESS?.toLowerCase();
+	const network = (envVars.NETWORK || "anvil").toLowerCase();
+	const normalizedNetwork =
+		network === "basesepolia" ? "base-sepolia" : network;
+	const canonical = CANONICAL_ADDRESSES[normalizedNetwork];
+
+	// Env vars override canonical addresses; normalize to lowercase
+	const commitObligationAddress =
+		envVars.COMMIT_OBLIGATION_ADDRESS?.toLowerCase() ||
+		canonical?.commitObligation.toLowerCase();
+	const gitIdentityRegistryAddress =
+		envVars.GIT_IDENTITY_REGISTRY_ADDRESS?.toLowerCase() ||
+		canonical?.gitIdentityRegistry.toLowerCase();
 
 	return {
 		privateKey: privateKey as `0x${string}`,
 		network: envVars.NETWORK || "anvil",
 		rpcUrl: envVars.RPC_URL,
 		wsRpcUrl: envVars.WS_RPC_URL,
-		commitObligationAddress: normalizedCommitObligation,
-		gitIdentityRegistryAddress: normalizedGitIdentityRegistry,
+		commitObligationAddress,
+		gitIdentityRegistryAddress,
 	};
 }
 
@@ -168,9 +191,21 @@ export async function createClientFromEnv(
 				transport: createTransport(rpcUrl),
 			});
 			break;
+		case "sepolia":
+			if (!rpcUrl) {
+				throw new Error(
+					"RPC_URL is required for sepolia network in .env file",
+				);
+			}
+			walletClient = createWalletClient({
+				account,
+				chain: sepolia,
+				transport: createTransport(rpcUrl),
+			});
+			break;
 		default:
 			throw new Error(
-				`Unsupported network: ${network}. Supported: anvil, base-sepolia`,
+				`Unsupported network: ${network}. Supported: anvil, base-sepolia, sepolia`,
 			);
 	}
 
@@ -234,7 +269,7 @@ export function requireEnvFile(envPath: string = ".env"): void {
 			chalk.yellow("\nPlease create a .env file with the following format:"),
 		);
 		console.error(chalk.gray("PRIVATE_KEY=0x1234567890abcdef..."));
-		console.error(chalk.gray("NETWORK=anvil  # optional: anvil, base-sepolia"));
+		console.error(chalk.gray("NETWORK=anvil  # optional: anvil, base-sepolia, sepolia"));
 		console.error(
 			chalk.gray("RPC_URL=http://127.0.0.1:8545  # optional for anvil"),
 		);
@@ -275,9 +310,17 @@ export function validateGitKeyEnv(envPath: string = ".env"): void {
 		const missing: string[] = [];
 
 		if (!env.PRIVATE_KEY) missing.push("PRIVATE_KEY");
+
+		// Check if network has canonical addresses
+		const network = (env.NETWORK || "anvil").toLowerCase();
+		const normalizedNetwork =
+			network === "basesepolia" ? "base-sepolia" : network;
+		const hasCanonical = !!CANONICAL_ADDRESSES[normalizedNetwork];
+
 		if (
-			!env.GIT_IDENTITY_REGISTRY_ADDRESS ||
-			env.GIT_IDENTITY_REGISTRY_ADDRESS.startsWith("#")
+			!hasCanonical &&
+			(!env.GIT_IDENTITY_REGISTRY_ADDRESS ||
+				env.GIT_IDENTITY_REGISTRY_ADDRESS.startsWith("#"))
 		) {
 			missing.push("GIT_IDENTITY_REGISTRY_ADDRESS");
 		}
