@@ -9,6 +9,6 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "intent-verification-ts": "^1.0.0"
+    "intent-verification-ts": "*"
   }
 }

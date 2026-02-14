@@ -3,6 +3,10 @@
 	"version": "1.0.0",
 	"description": "Git-based escrow system for code challenges and bounties",
 	"type": "module",
+	"workspaces": [
+		"intent-verification/packages/ts",
+		"intent-verification/examples/ts"
+	],
 	"bin": {
 		"git-escrows": "./dist/git-escrows.js"
 	},
@@ -28,7 +32,7 @@
 		"escrows list": "bun run src/cli/git-escrows.ts list",
 		"escrows submit": "bun run src/cli/git-escrows.ts submit",
 		"escrows fulfill": "bun run src/cli/git-escrows.ts fulfill",
-		"escrows server": "bun run src/cli/git-escrows.ts server",
+		"escrows oracle": "bun run src/cli/git-escrows.ts oracle",
 		"escrows collect": "bun run src/cli/git-escrows.ts collect",
 		"escrows register-key": "bun run src/cli/git-escrows.ts register-key",
 		"escrows check-key": "bun run src/cli/git-escrows.ts check-key",
@@ -50,7 +54,7 @@
 		"@peculiar/x509": "^1.13.0",
 		"@types/openpgp": "^5.0.0",
 		"@viem/anvil": "^0.0.10",
-		"alkahest-ts": "^0.7.0",
+		"alkahest-ts": "^0.7.3",
 		"chalk": "^5.6.0",
 		"commander": "^12.1.0",
 		"simple-git": "^3.28.0",
