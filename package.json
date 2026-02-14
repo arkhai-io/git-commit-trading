@@ -1,6 +1,6 @@
 {
 	"name": "git-escrows",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "Git-based escrow system for code challenges and bounties",
 	"type": "module",
 	"workspaces": [

@@ -145,8 +145,8 @@ Third-party arbiter trusted by challenge submitters to run tests and verify fulf
 
 **Workflow:**
 
-1. Run the arbiter server
-2. The server listens for fulfillment attestations
+1. Run the arbiter oracle
+2. The oracle listens for fulfillment attestations
 3. For each fulfillment:
    - Clone test and solution repositories
    - Verify commit signature (if enabled)
@@ -156,18 +156,18 @@ Third-party arbiter trusted by challenge submitters to run tests and verify fulf
 **Commands:**
 
 ```bash
-# Run arbiter server
-git-escrows server \
+# Run arbiter oracle
+git-escrows oracle \
   --mode allUnarbitrated \
   --timeout 300000 \
   --verify-key \
   --cleanup
 
 # One-time arbitration of past fulfillments
-git-escrows server --mode pastUnarbitrated
+git-escrows oracle --mode pastUnarbitrated
 ```
 
-**Server Modes:**
+**Oracle Modes:**
 - `allUnarbitrated` (default): Arbitrate unarbitrated past + listen for new
 - `past`: Arbitrate all past fulfillments, then exit
 - `pastUnarbitrated`: Arbitrate only unarbitrated past, then exit
@@ -193,7 +193,7 @@ git-escrows server --mode pastUnarbitrated
 | `fulfill` | Submit a solution to claim bounty (Bob) |
 | `collect` | Collect reward after passing tests (Bob) |
 | `list` | Query and display escrows |
-| `server` | Run arbiter oracle server (Charlie) |
+| `oracle` | Run arbiter oracle (Charlie) |
 
 ### Listing Escrows
 
@@ -328,7 +328,7 @@ Challenge Submitter (Alice)
               Arbiter Oracle (Charlie)
                         │
                         ▼
-    [server] ──► Clone repos ──► Run Docker tests ──► Record decision
+    [oracle] ──► Clone repos ──► Run Docker tests ──► Record decision
                         │
                         ▼
     [collect] ◄── If tests pass, Bob collects reward
@@ -349,6 +349,10 @@ Contracts are deployed on the following networks with built-in address defaults 
 | Sepolia | `0x5bf1EE1fEC1bC25d20C4537f74bD0909B195DEBd` | `0x57D5165F9487F6E7bD6E6a24017FAdadc2b1D7D2` |
 
 Set `COMMIT_OBLIGATION_ADDRESS` and `GIT_IDENTITY_REGISTRY_ADDRESS` in `.env` only to override these defaults (e.g., for local Anvil deployments).
+
+#### Public Demo Oracle
+
+A public demo oracle is running on Ethereum Sepolia at address `0xc5c132B69f57dAAAb75d9ebA86cab504b272Ccbc`. You can use this oracle when submitting escrows on Sepolia for testing.
 
 ### Test Execution
 
