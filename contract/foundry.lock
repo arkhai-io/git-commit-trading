@@ -1,0 +1,8 @@
+{
+  "lib/alkahest": {
+    "rev": "75ff1c631957e315b145f4544e5b44cbcc751b91"
+  },
+  "lib/forge-std": {
+    "rev": "100b0d756adda67bc70aab816fa5a1a95dcf78b6"
+  }
+}

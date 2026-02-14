@@ -15,6 +15,12 @@ The system uses Ethereum Attestation Service (EAS) for on-chain records and supp
 ## Installation
 
 ```bash
+npm i -g git-escrows
+```
+
+For development, clone the repo and install dependencies:
+
+```bash
 bun install
 ```
 
@@ -359,11 +365,17 @@ Set `COMMIT_OBLIGATION_ADDRESS` and `GIT_IDENTITY_REGISTRY_ADDRESS` in `.env` on
 ## Development
 
 ```bash
+# Install dependencies
+bun install
+
 # Run tests
 bun test
 
-# Build binaries
+# Build for npm (outputs to dist/)
 bun run build
+
+# Build standalone binaries (macOS/Linux/Windows)
+bun run build:all
 
 # Deploy contracts (requires Foundry)
 cd contract && forge script script/DeploySepolia.s.sol --broadcast        # Base Sepolia
