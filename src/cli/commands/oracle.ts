@@ -4,7 +4,7 @@ import { getRegisteredKey } from "../../crypto/index.js";
 import { verifyAndRunTests } from "../../test-execution/index.js";
 import { createClientFromEnv, requireEnvFile } from "../utils/envLoader.js";
 
-interface ServerOptions {
+interface OracleOptions {
 	port?: string;
 	pollingInterval?: string;
 	timeout?: string;
@@ -14,9 +14,9 @@ interface ServerOptions {
 	transport?: "http" | "websocket";
 }
 
-export async function serverCommand(options: ServerOptions) {
+export async function oracleCommand(options: OracleOptions) {
 	try {
-		console.log(chalk.blue("Starting Git Escrows Arbiter Server..."));
+		console.log(chalk.blue("Starting Git Escrows Arbiter Oracle..."));
 
 		// Validate mode options
 		const mode = options.mode || "allUnarbitrated";
@@ -47,7 +47,7 @@ export async function serverCommand(options: ServerOptions) {
 			future: "Listen for New Only",
 		};
 
-		console.log(chalk.gray("Server configuration:"));
+		console.log(chalk.gray("Oracle configuration:"));
 		console.log(chalk.gray(`  Mode: ${modeLabels[mode]}`));
 		console.log(chalk.gray(`  Transport: ${transport.toUpperCase()}`));
 		console.log(chalk.gray(`  Polling Interval: ${pollingInterval}ms`));
@@ -69,7 +69,7 @@ export async function serverCommand(options: ServerOptions) {
 
 		if (!hasCommitObligation) {
 			throw new Error(
-				"COMMIT_OBLIGATION_ADDRESS is required in .env file for the server command",
+				"COMMIT_OBLIGATION_ADDRESS is required in .env file for the oracle command",
 			);
 		}
 
@@ -230,7 +230,7 @@ export async function serverCommand(options: ServerOptions) {
 						: "Arbitrating past obligations and listening for new...",
 				),
 			);
-			console.log(chalk.gray("Press Ctrl+C to stop the server\n"));
+			console.log(chalk.gray("Press Ctrl+C to stop the oracle\n"));
 		} else {
 			console.log(chalk.yellow("Arbitrating past obligations..."));
 		}
@@ -239,9 +239,9 @@ export async function serverCommand(options: ServerOptions) {
 
 		if (isListeningMode) {
 			process.on("SIGINT", async () => {
-				console.log(chalk.yellow("\nShutting down server..."));
+				console.log(chalk.yellow("\nShutting down oracle..."));
 				if (unwatchFn) unwatchFn();
-				console.log(chalk.green("✓ Server shutdown complete"));
+				console.log(chalk.green("✓ Oracle shutdown complete"));
 				process.exit(0);
 			});
 
@@ -253,7 +253,7 @@ export async function serverCommand(options: ServerOptions) {
 				) {
 					console.log(
 						chalk.yellow(
-							"⚠️ Connection error. Server will attempt to reconnect...",
+							"⚠️ Connection error. Oracle will attempt to reconnect...",
 						),
 					);
 				} else {
@@ -324,12 +324,12 @@ export async function serverCommand(options: ServerOptions) {
 			);
 		}
 
-		console.log(chalk.green("✓ Server is now listening..."));
+		console.log(chalk.green("✓ Oracle is now listening..."));
 
 		// Keep alive
 		await new Promise<void>(() => {});
 	} catch (error) {
-		console.error(chalk.red("Failed to start server:"));
+		console.error(chalk.red("Failed to start oracle:"));
 		console.error(
 			chalk.red(error instanceof Error ? error.message : String(error)),
 		);

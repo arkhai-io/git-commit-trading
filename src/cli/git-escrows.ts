@@ -8,7 +8,7 @@ import { fulfillCommand } from "./commands/fulfill.js";
 import { listCommand } from "./commands/list.js";
 import { newClientCommand } from "./commands/new-client.js";
 import { registerKeyCommand } from "./commands/register-key.js";
-import { serverCommand } from "./commands/server.js";
+import { oracleCommand } from "./commands/oracle.js";
 import { submitCommand } from "./commands/submit.js";
 
 const program = new Command();
@@ -155,10 +155,10 @@ program
 	)
 	.action(collectCommand);
 
-// Server command - Charlie runs the arbiter server
+// Oracle command - Charlie runs the arbiter oracle
 program
-	.command("server")
-	.description("Run the arbiter server to listen and arbitrate escrows")
+	.command("oracle")
+	.description("Run the arbiter oracle to listen and arbitrate escrows")
 	.option(
 		"--mode <mode>",
 		"Arbitration mode: past, pastUnarbitrated, allUnarbitrated (default), all, future",
@@ -179,7 +179,7 @@ program
 	.option("--cleanup", "Cleanup temporary directories after execution", true)
 	.option("--verify-key", "Verify Git key registration (default: true)", true)
 	.option("--no-verify-key", "Skip Git key verification (not recommended)")
-	.action(serverCommand);
+	.action(oracleCommand);
 
 // Global error handling
 program.on("command:*", () => {
