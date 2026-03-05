@@ -11,7 +11,8 @@
 		"git-escrows": "./dist/git-escrows.js"
 	},
 	"files": [
-		"dist"
+		"dist",
+		"skills"
 	],
 	"engines": {
 		"node": ">=18"

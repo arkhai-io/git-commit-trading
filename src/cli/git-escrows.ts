@@ -9,6 +9,7 @@ import { listCommand } from "./commands/list.js";
 import { newClientCommand } from "./commands/new-client.js";
 import { registerKeyCommand } from "./commands/register-key.js";
 import { oracleCommand } from "./commands/oracle.js";
+import { installSkillsCommand } from "./commands/install-skills.js";
 import { submitCommand } from "./commands/submit.js";
 
 const program = new Command();
@@ -180,6 +181,20 @@ program
 	.option("--verify-key", "Verify Git key registration (default: true)", true)
 	.option("--no-verify-key", "Skip Git key verification (not recommended)")
 	.action(oracleCommand);
+
+// Install Skills command - Install agent skills to a compatible host
+program
+	.command("install-skills")
+	.description(
+		"Install agent skills (make-git-escrow, fulfill-git-escrow) to a compatible host",
+	)
+	.option(
+		"--host <host>",
+		"Target host (claude-code, openclaw)",
+	)
+	.option("--path <path>", "Custom installation directory")
+	.option("--list", "List available skills without installing", false)
+	.action(installSkillsCommand);
 
 // Global error handling
 program.on("command:*", () => {

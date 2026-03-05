@@ -194,6 +194,7 @@ git-escrows oracle --mode pastUnarbitrated
 | `collect` | Collect reward after passing tests (Bob) |
 | `list` | Query and display escrows |
 | `oracle` | Run arbiter oracle (Charlie) |
+| `install-skills` | Install agent skills to a compatible host |
 
 ### Listing Escrows
 
@@ -363,6 +364,45 @@ A public demo oracle is running on Ethereum Sepolia at address `0xc5c132B69f57dA
 5. Execute tests with timeout
 6. Parse output for pass/fail
 7. Record arbitration decision on-chain
+
+---
+
+## Agent Skills
+
+Git Escrows ships with [Agent Skills](https://agentskills.io) that let AI coding agents create and fulfill escrows on your behalf. Skills are compatible with any agent that supports the open standard, including [Claude Code](https://claude.ai/code), [OpenClaw](https://github.com/openclaw/openclaw), [Cursor](https://cursor.com), and others.
+
+### Available Skills
+
+| Skill | Description |
+|-------|-------------|
+| `make-git-escrow` | Interactively create an escrow bounty — gathers parameters, runs `git-escrows submit` |
+| `fulfill-git-escrow` | Fulfill an escrow by writing solution code or submitting an existing repo |
+
+### Installing Skills
+
+```bash
+# Auto-detect host and install
+git-escrows install-skills
+
+# Install to a specific host
+git-escrows install-skills --host claude-code
+git-escrows install-skills --host openclaw
+
+# Install to a custom directory
+git-escrows install-skills --path ./my-skills
+
+# List available skills
+git-escrows install-skills --list
+```
+
+### Manual Installation
+
+Copy the skill directories from `skills/` in this repo (or the installed npm package) to your agent's skills directory:
+
+| Host | Skills Directory |
+|------|-----------------|
+| Claude Code | `~/.claude/skills/` |
+| OpenClaw | `~/.openclaw/workspace/skills/` |
 
 ---
 
