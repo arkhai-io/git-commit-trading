@@ -369,7 +369,7 @@ A public demo oracle is running on Ethereum Sepolia at address `0xc5c132B69f57dA
 
 ## Agent Skills
 
-Git Escrows ships with [Agent Skills](https://agentskills.io) that let AI coding agents create and fulfill escrows on your behalf. Skills are compatible with any agent that supports the open standard, including [Claude Code](https://claude.ai/code), [OpenClaw](https://github.com/openclaw/openclaw), [Cursor](https://cursor.com), and others.
+The `skills/` directory contains agent skills for AI coding assistants ([Claude Code](https://docs.anthropic.com/en/docs/claude-code), [OpenClaw](https://github.com/AidenYuanDev/OpenClaw), etc.) that can create and fulfill git escrow bounties conversationally.
 
 ### Available Skills
 
@@ -378,31 +378,28 @@ Git Escrows ships with [Agent Skills](https://agentskills.io) that let AI coding
 | `make-git-escrow` | Interactively create an escrow bounty — gathers parameters, runs `git-escrows submit` |
 | `fulfill-git-escrow` | Fulfill an escrow by writing solution code or submitting an existing repo |
 
-### Installing Skills
+### Installation
 
-```bash
-# Auto-detect host and install
-git-escrows install-skills
+#### Claude Code (via plugin marketplace)
 
-# Install to a specific host
-git-escrows install-skills --host claude-code
-git-escrows install-skills --host openclaw
-
-# Install to a custom directory
-git-escrows install-skills --path ./my-skills
-
-# List available skills
-git-escrows install-skills --list
+```
+/plugin marketplace add arkhai-io/claude-plugins
+/plugin install git-escrows-plugin@arkhai-plugins
 ```
 
-### Manual Installation
+See the [arkhai-plugins marketplace](https://github.com/arkhai-io/claude-plugins) for all available plugins.
 
-Copy the skill directories from `skills/` in this repo (or the installed npm package) to your agent's skills directory:
+#### Manual
 
-| Host | Skills Directory |
-|------|-----------------|
-| Claude Code | `~/.claude/skills/` |
-| OpenClaw | `~/.openclaw/workspace/skills/` |
+Each skill is a directory under `skills/` containing a `SKILL.md` file. Any agent that supports SKILL.md-based skill definitions (Claude Code, OpenClaw, etc.) can use them directly.
+
+You can also use the built-in installer:
+
+```bash
+git-escrows install-skills
+git-escrows install-skills --host claude-code
+git-escrows install-skills --host openclaw
+```
 
 ---
 
