@@ -389,9 +389,16 @@ The `skills/` directory contains agent skills for AI coding assistants ([Claude 
 
 See the [arkhai-plugins marketplace](https://github.com/arkhai-io/claude-plugins) for all available plugins.
 
+#### OpenClaw (via ClawHub)
+
+```bash
+clawhub install make-git-escrow
+clawhub install fulfill-git-escrow
+```
+
 #### Manual
 
-Each skill is a directory under `skills/` containing a `SKILL.md` file. Any agent that supports SKILL.md-based skill definitions (Claude Code, OpenClaw, etc.) can use them directly.
+Each skill is a directory under `skills/` containing a `SKILL.md` file. Any agent that supports SKILL.md-based skill definitions can use them directly.
 
 You can also use the built-in installer:
 
