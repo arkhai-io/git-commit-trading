@@ -317,7 +317,7 @@ describe("Full Escrow Flow Integration", () => {
 		});
 
 		const { attested: escrow } =
-			await aliceClient.erc20.escrow.nonTierable.permitAndCreate(
+			await aliceClient.erc20.escrow.default.permitAndCreate(
 				{
 					address: testContext.mockAddresses.erc20A,
 					value: 10n,
@@ -395,7 +395,7 @@ describe("Full Escrow Flow Integration", () => {
 		console.log("✅ Arbitration complete: APPROVED");
 
 		console.log("\n📋 Step 7: Bob collects escrow");
-		const collectionHash = await bobClient.erc20.escrow.nonTierable.collect(
+		const collectionHash = await bobClient.erc20.escrow.default.collect(
 			escrow.uid,
 			fulfillment.uid,
 		);
@@ -438,7 +438,7 @@ describe("Full Escrow Flow Integration", () => {
 		});
 
 		const { attested: escrow } =
-			await aliceClient.erc20.escrow.nonTierable.permitAndCreate(
+			await aliceClient.erc20.escrow.default.permitAndCreate(
 				{
 					address: testContext.mockAddresses.erc20A,
 					value: 10n,
@@ -513,7 +513,7 @@ describe("Full Escrow Flow Integration", () => {
 		console.log("✅ Arbitration complete: APPROVED");
 
 		console.log("\n📋 Step 6: Bob collects escrow");
-		const collectionHash = await bobClient.erc20.escrow.nonTierable.collect(
+		const collectionHash = await bobClient.erc20.escrow.default.collect(
 			escrow.uid,
 			fulfillment.uid,
 		);
@@ -556,7 +556,7 @@ describe("Full Escrow Flow Integration", () => {
 		});
 
 		const { attested: escrow } =
-			await aliceClient.erc20.escrow.nonTierable.permitAndCreate(
+			await aliceClient.erc20.escrow.default.permitAndCreate(
 				{
 					address: testContext.mockAddresses.erc20A,
 					value: 10n,
@@ -631,7 +631,7 @@ describe("Full Escrow Flow Integration", () => {
 		console.log("✅ Arbitration complete: APPROVED");
 
 		console.log("\n📋 Step 6: Bob collects escrow");
-		const collectionHash = await bobClient.erc20.escrow.nonTierable.collect(
+		const collectionHash = await bobClient.erc20.escrow.default.collect(
 			escrow.uid,
 			fulfillment.uid,
 		);
@@ -674,7 +674,7 @@ describe("Full Escrow Flow Integration", () => {
 		});
 
 		const { attested: escrow } =
-			await aliceClient.erc20.escrow.nonTierable.permitAndCreate(
+			await aliceClient.erc20.escrow.default.permitAndCreate(
 				{
 					address: testContext.mockAddresses.erc20A,
 					value: 10n,
@@ -749,7 +749,7 @@ describe("Full Escrow Flow Integration", () => {
 		console.log("✅ Arbitration complete: APPROVED");
 
 		console.log("\n📋 Step 6: Bob collects escrow");
-		const collectionHash = await bobClient.erc20.escrow.nonTierable.collect(
+		const collectionHash = await bobClient.erc20.escrow.default.collect(
 			escrow.uid,
 			fulfillment.uid,
 		);

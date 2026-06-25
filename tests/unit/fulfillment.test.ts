@@ -77,7 +77,7 @@ describe("Fulfillment", () => {
 		});
 
 		const { attested: escrow } =
-			await aliceClient.erc20.escrow.nonTierable.permitAndCreate(
+			await aliceClient.erc20.escrow.default.permitAndCreate(
 				{
 					address: testContext.mockAddresses.erc20A,
 					value: 100n,

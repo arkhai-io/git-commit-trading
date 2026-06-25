@@ -37,7 +37,7 @@ git-escrows new-client --privateKey "0x..." --network "sepolia"
 ```env
 PRIVATE_KEY=0x...                           # Your wallet private key (address derived automatically)
 NETWORK=base-sepolia                        # Network: anvil, base-sepolia, sepolia
-RPC_URL=https://...                         # RPC endpoint
+RPC_URL=wss://...                           # RPC endpoint; wss recommended for oracles
 
 # Contract addresses (auto-configured for base-sepolia and sepolia)
 # Only needed as overrides or for custom/local deployments

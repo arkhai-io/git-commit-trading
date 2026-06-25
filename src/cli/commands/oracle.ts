@@ -37,7 +37,7 @@ export async function oracleCommand(options: OracleOptions) {
 		const pollingInterval = parseInt(options.pollingInterval || "1000", 10);
 		const timeout = parseInt(options.timeout || "300000", 10);
 		const cleanup = options.cleanup !== false;
-		const transport = options.transport || "http";
+		const transport = options.transport || "websocket";
 
 		const modeLabels = {
 			past: "Arbitrate All Past Only",

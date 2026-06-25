@@ -79,7 +79,7 @@ describe("Escrow", () => {
 			});
 
 			const { attested: escrow } =
-				await aliceClient.erc20.escrow.nonTierable.permitAndCreate(
+				await aliceClient.erc20.escrow.default.permitAndCreate(
 					{
 						address: testContext.mockAddresses.erc20A,
 						value: 100n,
@@ -108,7 +108,7 @@ describe("Escrow", () => {
 			});
 
 			const { attested: escrow } =
-				await aliceClient.erc20.escrow.nonTierable.permitAndCreate(
+				await aliceClient.erc20.escrow.default.permitAndCreate(
 					{
 						address: testContext.mockAddresses.erc20A,
 						value: escrowValue,
@@ -138,7 +138,7 @@ describe("Escrow", () => {
 			});
 
 			const { attested: escrow } =
-				await aliceClient.erc20.escrow.nonTierable.permitAndCreate(
+				await aliceClient.erc20.escrow.default.permitAndCreate(
 					{
 						address: testContext.mockAddresses.erc20A,
 						value: 100n,
@@ -172,7 +172,7 @@ describe("Escrow", () => {
 			);
 
 			// Bob collects
-			const collectionHash = await bobClient.erc20.escrow.nonTierable.collect(
+			const collectionHash = await bobClient.erc20.escrow.default.collect(
 				escrow.uid,
 				fulfillment.uid,
 			);
@@ -197,7 +197,7 @@ describe("Escrow", () => {
 			});
 
 			const { attested: escrow } =
-				await aliceClient.erc20.escrow.nonTierable.permitAndCreate(
+				await aliceClient.erc20.escrow.default.permitAndCreate(
 					{
 						address: testContext.mockAddresses.erc20A,
 						value: 100n,
@@ -219,7 +219,7 @@ describe("Escrow", () => {
 
 			// Bob tries to collect WITHOUT arbitration - should fail
 			await expect(
-				bobClient.erc20.escrow.nonTierable.collect(escrow.uid, fulfillment.uid),
+				bobClient.erc20.escrow.default.collect(escrow.uid, fulfillment.uid),
 			).rejects.toThrow();
 		}, 60000);
 	});

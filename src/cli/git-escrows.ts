@@ -167,8 +167,8 @@ program
 	)
 	.option(
 		"--transport <type>",
-		"Transport type: http or websocket (default: http)",
-		"http",
+		"Transport type: http or websocket (default: websocket)",
+		"websocket",
 	)
 	.option("--port <port>", "Server port (deprecated)", "3000")
 	.option(

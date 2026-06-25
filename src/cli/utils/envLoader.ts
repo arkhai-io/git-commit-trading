@@ -137,15 +137,18 @@ export async function createClientFromEnv(
 		);
 	}
 
-	// Helper to create transport based on type
-	const createTransport = (httpUrl: string) => {
-		if (transportType === "websocket") {
+	// Helper to create transport based on type and URL scheme.
+	const createTransport = (rpcUrl: string) => {
+		const isWebSocketUrl =
+			rpcUrl.startsWith("ws://") || rpcUrl.startsWith("wss://");
+
+		if (transportType === "websocket" || isWebSocketUrl) {
 			// Use WS_RPC_URL if available, otherwise convert HTTP URL to WebSocket
-			let wsUrl = config.wsRpcUrl;
+			let wsUrl = isWebSocketUrl ? rpcUrl : config.wsRpcUrl;
 
 			if (!wsUrl) {
 				// Fallback: convert http/https URLs to ws/wss
-				wsUrl = httpUrl.replace(/^http/, "ws");
+				wsUrl = rpcUrl.replace(/^http/, "ws");
 				console.log(
 					chalk.yellow(
 						`⚠️ WS_RPC_URL not found in .env, converting HTTP URL to WebSocket: ${wsUrl}`,
@@ -162,7 +165,7 @@ export async function createClientFromEnv(
 				},
 			});
 		}
-		return http(httpUrl);
+		return http(rpcUrl);
 	};
 
 	// Create wallet client based on network

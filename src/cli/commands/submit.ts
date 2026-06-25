@@ -176,7 +176,7 @@ export async function submitCommand(options: SubmitOptions) {
 		try {
 			// Try with permit first (EIP-2612)
 			console.log(chalk.gray("Attempting to use EIP-2612 permit..."));
-			const result = await client.erc20.escrow.nonTierable.permitAndCreate(
+			const result = await client.erc20.escrow.default.permitAndCreate(
 				{
 					address: tokenAddress,
 					value: rewardAmount,
@@ -196,7 +196,7 @@ export async function submitCommand(options: SubmitOptions) {
 
 			console.log(chalk.gray("Creating escrow with approval..."));
 			try {
-				const result = await client.erc20.escrow.nonTierable.approveAndCreate(
+				const result = await client.erc20.escrow.default.approveAndCreate(
 					{
 						address: tokenAddress,
 						value: rewardAmount,

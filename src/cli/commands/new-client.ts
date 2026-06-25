@@ -56,7 +56,7 @@ NETWORK=${options.network}
 
 		// Add RPC URL if not anvil
 		if (options.network.toLowerCase() !== "anvil") {
-			envContent += `RPC_URL=# Add your RPC URL here
+			envContent += `RPC_URL=# Add your RPC URL here (wss:// preferred for oracle usage)
 `;
 		} else {
 			envContent += `RPC_URL=http://127.0.0.1:8545
